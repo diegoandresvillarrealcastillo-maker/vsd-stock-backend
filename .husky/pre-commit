@@ -1,0 +1,4 @@
+# Revisa solo los archivos que van a entrar al commit.
+# Es una comodidad para ver los errores antes de subir, no la barrera real:
+# esa es el CI, que no se puede saltar con --no-verify.
+npx lint-staged

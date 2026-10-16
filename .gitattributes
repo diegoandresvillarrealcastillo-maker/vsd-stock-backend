@@ -1,0 +1,18 @@
+# Normalizacion de fin de linea.
+# El equipo trabaja en Windows y el CI en Linux: sin esto, cada cambio de
+# sistema operativo generaria diferencias falsas en todo el archivo.
+* text=auto eol=lf
+
+# Archivos binarios: Git no debe intentar convertirlos ni diferenciarlos.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+
+# Archivos generados: no ensucian el diff del Pull Request.
+package-lock.json linguist-generated=true -diff

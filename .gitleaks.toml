@@ -1,0 +1,11 @@
+# Configuracion del escaneo de secretos.
+#
+# Parte de las reglas por defecto de gitleaks. La tentacion al ver un falso
+# positivo es relajar la regla; aqui se hace lo contrario: si hace falta
+# perdonar algo, se nombra el valor exacto y se explica por que.
+#
+# Un escaner de secretos que grita demasiado acaba ignorandose, y un escaner
+# que se ignora es peor que no tenerlo: da tranquilidad sin darla.
+
+[extend]
+useDefault = true

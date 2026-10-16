@@ -1,0 +1,2 @@
+# Valida el mensaje con las mismas reglas del CI, antes de que el commit exista.
+npx --no -- commitlint --edit "$1"
