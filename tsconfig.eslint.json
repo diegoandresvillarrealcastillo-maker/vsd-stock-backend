@@ -6,6 +6,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.mts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.mts", "vitest.integration.config.mts"],
   "exclude": ["node_modules", "dist"]
 }
