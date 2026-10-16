@@ -1,16 +1,17 @@
 # ============================================================
 #  VSD Stock (backend) - Integracion continua
 # ============================================================
-#  Primera barrera automatica del proyecto. Cubre tres cosas:
+#  Primera barrera automatica del proyecto. Cubre cinco cosas:
 #
 #    1. que no entre ningun secreto al repositorio;
 #    2. que todo commit siga Conventional Commits y cite su Issue;
 #    3. que el codigo pase estilo, fronteras de la arquitectura, formato,
-#       tipos, pruebas con cobertura y compilacion.
+#       tipos, pruebas con cobertura, contrato OpenAPI al dia y compilacion;
+#    4. que las pruebas de integracion pasen contra un PostgreSQL real;
+#    5. que la imagen de Docker se construya y el contenedor responda.
 #
-#  Los trabajos de CodeQL, auditoria de dependencias, imagen de Docker y
-#  pruebas contra PostgreSQL se anaden en C0-05 y en los ciclos que
-#  introducen lo que comprueban.
+#  El analisis de codigo (CodeQL) y las vulnerabilidades de las dependencias
+#  van en sus propios archivos: codeql.yml y dependencias.yml.
 # ============================================================
 
 name: CI
@@ -131,8 +132,108 @@ jobs:
         run: npm run typecheck
 
       - name: Ejecutar las pruebas con cobertura
-        # Falla si domain/ o application/ bajan del 80 %.
+        # Falla si domain/ o application/ bajan del 80 %. Incluye la prueba
+        # que compara openapi.json con lo que produce el codigo: si el
+        # contrato quedo desactualizado, el mensaje dice `npm run openapi`.
         run: npm run test:coverage
 
       - name: Compilar
         run: npm run build
+
+  integracion:
+    name: Pruebas contra PostgreSQL
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: stock
+          POSTGRES_DB: stock_test
+          # El contenedor vive lo que dura el trabajo, no sale de la maquina de
+          # GitHub y no guarda datos de nadie: no hace falta contrasena.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stock -d stock_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://stock@localhost:5432/stock_test
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar las pruebas de integracion
+        # En serie (ver vitest.integration.config.mts): en paralelo se pisan.
+        run: npm run test:integration
+
+  imagen:
+    name: Imagen de Docker
+    runs-on: ubuntu-24.04
+    env:
+      # Opcional: con credenciales de Docker Hub se evita el limite de
+      # descargas anonimas (`toomanyrequests`). Las pone una persona como
+      # secretos del repositorio; sin ellas, el trabajo sigue sin iniciar sesion.
+      DOCKERHUB_USUARIO: ${{ secrets.DOCKERHUB_USUARIO }}
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Iniciar sesion en Docker Hub (si hay credenciales)
+        if: env.DOCKERHUB_USUARIO != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USUARIO }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Construir la imagen
+        run: docker build --tag vsd-stock-backend:ci .
+
+      - name: Arrancar el contenedor y esperar a que este sano
+        run: |
+          set -euo pipefail
+          docker run --detach --name stock-ci --publish 3000:3000 vsd-stock-backend:ci
+          estado="starting"
+          for _ in $(seq 1 30); do
+            estado="$(docker inspect --format '{{.State.Health.Status}}' stock-ci)"
+            if [ "$estado" = "healthy" ]; then break; fi
+            sleep 2
+          done
+          if [ "$estado" != "healthy" ]; then
+            echo "El contenedor no llego a estar sano (estado: $estado)."
+            docker logs stock-ci
+            exit 1
+          fi
+
+      - name: Comprobar GET /health y que no corra como root
+        run: |
+          set -euo pipefail
+          # Sin tuberias hacia grep -q: con pipefail, grep cierra la tuberia al
+          # primer acierto y curl recibe SIGPIPE (fallo que ya nos costo tiempo
+          # en VSD Health).
+          respuesta="$(curl --silent --show-error --fail http://127.0.0.1:3000/health)"
+          echo "$respuesta"
+          case "$respuesta" in
+            *'"status":"ok"'*) ;;
+            *) echo "Respuesta inesperada de /health"; exit 1 ;;
+          esac
+          usuario="$(docker exec stock-ci id -u)"
+          if [ "$usuario" = "0" ]; then
+            echo "El contenedor corre como root."
+            exit 1
+          fi
+
+      - name: Mostrar el registro del contenedor si algo fallo
+        if: failure()
+        run: docker logs stock-ci || true

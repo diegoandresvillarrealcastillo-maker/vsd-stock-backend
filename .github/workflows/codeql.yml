@@ -1,0 +1,61 @@
+# ============================================================
+#  VSD Stock (backend) - Analisis estatico del codigo con CodeQL
+# ============================================================
+#  Busca en el codigo, sin ejecutarlo, los patrones que suelen ser
+#  una vulnerabilidad: inyecciones, rutas construidas con datos de
+#  quien llama, peticiones a direcciones que elige otra persona,
+#  expresiones regulares que se cuelgan, secretos en el codigo.
+#
+#  Los hallazgos salen en Seguridad > Code scanning del repositorio
+#  y como comentarios del Pull Request.
+#
+#  Si el repositorio tuviera activada la configuracion predeterminada de
+#  Code scanning (Ajustes > Seguridad), GitHub rechaza los resultados de
+#  este archivo: se usa una u otra. Aqui usamos este archivo.
+# ============================================================
+
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [desarrollo, preproduccion, produccion]
+  schedule:
+    # Lunes 06:30 en Bogota (solo la rama por defecto, `produccion`, ejecuta
+    # las tareas programadas).
+    - cron: '30 11 * * 1'
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Por omision nada; cada trabajo pide lo que necesita.
+permissions: {}
+
+jobs:
+  analizar:
+    name: Analisis de codigo (JavaScript y TypeScript)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Subir los resultados a Code scanning.
+      security-events: write
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          # TypeScript no necesita compilar para analizarse.
+          build-mode: none
+          # Las consultas de seguridad por omision mas las ampliadas: algo mas
+          # de ruido a cambio de encontrar mas. Sin las de calidad de codigo,
+          # que ya cubre ESLint.
+          queries: security-extended
+
+      - name: Analizar
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript
