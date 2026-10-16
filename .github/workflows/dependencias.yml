@@ -1,0 +1,53 @@
+# ============================================================
+#  VSD Stock (backend) - Vulnerabilidades en las dependencias
+# ============================================================
+#  Falla si las dependencias de produccion traen un aviso grave
+#  (high o critical).
+#
+#  Va aparte de ci.yml a proposito, para poder programarlo: un aviso
+#  nuevo se publica cualquier dia, y la corrida semanal se entera de lo
+#  que salio sin esperar a que alguien abra un Pull Request.
+#
+#  No lleva filtro de rutas: si este trabajo es un check requerido y el
+#  filtro lo saltara, GitHub lo dejaria "esperando" para siempre y
+#  bloquearia los PR que no tocan las dependencias. El costo es que un
+#  aviso nuevo pone en rojo todos los PR hasta que se resuelva. Si algun dia
+#  hace falta aceptar un aviso sin arreglo, se agrega una lista de avisos
+#  aceptados con su motivo y su fecha (como en VSD Health).
+# ============================================================
+
+name: Dependencias
+
+on:
+  pull_request:
+  push:
+    branches: [desarrollo, preproduccion, produccion]
+  schedule:
+    # Lunes 06:00 en Bogota.
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependencias-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vulnerabilidades:
+    name: Vulnerabilidades en las dependencias
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Sin `npm ci`: `npm audit` lee package-lock.json y no necesita las
+      # dependencias instaladas, asi no se ejecuta ningun script de ellas.
+      - name: Revisar los avisos graves de produccion
+        run: npm audit --omit=dev --audit-level=high

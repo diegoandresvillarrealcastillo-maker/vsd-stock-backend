@@ -1,0 +1,63 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "No requiere sesión y no toca la base de datos. El cliente lo usa para confirmar que hay conexión de verdad: navigator.onLine solo es una pista.",
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "El servicio responde.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReportDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Comprueba que el servicio está en pie",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "VSD Stock API",
+    "description": "API de VSD Stock: inventario, punto de venta, caja y reportes para MiPymes. Este documento es el contrato que une al backend con el frontend (ADR 0001).",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "HealthReportDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok",
+            "description": "Estado del servicio. Hoy solo existe «ok»: si no responde, está caído."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-16T15:30:00.000Z",
+            "description": "Instante en que se comprobó el servicio, en ISO 8601 y en UTC."
+          }
+        },
+        "required": [
+          "status",
+          "timestamp"
+        ]
+      }
+    }
+  }
+}

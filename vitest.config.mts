@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    // Las de integracion necesitan una base de datos: tienen su propia
+    // configuracion (vitest.integration.config.mts) y su propio script.
+    exclude: ['**/node_modules/**', '**/dist/**', 'test/integration/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
