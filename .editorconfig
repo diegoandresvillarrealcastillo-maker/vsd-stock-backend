@@ -1,0 +1,16 @@
+# https://editorconfig.org
+# Unifica el formato entre editores para que el estilo no dependa
+# de la configuracion personal de cada integrante del equipo.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# En Markdown dos espacios al final significan salto de linea.
+trim_trailing_whitespace = false

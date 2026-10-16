@@ -1,0 +1,19 @@
+{
+  // Revisa los tipos de lo que tsconfig.json deja fuera: los archivos de
+  // prueba y los de configuracion.
+  //
+  // Sin esto nadie comprueba los tipos de `*.spec.ts`: Vitest transpila sin
+  // mirarlos y ESLint aplica reglas de estilo, no de tipos. Un doble que
+  // dejara de implementar su puerto seguiria compilando y pasando, que es
+  // justo el fallo que las pruebas existen para evitar.
+  //
+  // `rootDir` en la raiz porque aqui entran archivos que viven fuera de src/.
+  // No emite nada, asi que no afecta a lo que se despliega.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.mts"],
+  "exclude": ["node_modules", "dist"]
+}

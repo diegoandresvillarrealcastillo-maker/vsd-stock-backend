@@ -32,13 +32,13 @@ que se apruebe.
    forma ilegible.
 6. **Los fallos se clasifican**:
 
-   | Clase     | Ejemplos                              | Qué se hace                                           |
-   | --------- | ------------------------------------- | ----------------------------------------------------- |
-   | Red       | `fetch` falla, respuesta que no es JSON | Se detiene todo; no gasta un intento                |
-   | Sesión    | 401                                   | Se detiene todo; **la cola se conserva**              |
-   | Pasajero  | 408, 425, 429, 5xx                    | Espera creciente con azar; respeta `Retry-After`      |
-   | Conflicto | 409                                   | Se marca; no se pisa nada; se muestra a la persona    |
-   | Permanente| Otros 4xx                             | Se marca para atención; no bloquea a las demás        |
+   | Clase      | Ejemplos                                | Qué se hace                                        |
+   | ---------- | --------------------------------------- | -------------------------------------------------- |
+   | Red        | `fetch` falla, respuesta que no es JSON | Se detiene todo; no gasta un intento               |
+   | Sesión     | 401                                     | Se detiene todo; **la cola se conserva**           |
+   | Pasajero   | 408, 425, 429, 5xx                      | Espera creciente con azar; respeta `Retry-After`   |
+   | Conflicto  | 409                                     | Se marca; no se pisa nada; se muestra a la persona |
+   | Permanente | Otros 4xx                               | Se marca para atención; no bloquea a las demás     |
 
 7. **Una sola sincronización a la vez** entre pestañas (Web Locks). **La conexión se confirma con
    `GET /health`**; `navigator.onLine` es solo una pista.
