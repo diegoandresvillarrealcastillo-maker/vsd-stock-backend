@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "start": "node dist/infrastructure/main.js"
+    "start": "node --env-file-if-exists=.env dist/infrastructure/main.js"
   },
   "lint-staged": {
     "*.ts": [
