@@ -2,3 +2,7 @@ dist/
 coverage/
 node_modules/
 package-lock.json
+
+# Contrato generado: se compara byte a byte con lo que produce `npm run openapi`,
+# y Prettier lo reescribiria.
+openapi.json
