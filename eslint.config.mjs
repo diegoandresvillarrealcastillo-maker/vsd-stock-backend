@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
+import { boundaries } from './eslint/boundaries.mjs';
 
 /**
  * Configuracion de ESLint para vsd-stock-backend.
@@ -12,7 +13,7 @@ export default tseslint.config(
   {
     // Los archivos de configuracion en .mjs quedan fuera del analisis con
     // tipos: no forman parte del codigo del proyecto y no estan en tsconfig.
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '*.config.mjs'],
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '*.config.mjs', 'eslint/**'],
   },
 
   js.configs.recommended,
@@ -26,6 +27,9 @@ export default tseslint.config(
       },
     },
   },
+
+  // ---------- Fronteras de la arquitectura hexagonal (ADR 0002) ----------
+  ...boundaries,
 
   // ---------- Convencion del guion bajo ----------
   {
