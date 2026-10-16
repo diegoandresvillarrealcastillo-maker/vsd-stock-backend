@@ -40,15 +40,19 @@ Si una variable es inválida, la aplicación se detiene al arrancar con un mensa
 
 ## Scripts
 
-| Script                  | Qué hace                                                                   |
-| ----------------------- | -------------------------------------------------------------------------- |
-| `npm run build`         | Compila a `dist/`.                                                         |
-| `npm start`             | Arranca la versión compilada.                                              |
-| `npm test`              | Ejecuta las pruebas (Vitest).                                              |
-| `npm run test:coverage` | Pruebas con cobertura; falla si `domain/` o `application/` bajan del 80 %. |
-| `npm run lint`          | ESLint, incluidas las **fronteras de la arquitectura**.                    |
-| `npm run format:check`  | Comprueba el formato con Prettier (`npm run format` lo corrige).           |
-| `npm run typecheck`     | Revisa los tipos del código y de las pruebas.                              |
+| Script                     | Qué hace                                                                   |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `npm run build`            | Compila a `dist/`.                                                         |
+| `npm start`                | Arranca la versión compilada.                                              |
+| `npm test`                 | Ejecuta las pruebas (Vitest).                                              |
+| `npm run test:coverage`    | Pruebas con cobertura; falla si `domain/` o `application/` bajan del 80 %. |
+| `npm run lint`             | ESLint, incluidas las **fronteras de la arquitectura**.                    |
+| `npm run format:check`     | Comprueba el formato con Prettier (`npm run format` lo corrige).           |
+| `npm run typecheck`        | Revisa los tipos del código y de las pruebas.                              |
+| `npm run openapi`          | Regenera `openapi.json`, el contrato con el frontend. Súbelo si cambia.    |
+| `npm run db:up`            | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).      |
+| `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Necesitan `db:up`.                |
+| `npm run db:down`          | Apaga la base local.                                                       |
 
 ## Arquitectura
 
@@ -74,13 +78,35 @@ Cruzar una frontera **rompe el build**: `npm run lint` falla con un mensaje que 
 - **Pruebas primero:** cada pieza nace de una prueba que se vio fallar (ADR 0007).
 - **Hooks de Husky:** antes de cada commit se corren ESLint y Prettier sobre lo que cambia, y se
   valida el mensaje con commitlint.
-- **CI** (GitHub Actions) con tres trabajos requeridos: escaneo de secretos, convención de commits y
-  calidad del código (estilo y fronteras, formato, tipos, pruebas con cobertura y compilación).
+- **CI** (GitHub Actions), siete trabajos:
+  - escaneo de secretos (gitleaks sobre todo el historial);
+  - convención de commits;
+  - calidad del código (estilo y fronteras, formato, tipos, pruebas con cobertura, **contrato OpenAPI al
+    día** y compilación);
+  - pruebas de integración contra un PostgreSQL real;
+  - construcción de la imagen de Docker y comprobación del contenedor;
+  - análisis de código con CodeQL;
+  - vulnerabilidades de las dependencias de producción.
+
+## Contrato OpenAPI
+
+`openapi.json` es lo único que une a este repositorio con el frontend (ADR 0001). Se genera del código con
+`npm run openapi` y se versiona. Una prueba lo compara con lo que produce el código: si cambias la API y no lo
+regeneras, falla con un mensaje que dice qué hacer.
+
+## Docker
+
+```bash
+docker build -t vsd-stock-backend .
+docker run --rm -p 3000:3000 vsd-stock-backend
+```
+
+La imagen no corre como root, trae un `HEALTHCHECK` sobre `GET /health` y no contiene credenciales: la
+configuración llega por variables de entorno (ADR 0011).
 
 ## Documentación
 
+- Cómo contribuir (ramas, commits, PR, comprobaciones): [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md). Todos los ADR del proyecto, también
   los del frontend, viven aquí.
-- Flujo de trabajo (ramas, Issues, commits y PR):
-  [ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md). La guía `CONTRIBUTING.md` llega con el
-  ticket C0-05.
+- Flujo de trabajo, con su porqué: [ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md).
