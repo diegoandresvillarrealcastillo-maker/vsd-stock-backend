@@ -14,30 +14,30 @@ asumir que «la última» era la correcta.
 
 ### Backend
 
-| Pieza                                       | Versión                | Nota                                                           |
-| ------------------------------------------- | ---------------------- | -------------------------------------------------------------- |
-| Node                                        | 24 (LTS 24.22.0)       | `.nvmrc` y `engines: >=24`                                     |
-| TypeScript                                  | **`~6.0.3`**           | Fijada; ver abajo                                              |
-| NestJS (sobre Express)                      | 12.1.x, módulos ESM    | Se añade a mano, sin `nest new`                                |
-| Prisma (CLI y cliente)                      | **7.10.1** exacta      | Los dos juntos; ver abajo                                      |
-| PostgreSQL                                  | 17 (la de Supabase)    | Se confirma al crear el proyecto de PRE en el Ciclo 4          |
-| Zod / class-validator                       | 4.6.x / 0.15.x         | Solo en adaptadores de entrada                                 |
-| Vitest                                      | 5.0.x                  | ADR 0007                                                       |
-| ESLint / typescript-eslint                  | 10.12.x / 8.71.x       | ADR 0002                                                       |
-| Prettier, Husky, lint-staged, commitlint    | 3.9.x, 9.1.x, 17.6.x, 21.2.x | Calidad en el commit y en el CI                          |
+| Pieza                                    | Versión                      | Nota                                                  |
+| ---------------------------------------- | ---------------------------- | ----------------------------------------------------- |
+| Node                                     | 24 (LTS 24.22.0)             | `.nvmrc` y `engines: >=24`                            |
+| TypeScript                               | **`~6.0.3`**                 | Fijada; ver abajo                                     |
+| NestJS (sobre Express)                   | 12.1.x, módulos ESM          | Se añade a mano, sin `nest new`                       |
+| Prisma (CLI y cliente)                   | **7.10.1** exacta            | Los dos juntos; ver abajo                             |
+| PostgreSQL                               | 17 (la de Supabase)          | Se confirma al crear el proyecto de PRE en el Ciclo 4 |
+| Zod / class-validator                    | 4.6.x / 0.15.x               | Solo en adaptadores de entrada                        |
+| Vitest                                   | 5.0.x                        | ADR 0007                                              |
+| ESLint / typescript-eslint               | 10.12.x / 8.71.x             | ADR 0002                                              |
+| Prettier, Husky, lint-staged, commitlint | 3.9.x, 9.1.x, 17.6.x, 21.2.x | Calidad en el commit y en el CI                       |
 
 ### Frontend
 
-| Pieza                    | Versión                                      | Nota                                                   |
-| ------------------------ | -------------------------------------------- | ------------------------------------------------------ |
-| React / Vite             | 19.3.x / 8.3.x                               | TypeScript igual que el backend: `~6.0.3`              |
-| Tailwind CSS             | 4.3.x con `@tailwindcss/vite`                | ADR 0008                                               |
-| `framer-motion`          | 14.3.x                                       | ADR 0008                                               |
-| `react-router-dom`       | 7.x (como Health)                            | Pasar a la 8 requiere su propio ADR                    |
-| `idb`                    | 8.0.x                                        | Envoltorio de IndexedDB (no Dexie), ADR 0009           |
-| `vite-plugin-pwa`        | 2.0.x                                        | Declara compatibilidad con Vite 8                      |
-| Vitest y Testing Library | 5.0.x y 16.3.x                               | ADR 0007                                               |
-| Lighthouse CI            | `@lhci/cli` 0.15.x                           | Accesibilidad en el CI                                 |
+| Pieza                    | Versión                       | Nota                                         |
+| ------------------------ | ----------------------------- | -------------------------------------------- |
+| React / Vite             | 19.3.x / 8.3.x                | TypeScript igual que el backend: `~6.0.3`    |
+| Tailwind CSS             | 4.3.x con `@tailwindcss/vite` | ADR 0008                                     |
+| `framer-motion`          | 14.3.x                        | ADR 0008                                     |
+| `react-router-dom`       | 7.x (como Health)             | Pasar a la 8 requiere su propio ADR          |
+| `idb`                    | 8.0.x                         | Envoltorio de IndexedDB (no Dexie), ADR 0009 |
+| `vite-plugin-pwa`        | 2.0.x                         | Declara compatibilidad con Vite 8            |
+| Vitest y Testing Library | 5.0.x y 16.3.x                | ADR 0007                                     |
+| Lighthouse CI            | `@lhci/cli` 0.15.x            | Accesibilidad en el CI                       |
 
 ### Reglas de versionado
 
