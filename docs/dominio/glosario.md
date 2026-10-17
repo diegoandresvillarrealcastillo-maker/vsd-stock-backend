@@ -88,21 +88,22 @@ el dispositivo, cerrado; cerrar sesión lo borra.
 
 ### Producto
 
-Lo que el negocio vende o compra: «Arroz 500 g». Se piensa con nombre, categoría, unidad de medida, precio e
-impuesto.
+Lo que el negocio vende o compra: «Arroz 500 g». Tiene un nombre, un SKU, un código de barras opcional, una
+unidad de medida, un precio con el IVA incluido y la tarifa de ese IVA. Cada presentación (unidad, paca, caja) es
+otro producto. Un producto con historial no se borra: se archiva y conserva sus códigos (ADR 0015).
 
 **Código:** `Product`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0015)
 
 ### Variante
 
-Una presentación distinta del mismo producto (talla, color, tamaño). Puede no entrar en la entrega si un
-producto con unidad de medida alcanza para una tienda de barrio.
+Una presentación distinta del mismo producto (talla, color, tamaño). **No existe en la entrega:** cada
+presentación es un producto independiente con su propio código, sin conversión entre ellas (ADR 0015).
 
 **Código:** `Variant`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0015)
 
 ### Categoría
 
@@ -114,11 +115,13 @@ Agrupación de productos para encontrarlos y reportarlos: «Granos», «Aseo».
 
 ### Unidad de medida
 
-Cómo se cuenta un producto: unidad, libra, kilo, litro, caja.
+Cómo se cuenta un producto, en un conjunto cerrado: unidad, kilo, gramo, libra, litro y mililitro. No hay caja,
+paca ni docena (serían otro producto). La cantidad es un entero de milésimas de la unidad, y la unidad se cuenta
+solo en enteros (ADR 0015).
 
-**Código:** `UnitOfMeasure`
+**Código:** `UnitOfMeasure` y `Quantity`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0015)
 
 ### Precio
 
@@ -143,20 +146,22 @@ la mecánica frente a la norma son una hipótesis que debe verificar quien lleve
 
 ### Código de barras
 
-El identificador impreso en el empaque que lee el lector o la cámara del dispositivo. La entrega soporta lector
-de código de barras y cámara, sin impresora.
+El identificador impreso en el empaque que lee el lector o la cámara del dispositivo. Es opcional, de 8, 12, 13 o
+14 dígitos y con el dígito de control comprobado; el UPC-A y el EAN-13 que le antepone un cero son el mismo
+código, y es único por negocio. La entrega soporta lector de código de barras y cámara, sin impresora (ADR 0015).
 
 **Código:** `Barcode`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0015)
 
 ### SKU
 
-El identificador interno de un producto dentro de un negocio, el que el negocio le da a su mercancía.
+El identificador interno de un producto dentro de un negocio, el que el negocio le da a su mercancía. Es
+obligatorio, de 1 a 40 caracteres, y único por negocio sin distinguir mayúsculas (ADR 0015).
 
 **Código:** `Sku`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0015)
 
 ## Inventario
 

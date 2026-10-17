@@ -24,6 +24,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0012](0012-cors-con-lista-explicita-de-origenes-y-sin-credenciales.md) | CORS con lista explícita de orígenes y sin credenciales        | Aceptada |
 | [0013](0013-existencia-derivada-y-venta-como-una-sola-operacion.md)     | La existencia es un saldo derivado y la venta es una operación | Aceptada |
 | [0014](0014-dinero-impuestos-y-redondeo.md)                             | Dinero en pesos enteros, IVA incluido y una regla de redondeo  | Aceptada |
+| [0015](0015-catalogo-unidades-cantidades-y-codigos.md)                  | Catálogo sin variantes: unidades, cantidades y códigos         | Aceptada |
 
 ## Reglas
 
