@@ -57,14 +57,15 @@ JWKS) se decide en el Ciclo 2.
 
 ### Rol
 
-Lo que una persona puede hacer en un negocio. Se piensan tres: **dueño**, **administrador** y **cajero**; qué
-puede hacer cada uno se define en el Ciclo 1. El único permiso que el encargo ya fija es que un cajero no ve
-utilidades ni borra ventas. Los permisos son una regla de negocio que vive en `application/`, con una prueba en
-negativo por cada regla: no basta que el dueño acceda, otro negocio debe ser rechazado.
+Lo que una persona puede hacer en un negocio. Son tres, fijos: **dueño**, **administrador** y **cajero**. Un cajero
+no ve utilidades ni anula ventas. Cada acción tiene su tabla de quién la puede hacer y si funciona sin conexión
+([Permisos](permisos.md)); se niega por omisión y el negocio se revisa antes que el rol. Los permisos son una regla
+de negocio que vive en `domain/`, con una prueba en negativo por cada regla: no basta que el dueño acceda, otro
+negocio debe ser rechazado (ADR 0017).
 
-**Código:** `Role`
+**Código:** `Role`, `Action` y `authorize`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0017)
 
 ### Dispositivo
 
