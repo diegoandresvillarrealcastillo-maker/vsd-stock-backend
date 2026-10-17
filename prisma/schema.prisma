@@ -1,0 +1,424 @@
+// El modelo de datos congelado del ADR 0020 (docs/dominio/modelo-de-datos.md), traducido a Prisma (ADR 0021).
+//
+// Lo que Prisma no expresa vive en el SQL de la migracion y NO aqui: las restricciones CHECK, la seguridad por
+// fila (RLS), los disparadores y los permisos. Una prueba compara este archivo con la base que crea la migracion
+// (`npm run db:check-schema`), asi que ninguno de los dos puede cambiar sin el otro.
+//
+// Convenciones (docs/dominio/modelo-de-datos.md): tablas y columnas en ingles, snake_case y en singular; las
+// claves foraneas son compuestas con `id_negocio`; el dinero va en pesos enteros (bigint), las cantidades en
+// milesimas (bigint) y las tarifas en puntos basicos (integer).
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Identidad y acceso
+// ---------------------------------------------------------------------------------------------------------
+
+model Business {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  branches       Branch[]
+  users          AppUser[]
+  devices        Device[]
+  deviceCounter  DeviceCounter?
+  categories     Category[]
+  products       Product[]
+  warehouses     Warehouse[]
+  suppliers      Supplier[]
+  purchases      Purchase[]
+  purchaseLines  PurchaseLine[]
+  operations     Operation[]
+  stockMovements StockMovement[]
+  stockBalances  StockBalance[]
+  cashShifts     CashShift[]
+  cashMovements  CashMovement[]
+  sales          Sale[]
+  saleLines      SaleLine[]
+  payments       Payment[]
+  saleVoids      SaleVoid[]
+
+  @@map("business")
+}
+
+model Branch {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String   @map("id_negocio") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business   Business    @relation(fields: [idNegocio], references: [id])
+  warehouses Warehouse[]
+
+  @@unique([idNegocio, id])
+  @@map("branch")
+}
+
+model AppUser {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio           String    @map("id_negocio") @db.Uuid
+  /// El `sub` del token verificado. Vacio mientras la invitacion no se canjea.
+  authUserId          String?   @unique @map("auth_user_id") @db.Uuid
+  email               String?
+  fullName            String    @map("full_name")
+  role                String
+  active              Boolean   @default(true)
+  /// SHA-256 del secreto de la invitacion; nunca el secreto.
+  invitationHash      String?   @map("invitation_hash")
+  invitationExpiresAt DateTime? @map("invitation_expires_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deactivatedAt       DateTime? @map("deactivated_at") @db.Timestamptz(6)
+
+  business        Business    @relation(fields: [idNegocio], references: [id])
+  enrolledDevices Device[]
+  operations      Operation[]
+  cashShifts      CashShift[]
+  purchases       Purchase[]
+
+  @@unique([idNegocio, id])
+  @@map("app_user")
+}
+
+model Device {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio        String    @map("id_negocio") @db.Uuid
+  deviceCode       String    @map("device_code")
+  name             String?
+  enrolledByUserId String?   @map("enrolled_by_user_id") @db.Uuid
+  enrolledAt       DateTime  @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  business   Business    @relation(fields: [idNegocio], references: [id])
+  enrolledBy AppUser?    @relation(fields: [idNegocio, enrolledByUserId], references: [idNegocio, id])
+  operations Operation[]
+  cashShifts CashShift[]
+
+  @@unique([idNegocio, deviceCode], map: "device_code_unique")
+  @@unique([idNegocio, id])
+  @@map("device")
+}
+
+model DeviceCounter {
+  idNegocio String @id @map("id_negocio") @db.Uuid
+  nextIndex Int    @map("next_index")
+
+  business Business @relation(fields: [idNegocio], references: [id])
+
+  @@map("device_counter")
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Catalogo
+// ---------------------------------------------------------------------------------------------------------
+
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String   @map("id_negocio") @db.Uuid
+  name      String
+  /// La clave que se compara es la que calcula la base: el nombre es unico por negocio sin importar mayusculas.
+  nameKey   String?  @default(dbgenerated("lower(name)")) @map("name_key")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business  @relation(fields: [idNegocio], references: [id])
+  products Product[]
+
+  @@unique([idNegocio, nameKey], map: "category_name_unique")
+  @@unique([idNegocio, id])
+  @@map("category")
+}
+
+model Product {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio     String   @map("id_negocio") @db.Uuid
+  name          String
+  sku           String
+  /// Las claves que se comparan las calcula la base, no la aplicacion: no se pueden olvidar (ADR 0015).
+  skuKey        String?  @default(dbgenerated("upper(sku)")) @map("sku_key")
+  barcode       String?
+  barcodeKey    String?  @default(dbgenerated("lpad(barcode, 14, '0'::text)")) @map("barcode_key")
+  unit          String
+  unitPrice     BigInt   @map("unit_price")
+  taxRateBp     Int      @map("tax_rate_bp")
+  active        Boolean  @default(true)
+  categoryId    String?  @map("category_id") @db.Uuid
+  minStockMilli BigInt?  @map("min_stock_milli")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  business       Business        @relation(fields: [idNegocio], references: [id])
+  category       Category?       @relation(fields: [idNegocio, categoryId], references: [idNegocio, id])
+  purchaseLines  PurchaseLine[]
+  stockMovements StockMovement[]
+  stockBalances  StockBalance[]
+  saleLines      SaleLine[]
+
+  @@unique([idNegocio, skuKey], map: "product_sku_unique")
+  @@unique([idNegocio, barcodeKey], map: "product_barcode_unique")
+  @@unique([idNegocio, id])
+  @@map("product")
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Inventario
+// ---------------------------------------------------------------------------------------------------------
+
+model Warehouse {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String   @map("id_negocio") @db.Uuid
+  branchId  String   @map("branch_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business       Business        @relation(fields: [idNegocio], references: [id])
+  branch         Branch          @relation(fields: [idNegocio, branchId], references: [idNegocio, id])
+  purchases      Purchase[]
+  stockMovements StockMovement[]
+  stockBalances  StockBalance[]
+
+  @@unique([idNegocio, id])
+  @@map("warehouse")
+}
+
+model Supplier {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String   @map("id_negocio") @db.Uuid
+  name      String
+  contact   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business  Business   @relation(fields: [idNegocio], references: [id])
+  purchases Purchase[]
+
+  @@unique([idNegocio, id])
+  @@map("supplier")
+}
+
+model Purchase {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio   String   @map("id_negocio") @db.Uuid
+  operationId String   @map("operation_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  supplierId  String?  @map("supplier_id") @db.Uuid
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business        Business       @relation(fields: [idNegocio], references: [id])
+  operation       Operation      @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+  warehouse       Warehouse      @relation(fields: [idNegocio, warehouseId], references: [idNegocio, id])
+  supplier        Supplier?      @relation(fields: [idNegocio, supplierId], references: [idNegocio, id])
+  lines           PurchaseLine[]
+  createdBy       AppUser?       @relation(fields: [idNegocio, createdByUserId], references: [idNegocio, id])
+  createdByUserId String?        @map("created_by_user_id") @db.Uuid
+
+  @@unique([idNegocio, operationId], map: "purchase_operation_unique")
+  @@unique([idNegocio, id])
+  @@map("purchase")
+}
+
+model PurchaseLine {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio     String @map("id_negocio") @db.Uuid
+  purchaseId    String @map("purchase_id") @db.Uuid
+  productId     String @map("product_id") @db.Uuid
+  quantityMilli BigInt @map("quantity_milli")
+  unitCost      BigInt @map("unit_cost")
+
+  business Business @relation(fields: [idNegocio], references: [id])
+  purchase Purchase @relation(fields: [idNegocio, purchaseId], references: [idNegocio, id])
+  product  Product  @relation(fields: [idNegocio, productId], references: [idNegocio, id])
+
+  @@unique([idNegocio, purchaseId, productId], map: "purchase_line_product_unique")
+  @@map("purchase_line")
+}
+
+model StockMovement {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio   String   @map("id_negocio") @db.Uuid
+  operationId String   @map("operation_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  delta       BigInt
+  reason      String
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business  Business  @relation(fields: [idNegocio], references: [id])
+  operation Operation @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+  warehouse Warehouse @relation(fields: [idNegocio, warehouseId], references: [idNegocio, id])
+  product   Product   @relation(fields: [idNegocio, productId], references: [idNegocio, id])
+
+  @@index([idNegocio, productId], map: "stock_movement_product")
+  @@map("stock_movement")
+}
+
+model StockBalance {
+  idNegocio   String @map("id_negocio") @db.Uuid
+  warehouseId String @map("warehouse_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  quantity    BigInt
+
+  business  Business  @relation(fields: [idNegocio], references: [id])
+  warehouse Warehouse @relation(fields: [idNegocio, warehouseId], references: [idNegocio, id])
+  product   Product   @relation(fields: [idNegocio, productId], references: [idNegocio, id])
+
+  @@id([idNegocio, warehouseId, productId])
+  @@map("stock_balance")
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Sincronizacion
+// ---------------------------------------------------------------------------------------------------------
+
+model Operation {
+  idNegocio     String   @map("id_negocio") @db.Uuid
+  operationId   String   @map("operation_id") @db.Uuid
+  kind          String
+  userId        String   @map("user_id") @db.Uuid
+  deviceId      String?  @map("device_id") @db.Uuid
+  /// La hora efectiva (ADR 0016); la cruda del dispositivo y la de llegada se guardan aparte.
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  receivedAt    DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  deviceTimeRaw String?  @map("device_time_raw")
+  timeSource    String   @default("received") @map("time_source")
+  timeFlags     String[] @default([]) @map("time_flags")
+  /// Huella del cuerpo, para responder 409 si se reusa un operationId con otro cuerpo (ADR 0019).
+  bodyHash      String?  @map("body_hash")
+
+  business       Business        @relation(fields: [idNegocio], references: [id])
+  user           AppUser         @relation(fields: [idNegocio, userId], references: [idNegocio, id])
+  device         Device?         @relation(fields: [idNegocio, deviceId], references: [idNegocio, id])
+  purchase       Purchase?
+  stockMovements StockMovement[]
+  cashMovements  CashMovement[]
+  sale           Sale?
+  saleVoid       SaleVoid?
+
+  @@id([idNegocio, operationId])
+  @@map("operation")
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Caja
+// ---------------------------------------------------------------------------------------------------------
+
+model CashShift {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio     String    @map("id_negocio") @db.Uuid
+  deviceId      String    @map("device_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  openedAt      DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt      DateTime? @map("closed_at") @db.Timestamptz(6)
+  openingAmount BigInt    @default(0) @map("opening_amount")
+  countedAmount BigInt?   @map("counted_amount")
+
+  business  Business       @relation(fields: [idNegocio], references: [id])
+  device    Device         @relation(fields: [idNegocio, deviceId], references: [idNegocio, id])
+  user      AppUser        @relation(fields: [idNegocio, userId], references: [idNegocio, id])
+  sales     Sale[]
+  movements CashMovement[]
+
+  @@unique([idNegocio, id])
+  @@map("cash_shift")
+}
+
+model CashMovement {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio   String  @map("id_negocio") @db.Uuid
+  operationId String  @map("operation_id") @db.Uuid
+  shiftId     String  @map("shift_id") @db.Uuid
+  direction   String
+  amount      BigInt
+  reason      String?
+
+  business  Business  @relation(fields: [idNegocio], references: [id])
+  operation Operation @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+  shift     CashShift @relation(fields: [idNegocio, shiftId], references: [idNegocio, id])
+
+  @@map("cash_movement")
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Ventas
+// ---------------------------------------------------------------------------------------------------------
+
+model Sale {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio       String  @map("id_negocio") @db.Uuid
+  operationId     String  @map("operation_id") @db.Uuid
+  shiftId         String  @map("shift_id") @db.Uuid
+  folio           String
+  folioReported   String  @map("folio_reported")
+  folioConflict   Boolean @default(false) @map("folio_conflict")
+  total           BigInt
+  needsAdjustment Boolean @map("needs_adjustment")
+
+  business  Business   @relation(fields: [idNegocio], references: [id])
+  operation Operation  @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+  shift     CashShift  @relation(fields: [idNegocio, shiftId], references: [idNegocio, id])
+  lines     SaleLine[]
+  payments  Payment[]
+  void      SaleVoid?
+
+  @@unique([idNegocio, operationId], map: "sale_operation_unique")
+  @@unique([idNegocio, folio], map: "sale_folio_unique")
+  @@unique([idNegocio, id])
+  @@map("sale")
+}
+
+model SaleLine {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio     String @map("id_negocio") @db.Uuid
+  saleId        String @map("sale_id") @db.Uuid
+  productId     String @map("product_id") @db.Uuid
+  quantityMilli BigInt @map("quantity_milli")
+  unitPrice     BigInt @map("unit_price")
+  taxRateBp     Int    @map("tax_rate_bp")
+  discount      BigInt @default(0)
+
+  business Business @relation(fields: [idNegocio], references: [id])
+  sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
+  product  Product  @relation(fields: [idNegocio, productId], references: [idNegocio, id])
+
+  @@map("sale_line")
+}
+
+model Payment {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String  @map("id_negocio") @db.Uuid
+  saleId    String  @map("sale_id") @db.Uuid
+  method    String
+  amount    BigInt
+  reference String?
+
+  business Business @relation(fields: [idNegocio], references: [id])
+  sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
+
+  @@map("payment")
+}
+
+model SaleVoid {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio   String   @map("id_negocio") @db.Uuid
+  saleId      String   @map("sale_id") @db.Uuid
+  operationId String   @map("operation_id") @db.Uuid
+  reason      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business  Business  @relation(fields: [idNegocio], references: [id])
+  sale      Sale      @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
+  operation Operation @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+
+  @@unique([idNegocio, saleId], map: "sale_void_sale_unique")
+  @@unique([idNegocio, operationId], map: "sale_void_operation_unique")
+  @@map("sale_void")
+}
