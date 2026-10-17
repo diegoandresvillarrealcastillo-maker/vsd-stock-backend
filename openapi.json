@@ -66,6 +66,44 @@
           "health"
         ]
       }
+    },
+    "/v1/me": {
+      "get": {
+        "description": "Devuelve a la persona que demuestra el token y, si ya tiene negocio, el suyo y su rol. El negocio y el rol salen de la base de datos, nunca del token. Una persona que se registró pero aún no tiene negocio recibe `membership: null`. Responde 401 si el token falta o no sirve (`token-expired` si solo venció) y 403 `user-inactive` si fue dada de baja.",
+        "operationId": "MeController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "La persona y su lugar en el negocio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Quién soy",
+        "tags": [
+          "identity"
+        ]
+      }
     }
   },
   "info": {
@@ -77,6 +115,13 @@
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
     "schemas": {
       "HealthReportDto": {
         "type": "object",
@@ -131,6 +176,85 @@
           "status",
           "database",
           "timestamp"
+        ]
+      },
+      "MeIdentityDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "El identificador de la persona en el servicio de identidad (el `sub` del token)."
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "description": "El correo con que se registró, si lo tiene."
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ]
+      },
+      "MeMembershipDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La persona dentro del negocio."
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessName": {
+            "type": "string",
+            "example": "Tienda La Esquina"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "description": "Su rol en este negocio. Sale de la base de datos, nunca del token."
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Ana Gómez"
+          }
+        },
+        "required": [
+          "userId",
+          "businessId",
+          "businessName",
+          "role",
+          "fullName"
+        ]
+      },
+      "MeDto": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/MeIdentityDto"
+          },
+          "membership": {
+            "nullable": true,
+            "description": "Su lugar en un negocio. `null` si se registró pero aún no creó un negocio ni canjeó una invitación.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeMembershipDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "identity",
+          "membership"
         ]
       },
       "ProblemErrorDto": {

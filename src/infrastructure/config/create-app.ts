@@ -4,6 +4,7 @@ import { noStoreMiddleware } from '../../adapters/in/http/no-store.js';
 import { ProblemDetailsFilter } from '../../adapters/in/http/problem-details.filter.js';
 import { requestIdMiddleware } from '../../adapters/in/http/request-id.js';
 import { AppModule } from './app.module.js';
+import type { AuthConfig } from './env.js';
 
 export interface CreateAppOptions {
   /** Apaga el registro de Nest. Las pruebas lo usan para no llenar la salida. */
@@ -12,6 +13,8 @@ export interface CreateAppOptions {
   readonly corsOrigins?: readonly string[];
   /** La conexion de la aplicacion a la base de datos. Por omision, ninguna: la API arranca sin datos. */
   readonly databaseUrl?: string;
+  /** El servicio de identidad. Por omision, ninguno: ninguna peticion de una persona se atiende. */
+  readonly auth?: AuthConfig;
 }
 
 /** Cuanto tiempo puede recordar el navegador una respuesta a la peticion previa (OPTIONS): un dia. */
@@ -20,9 +23,10 @@ const PREFLIGHT_MAX_AGE_SECONDS = 86_400;
 /** Arma la aplicacion con su configuracion comun. main.ts y las pruebas usan esta misma. */
 export async function createApp(options: CreateAppOptions = {}): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(
-    AppModule.register(
-      options.databaseUrl === undefined ? {} : { databaseUrl: options.databaseUrl },
-    ),
+    AppModule.register({
+      ...(options.databaseUrl === undefined ? {} : { databaseUrl: options.databaseUrl }),
+      ...(options.auth === undefined ? {} : { auth: options.auth }),
+    }),
     options.quiet === true ? { logger: false } : {},
   );
   // No anunciamos el framework en cada respuesta.

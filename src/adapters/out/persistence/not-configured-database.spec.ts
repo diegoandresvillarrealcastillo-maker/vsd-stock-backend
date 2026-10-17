@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DatabaseNotConfiguredError, NotConfiguredDatabase } from './not-configured-database.js';
+import { DatabaseNotConfiguredError } from '../../../domain/model/database-not-configured-error.js';
+import { NotConfiguredDatabase } from './not-configured-database.js';
 
 describe('NotConfiguredDatabase', () => {
   it('says that there is no database, instead of pretending to be one', async () => {
@@ -27,5 +28,13 @@ describe('NotConfiguredDatabase', () => {
       .catch(() => undefined);
 
     expect(ran).toBe(false);
+  });
+
+  it('has nobody to look up: asking who a person is also says that the database is missing', async () => {
+    const attempt = new NotConfiguredDatabase().findMembership(
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    await expect(attempt).rejects.toBeInstanceOf(DatabaseNotConfiguredError);
   });
 });
