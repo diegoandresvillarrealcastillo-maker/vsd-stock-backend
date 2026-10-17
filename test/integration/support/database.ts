@@ -1,7 +1,7 @@
 import pg from 'pg';
+import { APP_ROLE } from '../../../scripts/prepare-database.ts';
 
-/** Rol que representa a la aplicacion: sin privilegios, sin BYPASSRLS, no propietario. */
-export const APP_ROLE = 'stock_app_test';
+export { APP_ROLE };
 
 /** Conexion de administracion: solo para preparar y comprobar datos, nunca para probar el aislamiento. */
 export function createAdminPool(max = 4): pg.Pool {
@@ -24,12 +24,36 @@ export async function asApplication<T>(
   businessId: string | null,
   work: (client: pg.PoolClient) => Promise<T>,
 ): Promise<T> {
+  return inTransactionAsApplication(
+    pool,
+    businessId === null ? {} : { 'app.id_negocio': businessId },
+    work,
+  );
+}
+
+/**
+ * Como `asApplication`, pero con el contexto de IDENTIDAD: solo se sabe quien es la persona (el `sub` del token
+ * verificado), todavia no su negocio. Es lo que permite resolver a que negocio pertenece (ADR 0022).
+ */
+export async function asIdentity<T>(
+  pool: pg.Pool,
+  authUserId: string,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  return inTransactionAsApplication(pool, { 'app.auth_user_id': authUserId }, work);
+}
+
+async function inTransactionAsApplication<T>(
+  pool: pg.Pool,
+  settings: Record<string, string>,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(`SET LOCAL ROLE ${APP_ROLE}`);
-    if (businessId !== null) {
-      await client.query("SELECT set_config('app.id_negocio', $1, true)", [businessId]);
+    for (const [name, value] of Object.entries(settings)) {
+      await client.query('SELECT set_config($1, $2, true)', [name, value]);
     }
     const result = await work(client);
     await client.query('COMMIT');

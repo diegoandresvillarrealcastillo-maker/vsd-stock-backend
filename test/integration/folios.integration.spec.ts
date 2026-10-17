@@ -2,15 +2,8 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { asApplication, createAdminPool } from './support/database.js';
-import {
-  FOLIO_SCHEMA,
-  createFolioDesign,
-  dropFolioDesign,
-  enrollDevice,
-  recordSale,
-  type SaleArrival,
-} from './support/folio-design.js';
-import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
+import { enrollDevice, recordSale, type SaleArrival } from './support/folio-support.js';
+import { BUSINESS_A, BUSINESS_B, resetData, seedBusiness } from './support/seed.js';
 
 /**
  * Demuestra, contra un PostgreSQL real, lo que el ADR 0016 pide al servidor: dar a cada dispositivo de un
@@ -19,8 +12,6 @@ import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
  */
 describe('device codes, folios and operation time in the database (ADR 0016)', () => {
   let admin: pg.Pool;
-  const BUSINESS_A = '11111111-1111-4111-8111-111111111111';
-  const BUSINESS_B = '22222222-2222-4222-8222-222222222222';
   const RECEIVED = '2026-10-20T15:00:00.000Z';
 
   beforeAll(() => {
@@ -28,11 +19,12 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
   });
 
   beforeEach(async () => {
-    await createFolioDesign(admin);
+    await resetData(admin);
+    await seedBusiness(admin, BUSINESS_A);
+    await seedBusiness(admin, BUSINESS_B);
   });
 
   afterAll(async () => {
-    await dropFolioDesign(admin);
     await admin.end();
   });
 
@@ -49,14 +41,10 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
   const salesOf = async (businessId = BUSINESS_A) =>
     (
       await admin.query<{ folio: string; folio_conflict: boolean }>(
-        `SELECT folio, folio_conflict FROM ${FOLIO_SCHEMA}.sale WHERE id_negocio = $1 ORDER BY folio`,
+        `SELECT folio, folio_conflict FROM sale WHERE id_negocio = $1 ORDER BY folio`,
         [businessId],
       )
     ).rows;
-
-  it('has row level security enabled and forced on every table with id_negocio (ADR 0005)', async () => {
-    expect(await findTablesWithoutForcedRls(admin, FOLIO_SCHEMA)).toEqual([]);
-  });
 
   describe('enrolling devices', () => {
     it('gives the first devices of a business AA, AB, AC...', async () => {
@@ -117,10 +105,9 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
 
       await expect(
         asApplication(admin, BUSINESS_A, (client) =>
-          client.query(
-            `INSERT INTO ${FOLIO_SCHEMA}.device (id_negocio, device_code) VALUES ($1, 'AA')`,
-            [BUSINESS_A],
-          ),
+          client.query(`INSERT INTO device (id_negocio, device_code) VALUES ($1, 'AA')`, [
+            BUSINESS_A,
+          ]),
         ),
       ).rejects.toMatchObject({ code: '23505' });
     });
@@ -152,7 +139,7 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
       );
 
       const { rows } = await admin.query<{ device_time_raw: string; time_source: string }>(
-        `SELECT device_time_raw, time_source FROM ${FOLIO_SCHEMA}.sale`,
+        `SELECT device_time_raw, time_source FROM operation`,
       );
       expect(rows).toEqual([
         { device_time_raw: '2026-10-20T13:00:00.000Z', time_source: 'corrected' },
@@ -191,7 +178,7 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
       await recordSale(admin, arrival({ folio: 'AA-000142' }));
 
       const { rows } = await admin.query<{ folio_reported: string }>(
-        `SELECT folio_reported FROM ${FOLIO_SCHEMA}.sale WHERE folio_conflict`,
+        `SELECT folio_reported FROM sale WHERE folio_conflict`,
       );
       expect(rows).toEqual([{ folio_reported: 'AA-000142' }]);
     });
@@ -270,7 +257,7 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
 
       const { rows } = await admin.query<{ day: string }>(
         `SELECT to_char((occurred_at AT TIME ZONE 'America/Bogota')::date, 'YYYY-MM-DD') AS day
-           FROM ${FOLIO_SCHEMA}.sale`,
+           FROM operation`,
       );
       expect(rows).toEqual([{ day: '2026-10-19' }]);
     });
@@ -281,7 +268,7 @@ describe('device codes, folios and operation time in the database (ADR 0016)', (
     await recordSale(admin, arrival({ businessId: BUSINESS_B, folio: 'AB-000001' }));
 
     const seenByA = await asApplication(admin, BUSINESS_A, (client) =>
-      client.query<{ folio: string }>(`SELECT folio FROM ${FOLIO_SCHEMA}.sale`),
+      client.query<{ folio: string }>(`SELECT folio FROM sale`),
     );
 
     expect(seenByA.rows.map((row) => row.folio)).toEqual(['AA-000001']);

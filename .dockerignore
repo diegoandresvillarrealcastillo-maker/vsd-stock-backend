@@ -10,6 +10,8 @@
 node_modules
 dist
 coverage
+# El cliente de Prisma se genera dentro de la imagen, del esquema.
+src/generated
 
 # Control de versiones y herramientas del equipo
 .git

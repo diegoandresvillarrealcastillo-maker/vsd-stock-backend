@@ -32,12 +32,16 @@ Responde `200` con un JSON como `{"status":"ok","timestamp":"2026-10-16T19:51:35
 `.env.example` como `.env` y ajústalo. **El `.env` no se sube nunca al repositorio.** Una variable
 ya definida en el entorno tiene prioridad sobre la del archivo.
 
-| Variable       | Qué es                                                                                          | Por defecto |
-| -------------- | ----------------------------------------------------------------------------------------------- | ----------- |
-| `PORT`         | Puerto en el que escucha la API (entero entre 1 y 65535).                                       | `3000`      |
-| `CORS_ORIGINS` | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador. | ninguno     |
+| Variable                 | Qué es                                                                                                         | Por defecto |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ----------- |
+| `PORT`                   | Puerto en el que escucha la API (entero entre 1 y 65535).                                                      | `3000`      |
+| `CORS_ORIGINS`           | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                | ninguno     |
+| `DATABASE_MIGRATION_URL` | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee. | ninguno     |
 
 Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra.
+
+`DATABASE_MIGRATION_URL` es la única que lleva una contraseña en un ambiente real: va en tu `.env` y nunca en un
+chat, un Issue, un PR o un archivo del repositorio. Para la base local de Docker no hace falta (`npm run db:prepare`).
 
 ### CORS: qué origen poner
 
@@ -65,11 +69,33 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 | `npm run typecheck`        | Revisa los tipos del código y de las pruebas.                              |
 | `npm run openapi`          | Regenera `openapi.json`, el contrato con el frontend. Súbelo si cambia.    |
 | `npm run db:up`            | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).      |
-| `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Necesitan `db:up`.                |
+| `npm run db:prepare`       | Deja esa base con los roles y el esquema real (migraciones aplicadas).     |
+| `npm run db:migrate`       | Aplica las migraciones a `DATABASE_MIGRATION_URL`, tras confirmar el host. |
+| `npm run db:check-schema`  | Falla si `prisma/schema.prisma` y la base migrada no dicen lo mismo.       |
+| `npm run prisma:generate`  | Regenera el cliente de Prisma (también lo hace `npm ci`).                  |
+| `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Preparan la base solas.           |
 | `npm run bench:stock`      | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.      |
 | `npm run vectors`          | Regenera los vectores de cálculo compartidos con el frontend (ADR 0014).   |
 | `npm run vectors:check`    | Falla si `contract/calculation-vectors.json` no coincide con su generador. |
 | `npm run db:down`          | Apaga la base local.                                                       |
+
+## Base de datos y migraciones
+
+El modelo de datos está congelado ([ADR 0020](docs/adr/0020-se-congela-el-modelo-del-dominio.md)) y vive en dos
+lugares que una prueba obliga a coincidir ([ADR 0021](docs/adr/0021-esquema-real-y-primera-migracion.md)):
+[`prisma/schema.prisma`](prisma/schema.prisma), que usa el código, y las migraciones de
+[`prisma/migrations`](prisma/migrations), SQL que contiene además lo que Prisma no expresa (restricciones, seguridad
+por fila, disparadores, permisos).
+
+- **Cliente de Prisma:** se genera en `src/generated/` (no se versiona) con `npm ci` o `npm run prisma:generate`.
+- **Pruebas de integración:** `npm run db:up` y `npm run test:integration`. Antes de correr, borran y recrean el esquema
+  `public` de la base local de pruebas y le aplican las migraciones reales con Prisma; se **niegan** a hacerlo contra
+  cualquier base que no sea local y cuyo nombre no termine en `_test`.
+- **Un ambiente real** (PRE, y PROD cuando se levante la pausa): las migraciones las aplica **una persona** con
+  `npm run db:migrate`, que antes muestra a qué host apunta la conexión (sin la contraseña) y pide escribirlo. Los
+  pasos están en el [plan de ambientes](docs/ambientes.md). Una migración aplicada no se edita; el cambio va en otra.
+- **Cambiar el modelo:** edita `prisma/schema.prisma`, escribe la migración (`prisma migrate diff` te da la parte
+  estructural) y completa a mano lo que Prisma no expresa. Dos pruebas te dicen si las dos descripciones se separaron.
 
 ## Arquitectura
 

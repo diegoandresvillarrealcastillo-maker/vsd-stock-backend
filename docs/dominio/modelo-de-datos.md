@@ -5,12 +5,12 @@ Las tablas de la entrega, cómo se llaman y cómo se relacionan. **Está congela
 regla de nombres de este documento escribe un ADR que lo reemplace. Lo que no aparece aquí no se construye antes
 del 2026-11-16.
 
-> **Es el modelo, no el esquema de Prisma.** El Ciclo 2 lo traduce a `schema.prisma` y a migraciones, empezando por
-> las pruebas que ya existen: los esquemas de juguete de `test/integration/support/*-design.ts` se apuntan a las
-> tablas reales. Una prueba (`test/docs/modelo.spec.ts`) comprueba que todas las tablas que esos esquemas construyen
-> están en este documento, que el diagrama dibuja exactamente las tablas de la lista y que dibuja cada clave foránea
-> que esos esquemas exigen. Las demás relaciones del diagrama no las vigila ninguna prueba todavía (el Ciclo 2 las
-> convierte en claves foráneas reales): las fija la revisión.
+> **Es el modelo; el esquema de Prisma y las migraciones lo hacen real** (ADR 0021): `prisma/schema.prisma` y la
+> migración `prisma/migrations/20261017120000_modelo_inicial`. Tres pruebas lo mantienen honesto:
+> `test/docs/modelo.spec.ts` comprueba que las tablas que crea la migración son exactamente las de este documento y
+> que el diagrama dibuja exactamente las relaciones entre tablas que la migración exige con claves foráneas;
+> `test/integration/schema.integration.spec.ts` comprueba, contra PostgreSQL real, que la base es lo que aquí se dice;
+> y `test/integration/schema-drift.integration.spec.ts` comprueba que `schema.prisma` y la base migrada no se separan.
 
 ## Reglas de nombres
 
@@ -51,6 +51,10 @@ erDiagram
   WAREHOUSE ||--o{ STOCK_BALANCE : resume
   DEVICE ||--o{ CASH_SHIFT : abre
   APP_USER ||--o{ CASH_SHIFT : atiende
+  APP_USER |o--o{ DEVICE : registra_a
+  APP_USER ||--o{ OPERATION : realiza
+  DEVICE |o--o{ OPERATION : envia
+  APP_USER |o--o{ PURCHASE : crea
   CASH_SHIFT ||--o{ SALE : agrupa
   SALE ||--|{ SALE_LINE : contiene
   PRODUCT ||--o{ SALE_LINE : se_vende
@@ -58,6 +62,8 @@ erDiagram
   SALE ||--o| SALE_VOID : se_anula
   CASH_SHIFT ||--o{ CASH_MOVEMENT : registra
   OPERATION ||--o| SALE : origina
+  OPERATION ||--o| SALE_VOID : origina
+  OPERATION ||--o| PURCHASE : origina
   OPERATION ||--o{ STOCK_MOVEMENT : origina
   OPERATION ||--o{ CASH_MOVEMENT : origina
 ```
@@ -106,10 +112,10 @@ Existe el vocabulario en el [glosario](glosario.md), pero **no hay tabla** en es
 Agregar cualquiera de ellas es un ADR nuevo y una migración; el modelo está pensado para que no obligue a rehacer
 las demás.
 
-## Lo que el esquema real cambia respecto de las pruebas
+## Lo que el esquema real añade a los esquemas de juguete del Ciclo 1
 
-Los esquemas de juguete de los ADR 0013 a 0016 son más pequeños que el modelo; la migración real del Ciclo 2 los
-completa **sin cambiar sus reglas**:
+Los esquemas de juguete de los ADR 0013 a 0016 eran más pequeños que el modelo. La migración real los completó
+**sin cambiar sus reglas** (ADR 0021), y las especificaciones del Ciclo 1 corren ahora sobre estas tablas:
 
 - `stock_movement` y `stock_balance` llevan `warehouse_id` (hoy hay una bodega por local) y la clave del saldo es
   `(id_negocio, warehouse_id, product_id)`.
@@ -117,3 +123,10 @@ completa **sin cambiar sus reglas**:
   dispositivo y de la persona viven en `operation`, no repetidos en cada tabla.
 - `product` lleva `category_id` (opcional) y `min_stock_milli` (opcional, para la alerta de stock mínimo).
 - Toda tabla con `id_negocio` lleva RLS forzado y claves foráneas compuestas, como las de las pruebas.
+- **Relaciones que el diagrama no dibujaba y la migración sí exige** (se corrigió el diagrama, ver ADR 0021):
+  `operation` con la persona que la hizo y, si vino de uno, el dispositivo; `device` con la persona que lo
+  registró; `purchase` con la persona que la creó y con su `operation`; y `sale_void` con su `operation`.
+- **Las columnas que aún no existen** (por ejemplo los desgloses de IVA de la venta) se agregan con la migración del
+  ciclo que construye esa funcionalidad: una migración nueva, nunca la edición de una ya aplicada.
+- `app_user` también sirve de invitación pendiente: mientras no se canjea, `auth_user_id` está vacío y guarda el hash
+  del código y su vencimiento (lo decide el ticket C2-04). No hay una tabla más.

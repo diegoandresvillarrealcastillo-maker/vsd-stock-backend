@@ -149,7 +149,8 @@ describe('documentation: ADR format', () => {
 });
 
 describe('documentation: environment variables', () => {
-  const variables = [...read('.env.example').matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(
+  // Tambien cuentan las que van comentadas: son las que solo lee quien las necesita (migraciones, pruebas).
+  const variables = [...read('.env.example').matchAll(/^#? ?([A-Z][A-Z0-9_]*)=/gm)].map(
     (match) => match[1] ?? '',
   );
 

@@ -3,16 +3,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createAdminPool } from './support/database.js';
 import {
   SCHEMA,
-  createIsolationFixture,
-  dropIsolationFixture,
-} from './support/isolation-fixture.js';
+  createRlsCheckerFixture,
+  dropRlsCheckerFixture,
+} from './support/rls-checker-fixture.js';
 import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
 
 /**
  * La red de seguridad del ADR 0005: una tabla con `id_negocio` a la que se le
  * olvida RLS no da ningun error, simplemente deja ver los datos de todos.
- * Esta comprobacion recorre el catalogo de PostgreSQL y la delata. Cuando
- * exista el esquema de negocio se apuntara a el.
+ * Esta comprobacion recorre el catalogo de PostgreSQL y la delata. Aqui se prueba a SI MISMA sobre un esquema de
+ * juguete con tablas deliberadamente mal protegidas; sobre el esquema real corre en schema.integration.spec.ts.
  */
 describe('catalog check: every table with id_negocio has forced RLS (ADR 0005)', () => {
   let admin: pg.Pool;
@@ -22,11 +22,11 @@ describe('catalog check: every table with id_negocio has forced RLS (ADR 0005)',
   });
 
   beforeEach(async () => {
-    await createIsolationFixture(admin);
+    await createRlsCheckerFixture(admin);
   });
 
   afterAll(async () => {
-    await dropIsolationFixture(admin);
+    await dropRlsCheckerFixture(admin);
     await admin.end();
   });
 

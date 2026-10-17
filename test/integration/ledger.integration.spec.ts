@@ -1,41 +1,54 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { APP_ROLE, asApplication, createAdminPool } from './support/database.js';
+import { asApplication, createAdminPool } from './support/database.js';
 import {
   BUSINESS_A,
   BUSINESS_B,
-  LEDGER_SCHEMA,
-  createLedgerDesign,
-  dropLedgerDesign,
   openShift,
   recordStockEntry,
   registerSale,
   type SaleInput,
 } from './support/ledger-design.js';
-import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
+import { resetData, seedBusiness, type SeededBusiness } from './support/seed.js';
 
 /**
- * Demuestra, contra un PostgreSQL real, el diseno del ADR 0013: la existencia
- * es una suma de movimientos inmutables que se mantiene sola en la misma
- * transaccion, y una venta con sus movimientos es una sola unidad de trabajo
- * que se puede reenviar sin duplicar.
+ * Demuestra, contra un PostgreSQL real y sobre las tablas REALES (ADR 0021), el diseno del ADR 0013: la
+ * existencia es una suma de movimientos inmutables que se mantiene sola en la misma transaccion, y una venta
+ * con sus movimientos es una sola unidad de trabajo que se puede reenviar sin duplicar.
  */
 describe('stock ledger and sale as one operation (ADR 0013)', () => {
   let admin: pg.Pool;
+  let a: SeededBusiness;
   const PRODUCT_1 = '00000000-0000-4000-8000-000000000001';
   const PRODUCT_2 = '00000000-0000-4000-8000-000000000002';
+  /** Un producto del negocio B: el identificador de un producto es unico en toda la base, no por negocio. */
+  const PRODUCT_OF_B = '00000000-0000-4000-8000-000000001001';
 
   beforeAll(() => {
     admin = createAdminPool(16);
   });
 
   beforeEach(async () => {
-    await createLedgerDesign(admin);
+    await resetData(admin);
+    a = await seedBusiness(admin, BUSINESS_A);
+    await seedBusiness(admin, BUSINESS_B);
+    // Cincuenta productos del negocio A, del ...0000 al ...0049 (los usa la carga masiva), y uno del B.
+    await admin.query(
+      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
+       SELECT ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, $1, 'P' || n, 'SKU-' || n,
+              'unit', 1000, 0
+         FROM generate_series(0, 49) AS n`,
+      [BUSINESS_A],
+    );
+    await admin.query(
+      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
+       VALUES ($1, $2, 'Producto de B', 'B-1', 'unit', 1000, 0)`,
+      [PRODUCT_OF_B, BUSINESS_B],
+    );
   });
 
   afterAll(async () => {
-    await dropLedgerDesign(admin);
     await admin.end();
   });
 
@@ -43,7 +56,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
 
   const count = async (table: string, businessId = BUSINESS_A): Promise<number> => {
     const result = await admin.query<{ n: string }>(
-      `SELECT count(*) AS n FROM ${LEDGER_SCHEMA}.${table} WHERE id_negocio = $1`,
+      `SELECT count(*) AS n FROM ${table} WHERE id_negocio = $1`,
       [businessId],
     );
     return Number(result.rows[0]?.n);
@@ -51,7 +64,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
 
   const balance = async (productId: string, businessId = BUSINESS_A): Promise<number> => {
     const result = await admin.query<{ quantity: string }>(
-      `SELECT quantity FROM ${LEDGER_SCHEMA}.stock_balance WHERE id_negocio = $1 AND product_id = $2`,
+      `SELECT quantity FROM stock_balance WHERE id_negocio = $1 AND product_id = $2`,
       [businessId, productId],
     );
     return result.rows.length === 0 ? 0 : Number(result.rows[0]?.quantity);
@@ -59,7 +72,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
 
   const summed = async (productId: string, businessId = BUSINESS_A): Promise<number> => {
     const result = await admin.query<{ total: string }>(
-      `SELECT COALESCE(sum(delta), 0) AS total FROM ${LEDGER_SCHEMA}.stock_movement
+      `SELECT COALESCE(sum(delta), 0) AS total FROM stock_movement
         WHERE id_negocio = $1 AND product_id = $2`,
       [businessId, productId],
     );
@@ -70,10 +83,10 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
   const driftedBalances = async (): Promise<string[]> => {
     const result = await admin.query<{ product_id: string }>(
       `SELECT product_id FROM (
-         SELECT m.id_negocio, m.product_id, sum(m.delta) AS total
-           FROM ${LEDGER_SCHEMA}.stock_movement m GROUP BY 1, 2
+         SELECT m.id_negocio, m.warehouse_id, m.product_id, sum(m.delta) AS total
+           FROM stock_movement m GROUP BY 1, 2, 3
        ) s
-       LEFT JOIN ${LEDGER_SCHEMA}.stock_balance b USING (id_negocio, product_id)
+       LEFT JOIN stock_balance b USING (id_negocio, warehouse_id, product_id)
        WHERE b.quantity IS DISTINCT FROM s.total`,
     );
     return result.rows.map((row) => row.product_id);
@@ -88,6 +101,20 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       reason: 'purchase',
     });
 
+  /** Un movimiento suelto en la transaccion de `client`: primero su operacion, para que las claves foraneas pasen. */
+  const insertMovement = async (client: pg.PoolClient, productId: string, delta: number) => {
+    const operationId = randomUUID();
+    await client.query(
+      `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'sale', $3)`,
+      [BUSINESS_A, operationId, a.ownerId],
+    );
+    await client.query(
+      `INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason)
+       VALUES ($1, $2, $3, $4, $5, 'sale')`,
+      [BUSINESS_A, operationId, a.warehouseId, productId, delta],
+    );
+  };
+
   const saleOf = (shiftId: string, overrides: Partial<SaleInput> = {}): SaleInput => ({
     businessId: BUSINESS_A,
     operationId: randomUUID(),
@@ -99,10 +126,6 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
   // ---------- El esquema respeta el aislamiento (ADR 0005) ----------
 
   describe('isolation', () => {
-    it('has row level security enabled and forced on every table with id_negocio', async () => {
-      expect(await findTablesWithoutForcedRls(admin, LEDGER_SCHEMA)).toEqual([]);
-    });
-
     it('does not show business B the movements, balances or sales of business A', async () => {
       const shift = await openShift(admin, BUSINESS_A);
       await stock(PRODUCT_1, 10);
@@ -112,9 +135,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
         const tables = ['stock_movement', 'stock_balance', 'sale', 'operation', 'cash_movement'];
         const counts: Record<string, number> = {};
         for (const table of tables) {
-          const result = await client.query<{ n: string }>(
-            `SELECT count(*) AS n FROM ${LEDGER_SCHEMA}.${table}`,
-          );
+          const result = await client.query<{ n: string }>(`SELECT count(*) AS n FROM ${table}`);
           counts[table] = Number(result.rows[0]?.n);
         }
         return counts;
@@ -167,21 +188,17 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('refuses to update a movement, even for the owner of the table', async () => {
       await stock(PRODUCT_1, 10);
 
-      await expect(
-        admin.query(`UPDATE ${LEDGER_SCHEMA}.stock_movement SET delta = 999`),
-      ).rejects.toThrow(/append-only/);
+      await expect(admin.query(`UPDATE stock_movement SET delta = 999`)).rejects.toThrow(
+        /append-only/,
+      );
       expect(await balance(PRODUCT_1)).toBe(10);
     });
 
     it('refuses to delete a movement, even for the owner of the table', async () => {
       await stock(PRODUCT_1, 10);
 
-      await expect(admin.query(`DELETE FROM ${LEDGER_SCHEMA}.stock_movement`)).rejects.toThrow(
-        /append-only/,
-      );
-      await expect(admin.query(`TRUNCATE ${LEDGER_SCHEMA}.stock_movement`)).rejects.toThrow(
-        /append-only/,
-      );
+      await expect(admin.query(`DELETE FROM stock_movement`)).rejects.toThrow(/append-only/);
+      await expect(admin.query(`TRUNCATE stock_movement`)).rejects.toThrow(/append-only/);
       expect(await count('stock_movement')).toBe(1);
     });
 
@@ -189,11 +206,11 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       await stock(PRODUCT_1, 10);
 
       const attempts = [
-        `UPDATE ${LEDGER_SCHEMA}.stock_movement SET delta = 999`,
-        `DELETE FROM ${LEDGER_SCHEMA}.stock_movement`,
-        `UPDATE ${LEDGER_SCHEMA}.stock_balance SET quantity = 999`,
-        `INSERT INTO ${LEDGER_SCHEMA}.stock_balance (id_negocio, product_id, quantity)
-           VALUES ('${BUSINESS_A}', '${PRODUCT_2}', 5)`,
+        `UPDATE stock_movement SET delta = 999`,
+        `DELETE FROM stock_movement`,
+        `UPDATE stock_balance SET quantity = 999`,
+        `INSERT INTO stock_balance (id_negocio, warehouse_id, product_id, quantity)
+           VALUES ('${BUSINESS_A}', '${a.warehouseId}', '${PRODUCT_2}', 5)`,
       ];
       for (const sql of attempts) {
         await expect(
@@ -205,16 +222,21 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     });
 
     it('keeps the balance right when thousands of movements arrive in one statement', async () => {
-      await asApplication(admin, BUSINESS_A, (client) =>
-        client.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-           SELECT $1::uuid, gen_random_uuid(),
+      const operationId = randomUUID();
+      await asApplication(admin, BUSINESS_A, async (client) => {
+        await client.query(
+          `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'purchase', $3)`,
+          [BUSINESS_A, operationId, a.ownerId],
+        );
+        await client.query(
+          `INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason)
+           SELECT $1::uuid, $2::uuid, $3::uuid,
                   ('00000000-0000-4000-8000-' || lpad((n % 50)::text, 12, '0'))::uuid,
                   CASE WHEN n % 7 = 0 THEN -3 ELSE 2 END, 'purchase'
              FROM generate_series(1, 5000) AS n`,
-          [BUSINESS_A],
-        ),
-      );
+          [BUSINESS_A, operationId, a.warehouseId],
+        );
+      });
 
       expect(await count('stock_movement')).toBe(5000);
       expect(await driftedBalances()).toEqual([]);
@@ -223,11 +245,17 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('refuses a movement written without the business context, and leaves no trace of it', async () => {
       // Ni siquiera un superusuario puede escribir un movimiento sin decir de que negocio es:
       // el disparador escribe el saldo como un propietario sujeto a RLS, y sin contexto no puede.
+      // La operacion existe de antemano para que las claves foraneas pasen y lo que falle sea el saldo.
+      const operationId = randomUUID();
+      await admin.query(
+        `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'purchase', $3)`,
+        [BUSINESS_A, operationId, a.ownerId],
+      );
       await expect(
         admin.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-           VALUES ($1, gen_random_uuid(), $2, 5, 'purchase')`,
-          [BUSINESS_A, PRODUCT_1],
+          `INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason)
+           VALUES ($1, $2, $3, $4, 5, 'purchase')`,
+          [BUSINESS_A, operationId, a.warehouseId, PRODUCT_1],
         ),
       ).rejects.toThrow(/row-level security policy for table "stock_balance"/);
 
@@ -259,17 +287,24 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('treats the same operationId in another business as a different operation', async () => {
       const operationId = randomUUID();
       await stock(PRODUCT_1, 10, BUSINESS_A);
-      await stock(PRODUCT_1, 10, BUSINESS_B);
+      await stock(PRODUCT_OF_B, 10, BUSINESS_B);
       const shiftA = await openShift(admin, BUSINESS_A);
       const shiftB = await openShift(admin, BUSINESS_B);
 
       const a = await registerSale(admin, saleOf(shiftA, { operationId }));
-      const b = await registerSale(admin, saleOf(shiftB, { operationId, businessId: BUSINESS_B }));
+      const b = await registerSale(
+        admin,
+        saleOf(shiftB, {
+          operationId,
+          businessId: BUSINESS_B,
+          lines: [{ productId: PRODUCT_OF_B, quantity: 1, unitPrice: 1000 }],
+        }),
+      );
 
       expect(a.replayed).toBe(false);
       expect(b.replayed).toBe(false);
       expect(await balance(PRODUCT_1, BUSINESS_A)).toBe(9);
-      expect(await balance(PRODUCT_1, BUSINESS_B)).toBe(9);
+      expect(await balance(PRODUCT_OF_B, BUSINESS_B)).toBe(9);
     });
 
     it('applies exactly once when the same sale arrives ten times at the same moment', async () => {
@@ -343,18 +378,12 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
 
     it('would miss an oversell if the check read a plain sum instead of the locked balance (why the balance exists)', async () => {
       // Sin el saldo (disparador apagado) cada venta suma solo lo confirmado mas lo suyo.
-      await admin.query(
-        `ALTER TABLE ${LEDGER_SCHEMA}.stock_movement DISABLE TRIGGER apply_stock_movement`,
-      );
+      await admin.query(`ALTER TABLE stock_movement DISABLE TRIGGER apply_stock_movement`);
       await stock(PRODUCT_1, 1);
       const sumSeenBy = async (client: pg.PoolClient): Promise<number> => {
-        await client.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-           VALUES ($1, gen_random_uuid(), $2, -1, 'sale')`,
-          [BUSINESS_A, PRODUCT_1],
-        );
+        await insertMovement(client, PRODUCT_1, -1);
         const result = await client.query<{ total: string }>(
-          `SELECT sum(delta) AS total FROM ${LEDGER_SCHEMA}.stock_movement
+          `SELECT sum(delta) AS total FROM stock_movement
             WHERE id_negocio = $1 AND product_id = $2`,
           [BUSINESS_A, PRODUCT_1],
         );
@@ -376,6 +405,8 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       } finally {
         left.release();
         right.release();
+        // El disparador es de la tabla, no de la prueba: se deja como estaba para las demas.
+        await admin.query(`ALTER TABLE stock_movement ENABLE TRIGGER apply_stock_movement`);
       }
     });
 
@@ -383,11 +414,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       const left = await admin.connect();
       const right = await admin.connect();
       const insert = (client: pg.PoolClient, productId: string) =>
-        client.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-           VALUES ($1, gen_random_uuid(), $2, -1, 'sale')`,
-          [BUSINESS_A, productId],
-        );
+        insertMovement(client, productId, -1);
       try {
         for (const client of [left, right]) {
           await client.query('BEGIN');
@@ -464,9 +491,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       const sale = registerSale(admin, saleOf(shift), {
         afterShiftLock: async () => {
           closing = admin
-            .query(`UPDATE ${LEDGER_SCHEMA}.cash_shift SET closed_at = now() WHERE id = $1`, [
-              shift,
-            ])
+            .query(`UPDATE cash_shift SET closed_at = now() WHERE id = $1`, [shift])
             .then(() => {
               closed = true;
             });
@@ -485,13 +510,19 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('forbids, in the database itself, a sale that points to a shift of another business', async () => {
       const shiftOfB = await openShift(admin, BUSINESS_B);
 
+      const operationId = randomUUID();
+      await admin.query(
+        `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'sale', $3)`,
+        [BUSINESS_A, operationId, a.ownerId],
+      );
+
       await expect(
         admin.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.sale (id_negocio, operation_id, shift_id, total, needs_adjustment)
-           VALUES ($1, gen_random_uuid(), $2, 100, false)`,
-          [BUSINESS_A, shiftOfB],
+          `INSERT INTO sale (id_negocio, operation_id, shift_id, folio, folio_reported, total, needs_adjustment)
+           VALUES ($1, $2, $3, 'X-1', 'X-1', 100, false)`,
+          [BUSINESS_A, operationId, shiftOfB],
         ),
-      ).rejects.toThrow(/sale_shift_fk/);
+      ).rejects.toThrow(/sale_id_negocio_shift_id_fkey/);
     });
 
     it('records the cash collected for the sale in the open shift', async () => {
@@ -504,7 +535,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       );
 
       const cash = await admin.query<{ amount: string; shift_id: string }>(
-        `SELECT amount, shift_id FROM ${LEDGER_SCHEMA}.cash_movement WHERE id_negocio = $1`,
+        `SELECT amount, shift_id FROM cash_movement WHERE id_negocio = $1`,
         [BUSINESS_A],
       );
       expect(outcome.total).toBe(3600);
@@ -514,9 +545,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('undoes everything when the shift is closed: no sale, no movements, no trace of the operation', async () => {
       await stock(PRODUCT_1, 5);
       const shift = await openShift(admin, BUSINESS_A);
-      await admin.query(`UPDATE ${LEDGER_SCHEMA}.cash_shift SET closed_at = now() WHERE id = $1`, [
-        shift,
-      ]);
+      await admin.query(`UPDATE cash_shift SET closed_at = now() WHERE id = $1`, [shift]);
       const input = saleOf(shift);
 
       await expect(registerSale(admin, input)).rejects.toThrow(/shift/i);
@@ -575,8 +604,7 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       `SELECT r.rolsuper, r.rolbypassrls
          FROM pg_proc p
          JOIN pg_roles r ON r.oid = p.proowner
-        WHERE p.proname = 'apply_stock_movement' AND p.pronamespace = $1::regnamespace`,
-      [LEDGER_SCHEMA],
+        WHERE p.proname = 'apply_stock_movement' AND p.pronamespace = 'public'::regnamespace`,
     );
     await stock(PRODUCT_1, 7);
 
@@ -587,22 +615,12 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
   it('pins an empty search_path on every SECURITY DEFINER function, so nobody can hijack it', async () => {
     const functions = await admin.query<{ proname: string; proconfig: string[] | null }>(
       `SELECT proname, proconfig FROM pg_proc
-        WHERE pronamespace = $1::regnamespace AND prosecdef`,
-      [LEDGER_SCHEMA],
+        WHERE pronamespace = 'public'::regnamespace AND prosecdef`,
     );
 
     expect(functions.rows.length).toBeGreaterThan(0);
     for (const row of functions.rows) {
       expect(row.proconfig, row.proname).toContain('search_path=""');
     }
-  });
-
-  it('runs the application as a role that is neither owner nor superuser', async () => {
-    const role = await admin.query<{ rolsuper: boolean; rolbypassrls: boolean }>(
-      'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1',
-      [APP_ROLE],
-    );
-
-    expect(role.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
   });
 });
