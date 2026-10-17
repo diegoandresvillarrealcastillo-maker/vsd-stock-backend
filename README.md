@@ -67,6 +67,13 @@ valor** cuando es una cadena de conexión (lleva la clave).
   ([ADR 0019](docs/adr/0019-convenciones-de-la-api.md)): repetirla da `200` con la misma compra y
   `Idempotent-Replayed: true`, y con otros datos `409 operation-id-reused`. `GET /v1/purchases` (de la más nueva a la más
   vieja, por cursor) y `GET /v1/purchases/{id}` las consultan. Todo es de la gerencia salvo ver la bodega.
+- `GET /v1/stock` es la **existencia** de cada producto (la suma de su libro de movimientos; un producto que nunca se
+  movió tiene cero): los tres roles la ven, busca por nombre, SKU o código de barras, filtra por categoría y por alta,
+  `belowMinimum=true` deja solo los que están **por debajo** del mínimo que el negocio fijó en el catálogo (igual al mínimo
+  no avisa) y pagina por cursor. `GET /v1/stock-movements?productId=…` es el historial de un producto, del más nuevo al más
+  viejo. `POST /v1/stock-adjustments` ajusta la existencia de un producto (la gerencia): es **un movimiento nuevo con su
+  motivo obligatorio**, nunca una edición del saldo, es idempotente por `operationId` y la existencia puede quedar en
+  negativo ([ADR 0013](docs/adr/0013-existencia-derivada-y-venta-como-una-sola-operacion.md)).
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 
