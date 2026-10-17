@@ -29,6 +29,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0017](0017-roles-permisos-y-modo-sin-conexion.md)                      | Tres roles, permisos por omisión negados y mostrador sin red     | Aceptada |
 | [0018](0018-cifrado-local-y-olvido-del-dispositivo.md)                  | Cifrado de lo guardado en el dispositivo y olvido en un paso     | Aceptada |
 | [0019](0019-convenciones-de-la-api.md)                                  | Convenciones de la API: versión, errores, enteros e idempotencia | Aceptada |
+| [0020](0020-se-congela-el-modelo-del-dominio.md)                        | Se congela el modelo del dominio                                 | Aceptada |
 
 ## Reglas
 

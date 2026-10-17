@@ -9,6 +9,7 @@ con una sola numeración de decisiones.
 | [Decisiones de arquitectura (ADR)](adr/README.md)                    | Qué decidimos, por qué, qué alternativas descartamos y qué perdemos. Un ADR no se edita.              |
 | [Glosario del dominio](dominio/glosario.md)                          | Cómo se llama cada cosa del negocio, en español y en el código, y qué tan firme es cada término.      |
 | [Mapa de contextos](dominio/mapa-de-contextos.md)                    | En qué partes se divide el sistema, cómo se hablan y qué entra en la entrega.                         |
+| [Modelo de datos](dominio/modelo-de-datos.md)                        | Las 20 tablas de la entrega, su diagrama y sus reglas de nombres. Congelado por el ADR 0020.          |
 | [Permisos](dominio/permisos.md)                                      | Qué puede hacer cada rol y qué funciona sin conexión (la tabla se compara con el código).             |
 | [Convenciones de la API](convenciones-de-la-api.md)                  | Versión, errores, dinero, fechas, idempotencia, paginación y cabeceras, con ejemplos.                 |
 | [Experimento de cifrado local](experimentos/cifrado-local/README.md) | Cómo se comprobó en un navegador real el cifrado y el olvido del ADR 0018, con qué resultado.         |

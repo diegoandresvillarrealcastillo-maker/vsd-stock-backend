@@ -3,10 +3,11 @@
 El vocabulario del negocio, en español, con el nombre que tiene cada cosa en el código. Sirve para que quien
 escribe una historia de usuario, una prueba o un documento use la misma palabra para la misma cosa.
 
-> **Este glosario no congela el modelo.** Casi todo lo que sigue es un punto de partida que se valida y se
-> congela en el Ciclo 1 con un ADR. Por eso cada término dice en qué estado está, y un término en
-> _Hipótesis_ puede cambiar de nombre, de forma o desaparecer. El [mapa de contextos](mapa-de-contextos.md)
-> agrupa estos términos en las partes del sistema.
+> **Desde el Ciclo 1 el modelo está congelado** para todo lo que entra en la entrega (ADR 0020): cada término
+> «Decidido» cita el ADR que lo fijó y no cambia sin otro ADR que lo reemplace. Lo único que sigue como
+> _Hipótesis_ es lo que la entrega deja **fuera de la entrega**: existe el vocabulario, no hay tabla ni código, y
+> nadie debe construir encima. El [mapa de contextos](mapa-de-contextos.md) agrupa estos términos en las partes
+> del sistema y el [modelo de datos](modelo-de-datos.md) dice cómo se llaman sus tablas.
 
 ## Cómo leerlo
 
@@ -14,14 +15,14 @@ escribe una historia de usuario, una prueba o un documento use la misma palabra 
 
 | Estado        | Qué significa                                                                                                          |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Decidido**  | Está escrito en un ADR. No cambia sin otro ADR que lo reemplace.                                                       |
+| **Decidido**  | Está escrito en un ADR, que el término cita. No cambia sin otro ADR que lo reemplace.                                  |
 | **Requisito** | Lo pidió el encargo inicial o el dueño del proyecto, pero todavía no tiene ADR. Se fija en el ciclo que lo implemente. |
-| **Hipótesis** | Punto de partida para validar en el Ciclo 1. Nadie debe construir encima como si fuera definitivo.                     |
+| **Hipótesis** | Solo para lo que queda fuera de la entrega: el concepto existe en el vocabulario y nada más.                           |
 
 **Idioma:** los documentos y los textos para la persona usuaria van en español; el código y sus identificadores,
 en inglés. La columna **Código** de cada término dice cómo se llama en el código (`—` si no tiene).
-La única regla de nombres en la base de datos que ya está decidida es la columna `id_negocio` (ADR 0005); el
-resto de nombres se decide en el Ciclo 1.
+Los nombres de las tablas y las columnas están en el [modelo de datos](modelo-de-datos.md); la columna de
+aislamiento, `id_negocio`, es la única en español (ADR 0005).
 
 **Alcance de la entrega:** donde un término dice _fuera de la entrega_, el concepto existe en el vocabulario pero
 no se construye antes del 2026-11-16 (ver el mapa de contextos).
@@ -39,21 +40,21 @@ negocio nunca ve los datos de otro. El negocio sale del token verificado, no de 
 
 ### Sucursal
 
-Un local físico de un negocio. Se modela desde el inicio para no rehacer el modelo después, pero la entrega
-opera con una sola por negocio.
+Un local físico de un negocio (tabla `branch`). Se modela desde el inicio para no rehacer el modelo después,
+pero la entrega opera con una sola por negocio.
 
 **Código:** `Branch`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Usuario
 
-Una persona con acceso a un negocio. Cómo se identifica (Supabase Auth y la verificación del token contra su
-JWKS) se decide en el Ciclo 2.
+Una persona con acceso a un negocio, con un rol y activa o dada de baja (tabla `app_user`). Cómo se
+identifica (Supabase Auth y la verificación del token contra su JWKS) se decide en el Ciclo 2.
 
 **Código:** `User`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0017 y ADR 0020)
 
 ### Rol
 
@@ -111,11 +112,12 @@ presentación es un producto independiente con su propio código, sin conversió
 
 ### Categoría
 
-Agrupación de productos para encontrarlos y reportarlos: «Granos», «Aseo».
+Agrupación opcional de productos, de un solo nivel, para encontrarlos: «Granos», «Aseo». El nombre es único por
+negocio y un producto puede no tener categoría.
 
 **Código:** `Category`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Unidad de medida
 
@@ -175,7 +177,7 @@ El lugar donde está la mercancía de un negocio. Se modela desde el inicio, per
 
 **Código:** `Warehouse`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Movimiento de stock
 
@@ -210,10 +212,11 @@ administrador (no al cajero).
 ### Ajuste
 
 Un movimiento de stock que corrige la existencia (mercancía dañada, un conteo, un error). Reemplaza editar.
+Abrir una caja en unidades es un ajuste (ADR 0015).
 
 **Código:** `Adjustment`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0013 y ADR 0020)
 
 ### Compra
 
@@ -221,24 +224,24 @@ La entrada de mercancía que se le compra a un proveedor. Genera movimientos de 
 
 **Código:** `Purchase`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Proveedor
 
-A quien el negocio le compra la mercancía.
+A quien el negocio le compra la mercancía. Solo se guarda su nombre y, si se quiere, un dato de contacto.
 
 **Código:** `Supplier`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Alerta de stock mínimo
 
-El aviso de que la existencia de un producto bajó del mínimo que el negocio fijó. Si el plazo aprieta, se
-recorta después de la mascota y de los reportes.
+El aviso de que la existencia de un producto bajó del mínimo que el negocio fijó (un campo opcional del
+producto). Si el plazo aprieta, se recorta después de la mascota y de los reportes.
 
 **Código:** `LowStockAlert`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Conteo físico
 
@@ -252,38 +255,41 @@ Contar la mercancía real y compararla con la existencia del sistema. Fuera de l
 
 ### Venta
 
-La transacción en el mostrador: qué se vendió, a qué precio y cómo se pagó. Una venta ya hecha **nunca se
-rechaza al sincronizar** (ver _Requiere ajuste_); solo se rechaza lo inválido de verdad: negocio distinto,
-firma inválida o forma ilegible.
+La transacción en el mostrador: qué se vendió, a qué precio y cómo se pagó. Es una sola transacción con sus
+movimientos de stock y de caja, lleva su folio y es inmutable. Una venta ya hecha **nunca se rechaza al
+sincronizar** (ver _Requiere ajuste_); solo se rechaza lo inválido de verdad: negocio distinto, firma inválida
+o forma ilegible.
 
 **Código:** `Sale`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0009, ADR 0013, ADR 0014 y ADR 0016)
 
 ### Línea de venta
 
-Un producto, una cantidad y su precio dentro de una venta.
+Un producto, una cantidad (en milésimas), el precio y la tarifa que tenían al vender y el descuento de la línea,
+dentro de una venta.
 
 **Código:** `SaleLine`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0014 y ADR 0015)
 
 ### Pago
 
 Con qué se cobró una venta. La entrega acepta efectivo y el **registro manual** de tarjeta o transferencia, sin
-pasarela de pagos.
+pasarela de pagos. Solo el efectivo entra a la caja.
 
 **Código:** `Payment`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Descuento
 
-Una rebaja sobre una línea o sobre toda la venta.
+Una rebaja en pesos sobre una línea, con el IVA incluido, que no pasa del valor de la línea. Un porcentaje se
+convierte a pesos con la misma regla de redondeo. El descuento sobre toda la venta queda fuera de la entrega.
 
 **Código:** `Discount`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0014)
 
 ### Anulación
 
@@ -304,7 +310,8 @@ Que el cliente regresa mercancía. Las devoluciones parciales quedan fuera de la
 
 ### Cliente
 
-A quien se le vende. Es opcional: una venta de mostrador puede no tener cliente.
+A quien se le vende. Es opcional: una venta de mostrador puede no tener cliente. Fuera de la entrega: sin fiado
+no hace falta saber a quién se vende y así no se guardan datos personales de clientes (ADR 0020); no hay tabla.
 
 **Código:** `Customer`
 
@@ -322,28 +329,30 @@ Vender ahora y cobrar después, y las cuentas por cobrar que eso genera. Fuera d
 
 ### Turno de caja
 
-El periodo entre que una persona abre la caja y la cierra. Todo cobro en efectivo ocurre dentro de un turno.
+El periodo entre que una persona abre la caja y la cierra. Todo cobro en efectivo ocurre dentro de un turno, y
+cerrarlo espera a las ventas en curso para que el arqueo no se pierda ninguna (ADR 0013).
 
 **Código:** `CashShift`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0013 y ADR 0020)
 
 ### Arqueo
 
 Al cerrar el turno, comparar el efectivo que **debería haber** (apertura, más cobros, menos egresos) con el
-que **se cuenta**. La diferencia queda registrada.
+que **se cuenta**. La diferencia queda registrada en el turno.
 
 **Código:** `CashCount`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0020)
 
 ### Movimiento de caja
 
-Un ingreso o un egreso de efectivo que no es una venta: pagar al repartidor, retirar para el banco.
+Un ingreso o un egreso de efectivo: el cobro de una venta o algo que no es una venta, como pagar al repartidor o
+retirar para el banco. Lo registra un administrador o el dueño y necesita conexión (ADR 0017).
 
 **Código:** `CashMovement`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0017 y ADR 0020)
 
 ### Folio
 
