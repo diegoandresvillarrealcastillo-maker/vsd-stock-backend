@@ -107,6 +107,19 @@ describe('ListUsersUseCase', () => {
     ).rejects.toBeInstanceOf(UserInactiveError);
   });
 
+  it('refuses a cursor whose id is not a UUID, which the database could not compare', async () => {
+    const { useCase } = setup();
+
+    const failure = await useCase
+      .execute(memberSession('owner'), { cursor: encodeCursor(['Ana', 'no-es-un-uuid']) })
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ValidationFailedError);
+    expect((failure as ValidationFailedError).errors.map((e) => e.code)).toEqual([
+      'invalid-cursor',
+    ]);
+  });
+
   it('reports a bad limit and a bad cursor together', async () => {
     const { useCase } = setup();
 

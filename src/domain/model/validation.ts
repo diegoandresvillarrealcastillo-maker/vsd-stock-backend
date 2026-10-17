@@ -63,9 +63,17 @@ const escapePointer = (segment: string): string =>
  */
 export class InputReader {
   private readonly source: Readonly<Record<string, unknown>> | undefined;
-  private readonly errors: FieldError[] = [];
+  private readonly errors: FieldError[];
+  /** El puntero del objeto que se lee dentro del cuerpo: vacio para el cuerpo mismo, `/lines/0` para una linea. */
+  private readonly prefix: string;
 
-  constructor(input: unknown, allowed: readonly string[]) {
+  constructor(
+    input: unknown,
+    allowed: readonly string[],
+    scope: { readonly prefix: string; readonly errors: FieldError[] } = { prefix: '', errors: [] },
+  ) {
+    this.prefix = scope.prefix;
+    this.errors = scope.errors;
     if (typeof input !== 'object' || input === null || Array.isArray(input)) {
       this.fail('', 'invalid-type', 'La petición debe ser un objeto JSON.');
       return;
@@ -227,6 +235,50 @@ export class InputReader {
     return text;
   }
 
+  /** Los elementos de una lista, tal cual llegaron, para leer cada uno con `within`. */
+  items(
+    key: string,
+    options: Labelled & { readonly min: number; readonly max: number },
+  ): readonly unknown[] {
+    const raw = this.raw(key);
+    if (raw === undefined) {
+      this.missing(key, options, false);
+      return [];
+    }
+    if (!Array.isArray(raw)) {
+      return this.reject(key, 'invalid-type', `${options.label} debe ser una lista.`, []);
+    }
+    if (raw.length < options.min) {
+      const plural = options.min === 1 ? 'elemento' : 'elementos';
+      return this.reject(
+        key,
+        'too-few',
+        `${options.label} debe tener al menos ${options.min} ${plural}.`,
+        [],
+      );
+    }
+    if (raw.length > options.max) {
+      return this.reject(
+        key,
+        'too-many',
+        `${options.label} no puede pasar de ${options.max} elementos.`,
+        [],
+      );
+    }
+    return raw as readonly unknown[];
+  }
+
+  /**
+   * Un lector para un objeto que va DENTRO del cuerpo (una linea de una compra). Sus problemas salen con el puntero
+   * completo (`/lines/0/quantityMilli`) y se suman a los de este lector, en el orden en que se encuentran.
+   */
+  within(pointer: string, input: unknown, allowed: readonly string[]): InputReader {
+    return new InputReader(input, allowed, {
+      prefix: `${this.prefix}${pointer}`,
+      errors: this.errors,
+    });
+  }
+
   /** Si el campo llego como `null`, que en una peticion quiere decir «ninguno», distinto de no haber llegado. */
   isNull(key: string): boolean {
     return this.raw(key) === null;
@@ -255,7 +307,7 @@ export class InputReader {
 
   /** Para una regla que mira varios campos a la vez y que el lector no conoce. */
   fail(pointer: string, code: string, detail: string): void {
-    this.errors.push({ pointer, code, detail });
+    this.errors.push({ pointer: `${this.prefix}${pointer}`, code, detail });
   }
 
   /** Lanza si algo no sirvio; si no, deja usar lo leido. */

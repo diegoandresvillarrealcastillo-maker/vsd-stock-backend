@@ -1,5 +1,5 @@
 import { canInvite } from '../../domain/model/user-administration.js';
-import { pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
+import { endsInUuid, pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
 import { InputReader } from '../../domain/model/validation.js';
 import type { Session } from '../../domain/ports/in/authenticate.js';
 import type { ListUsers, PersonView } from '../../domain/ports/in/business-people.js';
@@ -19,7 +19,7 @@ export class ListUsersUseCase implements ListUsers {
     ensureAllowed(canInvite(actor, 'cashier'));
 
     const reader = new InputReader(query, ['limit', 'cursor']);
-    const request = readPageRequest(reader, 2);
+    const request = readPageRequest(reader, 2, endsInUuid);
     reader.finish();
 
     const [afterName, afterId] = request.after ?? [];

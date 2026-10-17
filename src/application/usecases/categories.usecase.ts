@@ -1,5 +1,5 @@
 import { CategoryNotFoundError } from '../../domain/model/catalog-errors.js';
-import { pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
+import { endsInUuid, pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
 import { isUuid } from '../../domain/model/uuid.js';
 import { InputReader } from '../../domain/model/validation.js';
 import type { Session } from '../../domain/ports/in/authenticate.js';
@@ -22,7 +22,7 @@ export class CategoriesUseCase implements Categories {
     ensureCan(actor, 'product:view');
 
     const reader = new InputReader(query, ['limit', 'cursor']);
-    const request = readPageRequest(reader, 2);
+    const request = readPageRequest(reader, 2, endsInUuid);
     reader.finish();
 
     const [afterName, afterId] = request.after ?? [];

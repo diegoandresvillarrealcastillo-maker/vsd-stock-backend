@@ -111,6 +111,10 @@ export class FakeCatalog implements CatalogRepository {
     return Promise.resolve(this.products.find((product) => product.id === id) ?? null);
   }
 
+  findProducts(ids: readonly string[]): Promise<ProductRecord[]> {
+    return Promise.resolve(this.products.filter((product) => ids.includes(product.id)));
+  }
+
   hasStockMovements(productId: string): Promise<boolean> {
     return Promise.resolve(this.moved.has(productId));
   }

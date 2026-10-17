@@ -16,3 +16,6 @@ export const UPDATE_USER = Symbol('UPDATE_USER');
 export const REGENERATE_INVITATION = Symbol('REGENERATE_INVITATION');
 export const CATEGORIES = Symbol('CATEGORIES');
 export const PRODUCTS = Symbol('PRODUCTS');
+export const SUPPLIERS = Symbol('SUPPLIERS');
+export const PURCHASES = Symbol('PURCHASES');
+export const WAREHOUSE = Symbol('WAREHOUSE');
