@@ -64,7 +64,7 @@ valor** cuando es una cadena de conexión (lleva la clave).
   se borra), `GET /v1/warehouse` es la bodega única del negocio y `POST /v1/purchases` registra una **compra**: la compra,
   sus líneas (cantidad en milésimas y costo por unidad) y los movimientos que suben la existencia se guardan en la misma
   transacción, y el saldo lo sube el disparador de la base. Es idempotente por `operationId`
-  ([ADR 0019](docs/adr/0019-contrato-de-la-api-y-sincronizacion.md)): repetirla da `200` con la misma compra y
+  ([ADR 0019](docs/adr/0019-convenciones-de-la-api.md)): repetirla da `200` con la misma compra y
   `Idempotent-Replayed: true`, y con otros datos `409 operation-id-reused`. `GET /v1/purchases` (de la más nueva a la más
   vieja, por cursor) y `GET /v1/purchases/{id}` las consultan. Todo es de la gerencia salvo ver la bodega.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
