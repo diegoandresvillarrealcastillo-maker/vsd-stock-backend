@@ -47,7 +47,8 @@ npm run dev               # http://localhost:5173
 ```
 
 **Para comprobar que se hablan:** abre el frontend; el panel «Estado del servicio» debe decir «En línea». Si dice
-«Sin conexión» con el backend en marcha, mira la consola del navegador: casi siempre es `CORS_ORIGINS` (ADR 0012).
+«Sin conexión» con el backend en marcha, mira la consola del navegador: casi siempre es `CORS_ORIGINS`
+([ADR 0012](adr/0012-cors-con-lista-explicita-de-origenes-y-sin-credenciales.md)).
 
 **Base de datos de trabajo** (solo para las pruebas de integración):
 
