@@ -8,19 +8,20 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 
 ## Índice
 
-| ADR                                                           | Decisión                                                       | Estado   |
-| ------------------------------------------------------------- | -------------------------------------------------------------- | -------- |
-| [0001](0001-dos-repositorios-independientes.md)               | Dos repositorios independientes unidos por el contrato OpenAPI | Aceptada |
-| [0002](0002-arquitectura-hexagonal-impuesta-por-eslint.md)    | Arquitectura hexagonal impuesta por ESLint                     | Aceptada |
-| [0003](0003-el-dominio-se-escribe-sin-framework.md)           | El dominio se escribe sin framework                            | Aceptada |
-| [0004](0004-uuid-como-clave-primaria.md)                      | UUID como clave primaria                                       | Aceptada |
-| [0005](0005-aislamiento-por-negocio-en-la-base-de-datos.md)   | El aislamiento entre negocios lo impone la base de datos       | Aceptada |
-| [0006](0006-stack-y-versiones.md)                             | Stack y versiones                                              | Aceptada |
-| [0007](0007-vitest-pruebas-primero-y-cobertura.md)            | Vitest, pruebas primero y cobertura mínima                     | Aceptada |
-| [0008](0008-tailwind-y-framer-motion.md)                      | Estilo con Tailwind y movimiento con Framer Motion             | Aceptada |
-| [0009](0009-motor-offline-y-libro-de-movimientos.md)          | Motor offline-first y libro de movimientos                     | Aceptada |
-| [0010](0010-flujo-de-trabajo-en-github.md)                    | Flujo de trabajo en GitHub                                     | Aceptada |
-| [0011](0011-el-backend-se-empaqueta-como-imagen-de-docker.md) | El backend se empaqueta como una imagen de Docker              | Aceptada |
+| ADR                                                                     | Decisión                                                       | Estado   |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------- | -------- |
+| [0001](0001-dos-repositorios-independientes.md)                         | Dos repositorios independientes unidos por el contrato OpenAPI | Aceptada |
+| [0002](0002-arquitectura-hexagonal-impuesta-por-eslint.md)              | Arquitectura hexagonal impuesta por ESLint                     | Aceptada |
+| [0003](0003-el-dominio-se-escribe-sin-framework.md)                     | El dominio se escribe sin framework                            | Aceptada |
+| [0004](0004-uuid-como-clave-primaria.md)                                | UUID como clave primaria                                       | Aceptada |
+| [0005](0005-aislamiento-por-negocio-en-la-base-de-datos.md)             | El aislamiento entre negocios lo impone la base de datos       | Aceptada |
+| [0006](0006-stack-y-versiones.md)                                       | Stack y versiones                                              | Aceptada |
+| [0007](0007-vitest-pruebas-primero-y-cobertura.md)                      | Vitest, pruebas primero y cobertura mínima                     | Aceptada |
+| [0008](0008-tailwind-y-framer-motion.md)                                | Estilo con Tailwind y movimiento con Framer Motion             | Aceptada |
+| [0009](0009-motor-offline-y-libro-de-movimientos.md)                    | Motor offline-first y libro de movimientos                     | Aceptada |
+| [0010](0010-flujo-de-trabajo-en-github.md)                              | Flujo de trabajo en GitHub                                     | Aceptada |
+| [0011](0011-el-backend-se-empaqueta-como-imagen-de-docker.md)           | El backend se empaqueta como una imagen de Docker              | Aceptada |
+| [0012](0012-cors-con-lista-explicita-de-origenes-y-sin-credenciales.md) | CORS con lista explícita de orígenes y sin credenciales        | Aceptada |
 
 ## Reglas
 
