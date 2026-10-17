@@ -210,6 +210,22 @@ describe('redeeming an invitation against PostgreSQL (ADR 0023)', () => {
     ).rejects.toBeInstanceOf(InvitationExpiredError);
   });
 
+  it('treats the exact moment of the expiry as expired', async () => {
+    await seedInvitation(BUSINESS_A, 'CODIGO-A', { expiresAt: IN_A_WEEK });
+
+    await expect(
+      redeemer.redeem(redemption('CODIGO-A', { now: IN_A_WEEK })),
+    ).rejects.toBeInstanceOf(InvitationExpiredError);
+  });
+
+  it('still accepts it one millisecond before the expiry', async () => {
+    await seedInvitation(BUSINESS_A, 'CODIGO-A', { expiresAt: IN_A_WEEK });
+
+    await expect(
+      redeemer.redeem(redemption('CODIGO-A', { now: new Date(IN_A_WEEK.getTime() - 1) })),
+    ).resolves.toBeDefined();
+  });
+
   it('refuses a person who already belongs to a business, and keeps the invitation pending', async () => {
     const existing = await seedBusiness(admin, '33333333-3333-4333-8333-333333333333');
     const authUserId = (await rowOf(existing.ownerId)).auth_user_id as string;

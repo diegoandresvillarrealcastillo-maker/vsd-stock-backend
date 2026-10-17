@@ -179,6 +179,46 @@ describe('the invitation policies against PostgreSQL (ADR 0023)', () => {
       ).rejects.toThrow(/row-level security/);
     });
 
+    it('refuses to bind it to another identity even when nothing is read back', async () => {
+      const id = await invite(BUSINESS_A, 'hash-a');
+
+      // Sin RETURNING: lo unico que impide el cambio es la condicion WITH CHECK de la politica.
+      await expect(
+        withSettings(
+          admin,
+          { 'app.invitation_hash': 'hash-a', 'app.auth_user_id': randomUUID() },
+          (client) =>
+            client.query('UPDATE app_user SET auth_user_id = $2 WHERE invitation_hash = $1', [
+              'hash-a',
+              randomUUID(),
+            ]),
+        ),
+      ).rejects.toThrow(/row-level security/);
+      const row = (
+        await select(admin, 'SELECT auth_user_id FROM app_user WHERE id = $1', [id])
+      )[0]!;
+      expect(row['auth_user_id']).toBeNull();
+    });
+
+    it('does not let the transaction change an invitation without binding it: no raising its own role', async () => {
+      const id = await invite(BUSINESS_A, 'hash-a');
+
+      // Sin ligar la identidad, la fila nueva no cumple la condicion WITH CHECK: la politica solo deja un resultado, la
+      // invitacion canjeada por la identidad declarada.
+      await expect(
+        withSettings(
+          admin,
+          { 'app.invitation_hash': 'hash-a', 'app.auth_user_id': randomUUID() },
+          (client) =>
+            client.query("UPDATE app_user SET role = 'owner' WHERE invitation_hash = $1", [
+              'hash-a',
+            ]),
+        ),
+      ).rejects.toThrow(/row-level security/);
+      const row = (await select(admin, 'SELECT role FROM app_user WHERE id = $1', [id]))[0]!;
+      expect(row['role']).toBe('cashier');
+    });
+
     it('refuses to bind it when no identity was declared', async () => {
       await invite(BUSINESS_A, 'hash-a');
 
