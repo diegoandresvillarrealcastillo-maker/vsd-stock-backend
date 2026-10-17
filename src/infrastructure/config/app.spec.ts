@@ -81,6 +81,20 @@ describe('application wiring', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('says it is not ready, and why, when no database was configured', async () => {
+    const response = await fetch(`${baseUrl}/v1/ready`);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('content-type')).toContain('application/problem+json');
+    expect(await response.json()).toMatchObject({ status: 503, code: 'database-not-configured' });
+  });
+
+  it('keeps answering GET /health when no database was configured: the container checks itself with it', async () => {
+    const response = await fetch(`${baseUrl}/health`);
+
+    expect(response.status).toBe(200);
+  });
+
   it('emits no CORS header when no origin is configured, even if the caller sends one', async () => {
     const response = await fetch(`${baseUrl}/health`, {
       headers: { Origin: 'http://localhost:5173' },

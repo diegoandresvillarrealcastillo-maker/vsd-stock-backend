@@ -10,6 +10,8 @@ export interface CreateAppOptions {
   readonly quiet?: boolean;
   /** Origenes a los que se les permite leer las respuestas desde un navegador. Por omision, ninguno. */
   readonly corsOrigins?: readonly string[];
+  /** La conexion de la aplicacion a la base de datos. Por omision, ninguna: la API arranca sin datos. */
+  readonly databaseUrl?: string;
 }
 
 /** Cuanto tiempo puede recordar el navegador una respuesta a la peticion previa (OPTIONS): un dia. */
@@ -18,7 +20,9 @@ const PREFLIGHT_MAX_AGE_SECONDS = 86_400;
 /** Arma la aplicacion con su configuracion comun. main.ts y las pruebas usan esta misma. */
 export async function createApp(options: CreateAppOptions = {}): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(
-    AppModule,
+    AppModule.register(
+      options.databaseUrl === undefined ? {} : { databaseUrl: options.databaseUrl },
+    ),
     options.quiet === true ? { logger: false } : {},
   );
   // No anunciamos el framework en cada respuesta.
