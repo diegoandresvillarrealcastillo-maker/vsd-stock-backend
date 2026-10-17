@@ -99,17 +99,17 @@ borrado y **sin excepciones para nadie**, administradores incluidos.
 
 Además exige que ciertos **checks del CI** pasen. Estos son los **nombres exactos**; un check es su nombre:
 
-| Check                                          | Backend | Frontend                               |
-| ---------------------------------------------- | ------- | -------------------------------------- |
-| `Escaneo de secretos`                          | Exigido | Exigido                                |
-| `Convencion de commits`                        | Exigido | Exigido                                |
-| `Calidad del codigo`                           | Exigido | Exigido                                |
-| `Pruebas contra PostgreSQL`                    | Exigido | —                                      |
-| `Imagen de Docker`                             | Exigido | —                                      |
-| `Vulnerabilidades en las dependencias`         | Exigido | Existe desde C0-08; **falta exigirlo** |
-| `Analisis de codigo (JavaScript y TypeScript)` | Exigido | Existe desde C0-08; **falta exigirlo** |
-| `Contrato con el backend`                      | —       | Existe desde C0-08; **falta exigirlo** |
-| `Accesibilidad y rendimiento (Lighthouse)`     | —       | Existe desde C0-08; **falta exigirlo** |
+| Check                                          | Backend | Frontend |
+| ---------------------------------------------- | ------- | -------- |
+| `Escaneo de secretos`                          | Exigido | Exigido  |
+| `Convencion de commits`                        | Exigido | Exigido  |
+| `Calidad del codigo`                           | Exigido | Exigido  |
+| `Pruebas contra PostgreSQL`                    | Exigido | —        |
+| `Imagen de Docker`                             | Exigido | —        |
+| `Vulnerabilidades en las dependencias`         | Exigido | Exigido  |
+| `Analisis de codigo (JavaScript y TypeScript)` | Exigido | Exigido  |
+| `Contrato con el backend`                      | —       | Exigido  |
+| `Accesibilidad y rendimiento (Lighthouse)`     | —       | Exigido  |
 
 **Paso manual de quien administra el repositorio** (el asistente no lo hace), para exigir un check nuevo:
 
