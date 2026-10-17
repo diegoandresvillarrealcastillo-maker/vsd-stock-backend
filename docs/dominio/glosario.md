@@ -69,11 +69,13 @@ negativo por cada regla: no basta que el dueño acceda, otro negocio debe ser re
 ### Dispositivo
 
 El equipo en el que corre la aplicación: un teléfono, una tablet o un computador. Guarda la base local de cada
-persona que lo usa y puede ser compartido entre varias.
+persona que lo usa y puede ser compartido entre varias. Se registra con conexión la primera vez y el servidor le
+da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`...); ese código encabeza sus folios
+(ADR 0016).
 
-**Código:** `Device`
+**Código:** `Device` y `DeviceCode`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0016)
 
 ### Sesión
 
@@ -343,13 +345,14 @@ Un ingreso o un egreso de efectivo que no es una venta: pagar al repartidor, ret
 
 ### Folio
 
-El número con que se identifica una venta ante la persona. Dos cajas sin conexión **no pueden asignarse el mismo
-folio**: cómo se numera (identificador del cliente más una serie por dispositivo, y el folio definitivo al
-sincronizar, u otra) y qué ve la persona mientras tanto se resuelve en el Ciclo 1.
+El número con que se identifica una venta ante la persona: el código del dispositivo que la hizo y la serie de ese
+dispositivo, como `AA-000142`. Dos cajas sin conexión no pueden repetirlo porque sus códigos son distintos. No
+cambia al sincronizar, no ordena las ventas entre dispositivos (para eso está la hora) y puede tener saltos
+(ADR 0016).
 
 **Código:** `Folio`
 
-**Estado:** Requisito
+**Estado:** Decidido (ADR 0016)
 
 ## Finanzas y reportes
 
