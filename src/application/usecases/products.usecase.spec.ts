@@ -5,6 +5,7 @@ import {
   SkuTakenError,
   UnitLockedError,
 } from '../../domain/model/catalog-errors.js';
+import { encodeCursor } from '../../domain/model/pagination.js';
 import { ForbiddenError, NoMembershipError } from '../../domain/model/people-errors.js';
 import { ValidationFailedError } from '../../domain/model/validation.js';
 import { UserInactiveError } from '../../domain/ports/in/authenticate.js';
@@ -275,6 +276,20 @@ describe('ProductsUseCase', () => {
         '/search:blank',
         '/categoryId:invalid-id',
         '/active:invalid-value',
+      ]);
+    });
+
+    it('refuses a cursor whose id is not a UUID, which the database could not compare', async () => {
+      const { useCase } = setup();
+
+      const failure = await failureOf(
+        useCase.list(memberSession('owner'), {
+          cursor: encodeCursor(['Arroz', 'no-es-un-uuid']),
+        }),
+      );
+
+      expect(failure.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
+        '/cursor:invalid-cursor',
       ]);
     });
   });

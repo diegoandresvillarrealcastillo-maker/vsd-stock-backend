@@ -1,5 +1,5 @@
 import { ProductNotFoundError, UnitLockedError } from '../../domain/model/catalog-errors.js';
-import { pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
+import { endsInUuid, pageOf, readPageRequest, type Page } from '../../domain/model/pagination.js';
 import {
   NEW_PRODUCT_FIELDS,
   PRODUCT_CHANGE_FIELDS,
@@ -46,7 +46,7 @@ export class ProductsUseCase implements Products {
     ensureCan(actor, 'product:view');
 
     const reader = new InputReader(query, ['limit', 'cursor', 'search', 'categoryId', 'active']);
-    const request = readPageRequest(reader, 2);
+    const request = readPageRequest(reader, 2, endsInUuid);
     const search = reader.text('search', {
       label: 'La búsqueda',
       max: MAX_SEARCH_LENGTH,
