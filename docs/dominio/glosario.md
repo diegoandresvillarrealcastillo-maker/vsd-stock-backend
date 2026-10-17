@@ -122,21 +122,24 @@ Cómo se cuenta un producto: unidad, libra, kilo, litro, caja.
 
 ### Precio
 
-Cuánto cuesta un producto al venderlo. Es dinero (ver _Dinero_). Se propone que la venta guarde el precio que
-tenía en ese momento y no una referencia que pueda cambiar después; se confirma en el Ciclo 1.
+Cuánto cuesta un producto al venderlo, en pesos enteros y **con el IVA incluido**. Es dinero (ver _Dinero_). La
+línea de venta guarda el precio y la tarifa que tenían en ese momento, no una referencia que pueda cambiar
+después (ADR 0014).
 
 **Código:** `Price`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0014)
 
 ### Impuesto
 
-El gravamen que se suma o se incluye en el precio (en Colombia, el IVA). La entrega calcula impuestos pero no
-emite factura electrónica (DIAN).
+El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
+sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
+siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Las tarifas y
+la mecánica frente a la norma son una hipótesis que debe verificar quien lleve la contabilidad.
 
 **Código:** `Tax`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0014)
 
 ### Código de barras
 
@@ -461,20 +464,21 @@ para atención sin bloquear a las demás).
 
 ### Dinero
 
-Una cantidad con su moneda. **Nunca un `float`**: enteros en la unidad menor o `Decimal`, con un objeto de valor
-que lleva la moneda y un redondeo definido y probado.
+Una cantidad con su moneda. **Nunca un `float`**: un entero de pesos, sin centavos, en un objeto de valor
+inmutable. Hay una sola regla de redondeo (la mitad exacta se aleja de cero) y los cálculos se prueban con
+vectores que comparten el backend y el frontend (ADR 0014).
 
 **Código:** `Money`
 
-**Estado:** Requisito
+**Estado:** Decidido (ADR 0014)
 
 ### Moneda
 
-El peso colombiano (COP). La entrega es para Colombia.
+El peso colombiano (COP). La entrega es para Colombia y no maneja otra moneda (ADR 0014).
 
 **Código:** `Currency`
 
-**Estado:** Requisito
+**Estado:** Decidido (ADR 0014)
 
 ### Auditoría
 

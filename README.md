@@ -67,6 +67,8 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 | `npm run db:up`            | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).      |
 | `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Necesitan `db:up`.                |
 | `npm run bench:stock`      | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.      |
+| `npm run vectors`          | Regenera los vectores de cálculo compartidos con el frontend (ADR 0014).   |
+| `npm run vectors:check`    | Falla si `contract/calculation-vectors.json` no coincide con su generador. |
 | `npm run db:down`          | Apaga la base local.                                                       |
 
 ## Arquitectura
@@ -108,6 +110,14 @@ Cruzar una frontera **rompe el build**: `npm run lint` falla con un mensaje que 
 `openapi.json` es lo único que une a este repositorio con el frontend (ADR 0001). Se genera del código con
 `npm run openapi` y se versiona. Una prueba lo compara con lo que produce el código: si cambias la API y no lo
 regeneras, falla con un mensaje que dice qué hacer.
+
+## Vectores de cálculo
+
+El dinero, el IVA y el redondeo se calculan en los dos repositorios (el cliente cobra cuando no hay red). Para que
+no diverjan, [`contract/calculation-vectors.json`](contract/calculation-vectors.json) reúne los casos que ejecutan
+ambos, con resultados que calcula [`scripts/calculation-vectors.ts`](scripts/calculation-vectors.ts) con aritmética
+exacta y no el dominio (ADR 0014). **No se edita a mano:** si cambia la regla, `npm run vectors` lo regenera y el
+CI del frontend avisa si su copia quedó atrás.
 
 ## Docker
 
