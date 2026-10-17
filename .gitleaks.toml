@@ -16,3 +16,9 @@ useDefault = true
 [[allowlists]]
 description = "Contrasenas falsas de las pruebas que vigilan que no se filtre una cadena de conexion"
 regexes = ['''^(S3cretoLargo123|ContrasenaLarga123|SecretoLargo123)$''']
+
+# Identificador FALSO de una persona (el `sub` de un token) en las pruebas. Es un UUID cualquiera, sin cuenta detras; la
+# regla de claves genericas lo toma por una clave porque se escribe junto al nombre `authUserId`. Se nombra el valor exacto.
+[[allowlists]]
+description = "Identificador falso de una persona en las pruebas"
+regexes = ['''^9b2f6c1e-0d5a-4c1b-8f3e-2a7d6e5c4b3a$''']

@@ -129,4 +129,6 @@ Los esquemas de juguete de los ADR 0013 a 0016 eran más pequeños que el modelo
 - **Las columnas que aún no existen** (por ejemplo los desgloses de IVA de la venta) se agregan con la migración del
   ciclo que construye esa funcionalidad: una migración nueva, nunca la edición de una ya aplicada.
 - `app_user` también sirve de invitación pendiente: mientras no se canjea, `auth_user_id` está vacío y guarda el hash
-  del código y su vencimiento (lo decide el ticket C2-04). No hay una tabla más.
+  del código y su vencimiento ([ADR 0023](../adr/0023-negocio-personas-e-invitaciones.md)). No hay una tabla más.
+  El hash es **único en toda la base** (no por negocio) y dos políticas dejan a quien canjea ver y tomar solo esa
+  fila; al canjear se borran el hash y el vencimiento.

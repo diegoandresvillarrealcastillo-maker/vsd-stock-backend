@@ -5,6 +5,7 @@ import type {
   UnitOfWork,
 } from '../../../domain/ports/out/unit-of-work.js';
 import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
+import { PrismaPeopleRepository } from './prisma-people.js';
 
 /** La transaccion de Prisma, ya con el negocio fijado. Solo la usan los repositorios de este adaptador. */
 export type PrismaTransaction = Prisma.TransactionClient;
@@ -35,7 +36,11 @@ export class PrismaUnitOfWork implements UnitOfWork {
 
   async inBusiness<T>(businessId: string, work: (scope: BusinessScope) => Promise<T>): Promise<T> {
     return this.transaction(businessId, (tx) =>
-      work({ businessId, business: new PrismaBusinessReader(tx) }),
+      work({
+        businessId,
+        business: new PrismaBusinessReader(tx),
+        people: new PrismaPeopleRepository(tx, businessId),
+      }),
     );
   }
 

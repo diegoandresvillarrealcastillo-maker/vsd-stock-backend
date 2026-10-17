@@ -1,4 +1,15 @@
 import { DatabaseNotConfiguredError } from '../../../domain/model/database-not-configured-error.js';
+import {
+  AlreadyMemberError,
+  ForbiddenError,
+  InvitationExpiredError,
+  InvitationNotFoundError,
+  InvitationNotPendingError,
+  LastOwnerError,
+  NoMembershipError,
+  PersonNotFoundError,
+} from '../../../domain/model/people-errors.js';
+import { ValidationFailedError } from '../../../domain/model/validation.js';
 import { AuthenticationError, UserInactiveError } from '../../../domain/ports/in/authenticate.js';
 import { ApiProblem } from './api-problem.js';
 
@@ -59,6 +70,56 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
   }
   if (error instanceof DatabaseNotConfiguredError) {
     return new ApiProblem(503, 'database-not-configured', 'La base de datos no está configurada.');
+  }
+  return problemOfPeopleError(error);
+}
+
+/** Los errores de negocio y personas (ADR 0023). */
+function problemOfPeopleError(error: unknown): ApiProblem | undefined {
+  if (error instanceof ValidationFailedError) {
+    return new ApiProblem(
+      400,
+      'validation-failed',
+      'La petición trae datos que no sirven. Revisa los campos indicados.',
+      { errors: error.errors.map((item) => ({ ...item })) },
+    );
+  }
+  if (error instanceof AlreadyMemberError) {
+    return new ApiProblem(409, 'already-member', 'La persona ya trabaja en un negocio.');
+  }
+  if (error instanceof NoMembershipError) {
+    return new ApiProblem(403, 'no-membership', 'Primero crea un negocio o canjea una invitación.');
+  }
+  // El motivo (rol, baja...) es para el registro: al cliente se le dice una sola cosa.
+  if (error instanceof ForbiddenError) {
+    return new ApiProblem(403, 'forbidden', 'Tu rol no permite hacer esto.');
+  }
+  if (error instanceof PersonNotFoundError) {
+    return new ApiProblem(404, 'person-not-found', 'No existe esa persona en este negocio.');
+  }
+  if (error instanceof LastOwnerError) {
+    return new ApiProblem(409, 'last-owner', 'El negocio no puede quedarse sin un dueño activo.');
+  }
+  if (error instanceof InvitationNotFoundError) {
+    return new ApiProblem(
+      404,
+      'invitation-not-found',
+      'No hay una invitación pendiente con ese código.',
+    );
+  }
+  if (error instanceof InvitationExpiredError) {
+    return new ApiProblem(
+      410,
+      'invitation-expired',
+      'La invitación venció. Pide un código nuevo a quien te invitó.',
+    );
+  }
+  if (error instanceof InvitationNotPendingError) {
+    return new ApiProblem(
+      409,
+      'invitation-not-pending',
+      'Esa persona no tiene una invitación pendiente que renovar.',
+    );
   }
   return undefined;
 }
