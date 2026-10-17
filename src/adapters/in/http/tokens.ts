@@ -19,3 +19,5 @@ export const PRODUCTS = Symbol('PRODUCTS');
 export const SUPPLIERS = Symbol('SUPPLIERS');
 export const PURCHASES = Symbol('PURCHASES');
 export const WAREHOUSE = Symbol('WAREHOUSE');
+export const STOCK = Symbol('STOCK');
+export const STOCK_ADJUSTMENTS = Symbol('STOCK_ADJUSTMENTS');

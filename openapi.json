@@ -1269,6 +1269,246 @@
           "purchasing"
         ]
       }
+    },
+    "/v1/stock": {
+      "get": {
+        "description": "Ordenada por nombre. La ven los tres roles. `search` busca una parte del nombre o del SKU sin importar mayúsculas, o un código de barras completo; `belowMinimum=true` deja solo los que tienen mínimo y están por debajo de él. Un producto que nunca se movió aparece con cero. Pagina por cursor (ADR 0019).",
+        "operationId": "StockController_list",
+        "parameters": [
+          {
+            "name": "belowMinimum",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "`true`: solo los que están por debajo de su mínimo. `false` no filtra."
+          },
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Sin este filtro se devuelven activos y archivados."
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La existencia de cada producto",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/stock-movements": {
+      "get": {
+        "description": "Los movimientos del libro de un producto, del más nuevo al más viejo: ventas, compras, ajustes y anulaciones. Lo ven los tres roles. `productId` es obligatorio; si el producto no existe, 404 `product-not-found`. Pagina por cursor (ADR 0019).",
+        "operationId": "StockMovementsController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovementPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El historial de un producto",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/stock-adjustments": {
+      "post": {
+        "description": "Es de la gerencia (`stock:adjust`). Un ajuste es **un movimiento nuevo del libro** con su motivo, nunca una edición del saldo: el saldo lo sube o baja el disparador de la base en la misma transacción. Es idempotente por `operationId` (ADR 0019): la primera vez responde 201; repetirlo con los mismos datos responde 200 con el mismo movimiento y `Idempotent-Replayed: true`, sin ajustar otra vez; con otros datos, 409 `operation-id-reused`. La existencia puede quedar en negativo: el libro cuenta lo que pasó.",
+        "operationId": "StockAdjustmentsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStockAdjustmentRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "El ajuste ya se había registrado con este `operationId`: es el mismo de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovementDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovementDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ajustar la existencia de un producto",
+        "tags": [
+          "inventory"
+        ]
+      }
     }
   },
   "info": {
@@ -2187,6 +2427,184 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "StockDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Arroz 500 g"
+          },
+          "sku": {
+            "type": "string",
+            "example": "ARR-500"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "kilogram",
+              "gram",
+              "pound",
+              "liter",
+              "milliliter"
+            ]
+          },
+          "active": {
+            "type": "boolean",
+            "description": "`false` si el producto está archivado."
+          },
+          "quantityMilli": {
+            "type": "integer",
+            "description": "Lo que hay: la suma de los movimientos del producto, en milésimas de su unidad. Un producto que nunca se movió tiene cero; puede ser negativa (una venta sin conexión que se aceptó)."
+          },
+          "minStockMilli": {
+            "type": "integer",
+            "nullable": true,
+            "description": "El mínimo que fijó el negocio, o `null` si no fijó uno."
+          },
+          "belowMinimum": {
+            "type": "boolean",
+            "description": "Hay un mínimo y la existencia está **por debajo** de él (igual al mínimo no avisa)."
+          }
+        },
+        "required": [
+          "productId",
+          "name",
+          "sku",
+          "unit",
+          "active",
+          "quantityMilli",
+          "minStockMilli",
+          "belowMinimum"
+        ]
+      },
+      "StockPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "StockMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "purchase",
+              "adjustment",
+              "void"
+            ],
+            "description": "Qué lo originó."
+          },
+          "deltaMilli": {
+            "type": "integer",
+            "description": "Milésimas de la unidad del producto; negativo si resta."
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "La nota del movimiento: en un ajuste, el motivo; en una compra, la nota de la compra."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "productId",
+          "kind",
+          "deltaMilli",
+          "reason",
+          "createdAt"
+        ]
+      },
+      "StockMovementPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockMovementDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CreateStockAdjustmentRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La llave de idempotencia: la genera el cliente una vez por ajuste. Repetir la petición con el mismo `operationId` y los mismos datos devuelve el mismo movimiento (200 y `Idempotent-Replayed: true`) sin ajustar de nuevo; con otros datos, 409 `operation-id-reused`."
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Un producto del negocio, archivado o no."
+          },
+          "deltaMilli": {
+            "type": "integer",
+            "minimum": -1000000000,
+            "maximum": 1000000000,
+            "example": -2000,
+            "description": "Cuánto sube (positivo) o baja (negativo) la existencia, en milésimas de la unidad del producto; nunca cero. Los productos que se cuentan en unidades enteras no admiten decimales. **No es el saldo nuevo:** el saldo no se edita, el ajuste es un movimiento."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Se cayeron dos paquetes",
+            "description": "Por qué se ajusta. Es obligatorio y queda escrito en el movimiento."
+          }
+        },
+        "required": [
+          "operationId",
+          "productId",
+          "deltaMilli",
+          "reason"
         ]
       },
       "ProblemErrorDto": {

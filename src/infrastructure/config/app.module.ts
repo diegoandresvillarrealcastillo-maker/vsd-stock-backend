@@ -17,6 +17,11 @@ import {
   ProductsController,
 } from '../../adapters/in/http/catalog.controller.js';
 import { HealthController } from '../../adapters/in/http/health.controller.js';
+import {
+  StockAdjustmentsController,
+  StockController,
+  StockMovementsController,
+} from '../../adapters/in/http/inventory.controller.js';
 import { MeController } from '../../adapters/in/http/me.controller.js';
 import {
   PurchasesController,
@@ -37,6 +42,8 @@ import {
   PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
+  STOCK,
+  STOCK_ADJUSTMENTS,
   SUPPLIERS,
   UPDATE_USER,
   WAREHOUSE,
@@ -64,6 +71,8 @@ import { ProductsUseCase } from '../../application/usecases/products.usecase.js'
 import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { StockAdjustmentsUseCase } from '../../application/usecases/stock-adjustments.usecase.js';
+import { StockUseCase } from '../../application/usecases/stock.usecase.js';
 import { SuppliersUseCase } from '../../application/usecases/suppliers.usecase.js';
 import { UpdateUserUseCase } from '../../application/usecases/update-user.usecase.js';
 import { WarehouseUseCase } from '../../application/usecases/warehouse.usecase.js';
@@ -241,6 +250,20 @@ export class AppModule {
       },
     ];
 
+    // Existencias y ajustes (C2-07, ADR 0013 y 0019).
+    const inventoryProviders: Provider[] = [
+      {
+        provide: STOCK,
+        useFactory: (work: UnitOfWork) => new StockUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+      {
+        provide: STOCK_ADJUSTMENTS,
+        useFactory: (work: UnitOfWork) => new StockAdjustmentsUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+    ];
+
     return {
       module: AppModule,
       controllers: [
@@ -255,6 +278,9 @@ export class AppModule {
         SuppliersController,
         PurchasesController,
         WarehouseController,
+        StockController,
+        StockMovementsController,
+        StockAdjustmentsController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
@@ -263,6 +289,7 @@ export class AppModule {
         ...peopleProviders,
         ...catalogProviders,
         ...purchasingProviders,
+        ...inventoryProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,
