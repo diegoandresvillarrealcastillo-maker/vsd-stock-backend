@@ -43,4 +43,107 @@ describe('application wiring', () => {
 
     expect(response.status).toBe(404);
   });
+
+  it('emits no CORS header when no origin is configured, even if the caller sends one', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: { Origin: 'http://localhost:5173' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+});
+
+describe('application wiring: CORS', () => {
+  const ALLOWED = 'http://localhost:5173';
+  let app: NestExpressApplication;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    app = await createApp({ quiet: true, corsOrigins: [ALLOWED, 'https://stock.example.com'] });
+    await app.listen(0, '127.0.0.1');
+    const { port } = app.getHttpServer().address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('answers an allowed origin with its own value, never with a wildcard', async () => {
+    const response = await fetch(`${baseUrl}/health`, { headers: { Origin: ALLOWED } });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED);
+  });
+
+  it('answers the second origin of the list with its own value', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: { Origin: 'https://stock.example.com' },
+    });
+
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://stock.example.com');
+  });
+
+  it('tells caches that the answer depends on the origin', async () => {
+    const response = await fetch(`${baseUrl}/health`, { headers: { Origin: ALLOWED } });
+
+    expect(response.headers.get('vary')?.toLowerCase()).toContain('origin');
+  });
+
+  it('does not allow credentials: the API will use a token in a header, not cookies', async () => {
+    const response = await fetch(`${baseUrl}/health`, { headers: { Origin: ALLOWED } });
+
+    expect(response.headers.get('access-control-allow-credentials')).toBeNull();
+  });
+
+  it('gives an origin that is not in the list no permission', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: { Origin: 'https://evil.example.com' },
+    });
+
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('does not match an origin that only starts like an allowed one', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: { Origin: `${ALLOWED}.evil.example.com` },
+    });
+
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('answers the preflight of an allowed origin without a body and lets the browser cache it', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: ALLOWED,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization,content-type',
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED);
+    expect(response.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(response.headers.get('access-control-allow-headers')?.toLowerCase()).toContain(
+      'authorization',
+    );
+    expect(response.headers.get('access-control-max-age')).toBe('86400');
+    expect(await response.text()).toBe('');
+  });
+
+  it('gives the preflight of an origin that is not in the list no permission', async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://evil.example.com',
+        'Access-Control-Request-Method': 'POST',
+      },
+    });
+
+    // Lo que decide al navegador es la ausencia de Allow-Origin. La biblioteca
+    // anuncia los metodos de todos modos y eso no concede nada.
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
 });
