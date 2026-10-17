@@ -66,6 +66,7 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 | `npm run openapi`          | Regenera `openapi.json`, el contrato con el frontend. Súbelo si cambia.    |
 | `npm run db:up`            | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).      |
 | `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Necesitan `db:up`.                |
+| `npm run bench:stock`      | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.      |
 | `npm run db:down`          | Apaga la base local.                                                       |
 
 ## Arquitectura

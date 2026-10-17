@@ -50,6 +50,7 @@ Las pruebas de integración necesitan un PostgreSQL real. Hace falta Docker:
 ```bash
 npm run db:up             # arranca la base local (solo escucha en 127.0.0.1)
 npm run test:integration
+npm run bench:stock       # opcional: mide el costo de la existencia derivada (ADR 0013)
 npm run db:down
 ```
 

@@ -5,8 +5,9 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
     // Las de integracion necesitan una base de datos: tienen su propia
-    // configuracion (vitest.integration.config.mts) y su propio script.
-    exclude: ['**/node_modules/**', '**/dist/**', 'test/integration/**'],
+    // configuracion (vitest.integration.config.mts) y su propio script. Las
+    // mediciones (test/benchmark) tambien: imprimen una tabla y no afirman nada.
+    exclude: ['**/node_modules/**', '**/dist/**', 'test/integration/**', 'test/benchmark/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

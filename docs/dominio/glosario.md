@@ -177,13 +177,13 @@ movimiento que compensa; nunca se edita.
 
 ### Existencia
 
-Cuánta mercancía hay de un producto: la **suma** de sus movimientos de stock. Calcularla en cada lectura puede
-ser lento, así que se mantendrá un saldo derivado en la misma transacción que el movimiento; su diseño es del
-Ciclo 1.
+Cuánta mercancía hay de un producto: la **suma** de sus movimientos de stock. Se lee de un saldo por producto
+que mantiene un disparador de la base de datos en la misma transacción que el movimiento; la aplicación solo lo
+lee, y la suma de los movimientos sigue siendo la verdad (ADR 0013).
 
 **Código:** `StockOnHand`
 
-**Estado:** Decidido (ADR 0009)
+**Estado:** Decidido (ADR 0009 y ADR 0013)
 
 ### Requiere ajuste
 
