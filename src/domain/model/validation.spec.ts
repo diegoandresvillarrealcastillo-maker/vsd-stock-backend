@@ -324,6 +324,138 @@ describe('InputReader', () => {
     });
   });
 
+  describe('uuid', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+
+    it('returns an identifier as it came', () => {
+      const reader = new InputReader({ categoryId: id }, ['categoryId']);
+
+      expect(reader.uuid('categoryId', { label: 'El identificador' })).toBe(id);
+      expect(() => reader.finish()).not.toThrow();
+    });
+
+    it('lets an optional one be absent, and says nothing', () => {
+      const reader = new InputReader({}, ['categoryId']);
+
+      expect(
+        reader.uuid('categoryId', { label: 'El identificador', optional: true }),
+      ).toBeUndefined();
+      expect(() => reader.finish()).not.toThrow();
+    });
+
+    it('says a missing one is required', () => {
+      expect(
+        errorsOf((r) => r.uuid('categoryId', { label: 'El identificador' }), {}, ['categoryId']),
+      ).toEqual([{ pointer: '/categoryId', code: 'required', detail: 'Falta el identificador.' }]);
+    });
+
+    it.each([
+      'no-es-uuid',
+      '11111111-1111-4111-8111-11111111111',
+      '11111111-1111-4111-8111-11111111111x',
+    ])('says %j is not an identifier', (value) => {
+      expect(
+        errorsOf(
+          (r) => r.uuid('categoryId', { label: 'El identificador' }),
+          { categoryId: value },
+          ['categoryId'],
+        ),
+      ).toEqual([
+        {
+          pointer: '/categoryId',
+          code: 'invalid-id',
+          detail: 'El identificador no tiene la forma de un identificador.',
+        },
+      ]);
+    });
+
+    it('says a text longer than an identifier is too long, not malformed', () => {
+      const errors = errorsOf(
+        (r) => r.uuid('categoryId', { label: 'El identificador' }),
+        { categoryId: `${id}0` },
+        ['categoryId'],
+      );
+
+      expect(errors).toEqual([
+        {
+          pointer: '/categoryId',
+          code: 'too-long',
+          detail: 'El identificador no puede pasar de 36 caracteres.',
+        },
+      ]);
+    });
+
+    it.each([5, null, true])('says %j is not text, only once', (value) => {
+      const errors = errorsOf(
+        (r) => r.uuid('categoryId', { label: 'El identificador' }),
+        { categoryId: value },
+        ['categoryId'],
+      );
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.code).toBe('invalid-type');
+    });
+  });
+
+  describe('null', () => {
+    it('tells a field sent as null, which means «none», apart from one that was not sent', () => {
+      const reader = new InputReader({ barcode: null, name: 'x' }, ['barcode', 'name', 'sku']);
+
+      expect(reader.isNull('barcode')).toBe(true);
+      expect(reader.isNull('name')).toBe(false);
+      expect(reader.isNull('sku')).toBe(false);
+    });
+
+    it('is false for an inherited name or when the input was not an object', () => {
+      expect(new InputReader({}, []).isNull('constructor')).toBe(false);
+      expect(new InputReader(null, []).isNull('x')).toBe(false);
+    });
+  });
+
+  describe('convert', () => {
+    const parse = (text: string): number => {
+      if (text !== 'ok') throw new RangeError('no sirve');
+      return 1;
+    };
+    const failure = { code: 'invalid-sku', detail: 'El SKU no sirve.' };
+
+    it('returns what the conversion gives', () => {
+      const reader = new InputReader({}, []);
+
+      expect(reader.convert('sku', failure, () => parse('ok'), 0)).toBe(1);
+      expect(() => reader.finish()).not.toThrow();
+    });
+
+    it('notes the problem at the field and hands back the placeholder when the domain refuses the value', () => {
+      const reader = new InputReader({}, []);
+
+      expect(reader.convert('sku', failure, () => parse('mal'), 0)).toBe(0);
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors).toEqual([
+          { pointer: '/sku', code: 'invalid-sku', detail: 'El SKU no sirve.' },
+        ]);
+      }
+    });
+
+    it('does not hide a failure that is not the domain refusing a value: that is a bug of ours', () => {
+      const reader = new InputReader({}, []);
+
+      expect(() =>
+        reader.convert(
+          'sku',
+          failure,
+          () => {
+            throw new TypeError('defecto');
+          },
+          0,
+        ),
+      ).toThrow(TypeError);
+    });
+  });
+
   it('lets the caller add its own error before finishing', () => {
     const reader = new InputReader({ a: 1 }, ['a']);
     reader.fail('/a', 'inconsistent', 'No cuadra con lo demás.');
