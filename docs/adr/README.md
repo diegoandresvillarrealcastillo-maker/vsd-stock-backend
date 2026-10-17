@@ -31,6 +31,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0019](0019-convenciones-de-la-api.md)                                  | Convenciones de la API: versión, errores, enteros e idempotencia                            | Aceptada |
 | [0020](0020-se-congela-el-modelo-del-dominio.md)                        | Se congela el modelo del dominio                                                            | Aceptada |
 | [0021](0021-esquema-real-y-primera-migracion.md)                        | El esquema real: Prisma, una migración revisada a mano y una base que se prueba tal como es | Aceptada |
+| [0022](0022-identidad-y-sesion.md)                                      | Identidad y sesión: quién llama, a qué negocio pertenece y cuánto dura                      | Aceptada |
 
 ## Reglas
 
