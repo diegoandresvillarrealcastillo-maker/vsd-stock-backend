@@ -501,6 +501,23 @@ describe('InputReader', () => {
       }
     });
 
+    it('writes the whole path when an object inside another has an object inside it', () => {
+      const reader = new InputReader({}, []);
+      reader
+        .within('/orders/0', {}, ['lines'])
+        .within('/lines/2', {}, ['qty'])
+        .integer('qty', { label: 'La cantidad', min: 1, max: 9 });
+
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors.map((e) => e.pointer)).toEqual([
+          '/orders/0/lines/2/qty',
+        ]);
+      }
+    });
+
     it('keeps the order in which problems were found, across the parent and its children', () => {
       const reader = new InputReader({ note: 5 }, ['note']);
       reader.text('note', { label: 'La nota', max: 5 });

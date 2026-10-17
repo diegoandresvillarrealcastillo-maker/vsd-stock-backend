@@ -7,7 +7,12 @@ import {
   PurchaseNotFoundError,
   WarehouseMissingError,
 } from '../../domain/model/purchase-errors.js';
-import { ValidationFailedError } from '../../domain/model/validation.js';
+import {
+  PURCHASE_FIELDS,
+  purchaseFingerprint,
+  readPurchase,
+} from '../../domain/model/purchase-input.js';
+import { InputReader, ValidationFailedError } from '../../domain/model/validation.js';
 import { UserInactiveError } from '../../domain/ports/in/authenticate.js';
 import { FakeCatalog } from '../../../test/support/fake-catalog.js';
 import { FakePeople, fakeUnitOfWork } from '../../../test/support/fake-people.js';
@@ -271,6 +276,21 @@ describe('PurchasesUseCase', () => {
       await expect(useCase.create(memberSession('owner'), body())).resolves.toMatchObject({
         replayed: true,
       });
+    });
+
+    it('does not invent a purchase when the operation is claimed but made none: that is a broken state, not a repetition', async () => {
+      const { purchasing, useCase } = setup();
+      const reader = new InputReader(body(), PURCHASE_FIELDS);
+      await purchasing.operations.claim({
+        operationId: OPERATION,
+        kind: 'purchase',
+        userId: ACTOR_ID,
+        fingerprint: purchaseFingerprint(readPurchase(reader)),
+      });
+
+      await expect(useCase.create(memberSession('owner'), body())).rejects.toThrow(
+        /claimed but has no purchase/,
+      );
     });
 
     it.each([

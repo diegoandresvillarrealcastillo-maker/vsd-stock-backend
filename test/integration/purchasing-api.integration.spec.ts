@@ -237,6 +237,10 @@ describe('suppliers, warehouse and purchases, end to end (C2-06)', () => {
         await call('POST', '/v1/suppliers', owner, { name });
       }
 
+      const firstPage = await call('GET', '/v1/suppliers?limit=2', owner);
+      expect(firstPage.body.items).toHaveLength(2);
+      expect(firstPage.body.nextCursor).not.toBeNull();
+
       const names: string[] = [];
       let query = '?limit=2';
       for (;;) {

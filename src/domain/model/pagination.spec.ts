@@ -180,6 +180,10 @@ describe('a position made of a moment and an id', () => {
     ['a moment without milliseconds', ['2026-10-17T12:00:00Z', UUID]],
     ['a moment with an offset instead of Z', ['2026-10-17T12:00:00.000+05:00', UUID]],
     ['a day that does not exist', ['2026-02-30T12:00:00.000Z', UUID]],
+    [
+      'a year with more than four digits, which JavaScript writes back unchanged',
+      ['+275760-09-13T00:00:00.000Z', UUID],
+    ],
     ['an hour that does not exist', ['2026-10-17T25:00:00.000Z', UUID]],
     ['an id that is not a UUID', ['2026-10-17T12:00:00.000Z', 'no-es-un-uuid']],
     ['too many parts', ['2026-10-17T12:00:00.000Z', UUID, UUID]],

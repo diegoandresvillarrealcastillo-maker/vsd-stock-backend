@@ -159,6 +159,29 @@ describe('suppliers, purchases and stock against PostgreSQL (C2-06)', () => {
     });
   });
 
+  describe('the products a purchase names', () => {
+    it('finds only the ones asked for in this business, in any order, and ignores what does not exist', async () => {
+      const mine = await seedProduct(admin, BUSINESS_A);
+      const alsoMine = await seedProduct(admin, BUSINESS_A);
+      await seedProduct(admin, BUSINESS_A);
+      const foreign = await seedProduct(admin, BUSINESS_B);
+
+      const found = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+        s.catalog.findProducts([alsoMine, mine, foreign, randomUUID()]),
+      );
+
+      expect(found.map((p) => p.id).sort()).toEqual([mine, alsoMine].sort());
+    });
+
+    it('finds nothing for nothing', async () => {
+      await seedProduct(admin, BUSINESS_A);
+
+      expect(await unitOfWork.inBusiness(BUSINESS_A, (s) => s.catalog.findProducts([]))).toEqual(
+        [],
+      );
+    });
+  });
+
   describe('operations (ADR 0019)', () => {
     const claim = (
       businessId: string,
@@ -200,6 +223,27 @@ describe('suppliers, purchases and stock against PostgreSQL (C2-06)', () => {
       expect(rows[0]).toMatchObject({ kind: 'purchase', user_id: a.ownerId });
       expect(rows[0]!['body_hash']).toMatch(/^[0-9a-f]{64}$/);
       expect(JSON.stringify(rows[0])).not.toContain('secreto');
+    });
+
+    it('stores the kind of the operation it was asked to claim', async () => {
+      const operationId = randomUUID();
+      await claim(BUSINESS_A, { operationId, fingerprint: 'ajuste', kind: 'adjustment' });
+
+      const rows = await select(admin, 'SELECT kind FROM operation WHERE operation_id = $1', [
+        operationId,
+      ]);
+      expect(rows).toEqual([{ kind: 'adjustment' }]);
+    });
+
+    it('compares a repetition with ITS operation, not with another one of the same business', async () => {
+      const first = randomUUID();
+      const second = randomUUID();
+      await claim(BUSINESS_A, { operationId: first, fingerprint: 'uno' });
+      await claim(BUSINESS_A, { operationId: second, fingerprint: 'dos' });
+
+      expect(await claim(BUSINESS_A, { operationId: second, fingerprint: 'dos' })).toBe('replay');
+      expect(await claim(BUSINESS_A, { operationId: first, fingerprint: 'uno' })).toBe('replay');
+      expect(await claim(BUSINESS_A, { operationId: second, fingerprint: 'uno' })).toBe('conflict');
     });
 
     it('keeps operation ids apart between businesses: the same id is two different operations', async () => {
@@ -329,6 +373,42 @@ describe('suppliers, purchases and stock against PostgreSQL (C2-06)', () => {
       expect(rows.map((r) => r['product_id'])).toEqual([...ids].sort());
     });
 
+    it('adds a movement that takes away, with its sign: the trigger lowers the balance', async () => {
+      const product = await seedProduct(admin, BUSINESS_A);
+      const first = randomUUID();
+      const second = randomUUID();
+
+      await unitOfWork.inBusiness(BUSINESS_A, async (s) => {
+        for (const [operationId, delta] of [
+          [first, 5000],
+          [second, -1500],
+        ] as const) {
+          await s.operations.claim({
+            operationId,
+            kind: 'adjustment',
+            userId: a.ownerId,
+            fingerprint: operationId,
+          });
+          await s.stock.addMovements(operationId, [
+            { productId: product, delta, reason: 'adjustment', note: 'Conteo' },
+          ]);
+        }
+      });
+
+      const deltas = await select(
+        admin,
+        'SELECT delta FROM stock_movement WHERE product_id = $1 ORDER BY delta',
+        [product],
+      );
+      expect(deltas).toEqual([{ delta: '-1500' }, { delta: '5000' }]);
+      const balance = await select(
+        admin,
+        'SELECT quantity FROM stock_balance WHERE product_id = $1',
+        [product],
+      );
+      expect(balance).toEqual([{ quantity: '3500' }]);
+    });
+
     it('refuses a movement for a product of another business', async () => {
       const foreign = await seedProduct(admin, BUSINESS_B);
       const operationId = randomUUID();
@@ -425,6 +505,38 @@ describe('suppliers, purchases and stock against PostgreSQL (C2-06)', () => {
       ).toEqual(created);
     });
 
+    it('gives the lines ordered by product, whatever order they were sent in', async () => {
+      const low = await seedProduct(admin, BUSINESS_A, '00000000-0000-4000-8000-0000000000a1');
+      const middle = await seedProduct(admin, BUSINESS_A, '00000000-0000-4000-8000-0000000000b2');
+      const high = await seedProduct(admin, BUSINESS_A, '00000000-0000-4000-8000-0000000000c3');
+
+      const created = await purchase(
+        BUSINESS_A,
+        a.ownerId,
+        a.warehouseId,
+        { lines: [line(high), line(low), line(middle)] },
+        low,
+      );
+
+      expect(created.lines.map((l) => l.productId)).toEqual([low, middle, high]);
+    });
+
+    it('finds a purchase by ITS operation id even when the business has others', async () => {
+      const product = await seedProduct(admin, BUSINESS_A);
+      const first = await purchase(BUSINESS_A, a.ownerId, a.warehouseId, {}, product);
+      const second = await purchase(BUSINESS_A, a.ownerId, a.warehouseId, {}, product);
+
+      const found = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+        s.purchases.findByOperation(second.operationId),
+      );
+      const foundFirst = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+        s.purchases.findByOperation(first.operationId),
+      );
+
+      expect(found?.id).toBe(second.id);
+      expect(foundFirst?.id).toBe(first.id);
+    });
+
     it('does not find a purchase of another business, nor by its operation id', async () => {
       const product = await seedProduct(admin, BUSINESS_A);
       const mine = await purchase(BUSINESS_A, a.ownerId, a.warehouseId, {}, product);
@@ -502,6 +614,7 @@ describe('suppliers, purchases and stock against PostgreSQL (C2-06)', () => {
           s.purchases.list({ limit: 3, ...(after === undefined ? {} : { after }) }),
         );
         walked.push(...page.map((p) => p.id));
+        expect(page.length).toBeLessThanOrEqual(3);
         if (page.length < 3) break;
         const last = page[page.length - 1]!;
         after = [last.createdAt.toISOString(), last.id];
