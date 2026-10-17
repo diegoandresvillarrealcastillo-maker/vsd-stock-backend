@@ -5,6 +5,7 @@ import {
 } from '../../src/domain/model/purchase-errors.js';
 import type { NewSupplier, SupplierChange } from '../../src/domain/model/supplier-input.js';
 import type { ListRequest } from '../../src/domain/ports/out/catalog.js';
+import type { FakeCatalog } from './fake-catalog.js';
 import type {
   OperationClaim,
   OperationClaimRequest,
@@ -18,8 +19,12 @@ import type {
   PurchaseSummary,
 } from '../../src/domain/ports/out/purchases.js';
 import type {
+  MovementListRequest,
   StockChange,
+  StockFilter,
   StockLedger,
+  StockMovementRecord,
+  StockRecord,
   WarehouseRecord,
 } from '../../src/domain/ports/out/stock.js';
 import type { SupplierRecord, SupplierRepository } from '../../src/domain/ports/out/suppliers.js';
@@ -150,7 +155,12 @@ export class FakeStock implements StockLedger {
   /** Lo que cada llamada recibio, en el orden en que el libro lo aplico. */
   readonly applied: { operationId: string; changes: StockChange[] }[] = [];
   readonly balances = new Map<string, number>();
+  /** El libro: cada movimiento que se agrego, en orden. */
+  readonly book: StockMovementRecord[] = [];
+  /** El catalogo del que salen los productos de la lista de existencias. */
+  catalog: FakeCatalog | undefined;
   warehouseRecord: WarehouseRecord | null = { id: WAREHOUSE_ID, name: 'Principal' };
+  private counter = 0;
 
   warehouse(): Promise<WarehouseRecord> {
     return this.warehouseRecord === null
@@ -164,12 +174,92 @@ export class FakeStock implements StockLedger {
     );
     this.applied.push({ operationId, changes: ordered });
     for (const change of ordered) {
+      this.counter += 1;
+      this.book.push({
+        id: `d0000000-0000-4000-8000-${String(this.counter).padStart(12, '0')}`,
+        operationId,
+        productId: change.productId,
+        kind: change.reason,
+        deltaMilli: change.delta,
+        reason: change.note,
+        createdAt: new Date(Date.UTC(2026, 9, 17, 13, this.counter)),
+      });
       this.balances.set(
         change.productId,
         (this.balances.get(change.productId) ?? 0) + change.delta,
       );
     }
     return Promise.resolve();
+  }
+
+  list(request: ListRequest & { filter: StockFilter }): Promise<StockRecord[]> {
+    const { search, categoryId, active, belowMinimum } = request.filter;
+    const rows: StockRecord[] = (this.catalog?.products ?? [])
+      .map((product) => {
+        const quantityMilli = this.balances.get(product.id) ?? 0;
+        return {
+          productId: product.id,
+          name: product.name,
+          sku: product.sku,
+          unit: product.unit,
+          active: product.active,
+          quantityMilli,
+          minStockMilli: product.minStockMilli,
+          belowMinimum: product.minStockMilli !== null && quantityMilli < product.minStockMilli,
+          categoryId: product.categoryId,
+          barcode: product.barcode,
+        };
+      })
+      .filter((row) => {
+        if (search !== undefined) {
+          const needle = search.toLowerCase();
+          const hit =
+            row.name.toLowerCase().includes(needle) ||
+            row.sku.toLowerCase().includes(needle) ||
+            row.barcode === search;
+          if (!hit) return false;
+        }
+        if (categoryId !== undefined && row.categoryId !== categoryId) return false;
+        if (active !== undefined && row.active !== active) return false;
+        if (belowMinimum === true && !row.belowMinimum) return false;
+        return true;
+      })
+      .map(({ categoryId: _category, barcode: _barcode, ...row }) => row)
+      .sort((a, b) =>
+        a.name < b.name ? -1 : a.name > b.name ? 1 : a.productId < b.productId ? -1 : 1,
+      );
+    const after = request.after;
+    const rest =
+      after === undefined
+        ? rows
+        : rows.filter(
+            (row) => row.name > after[0] || (row.name === after[0] && row.productId > after[1]),
+          );
+    return Promise.resolve(rest.slice(0, request.limit));
+  }
+
+  movements(productId: string, request: MovementListRequest): Promise<StockMovementRecord[]> {
+    const newestFirst = this.book
+      .filter((movement) => movement.productId === productId)
+      .sort((a, b) => {
+        const byTime = b.createdAt.getTime() - a.createdAt.getTime();
+        return byTime !== 0 ? byTime : a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+      });
+    const after = request.after;
+    const rest =
+      after === undefined
+        ? newestFirst
+        : newestFirst.filter((movement) => {
+            const at = movement.createdAt.toISOString();
+            return at < after[0] || (at === after[0] && movement.id < after[1]);
+          });
+    return Promise.resolve(rest.slice(0, request.limit));
+  }
+
+  movementOfOperation(operationId: string): Promise<StockMovementRecord | null> {
+    return Promise.resolve(
+      this.book.find((movement) => movement.operationId === operationId) ?? null,
+    );
   }
 }
 

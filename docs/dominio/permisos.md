@@ -22,6 +22,9 @@ lee una persona.
 > **Dónde se aplican las acciones de proveedores y compras** (C2-06): la lista de proveedores y las compras (registrar,
 > listar y ver) son `purchase:create`, de la gerencia; ver la bodega es `stock:view`, de los tres roles.
 
+> **Dónde se aplican las acciones de existencias** (C2-07): ver la existencia y el historial de un producto es
+> `stock:view`, de los tres roles; ajustar la existencia es `stock:adjust`, de la gerencia.
+
 ## Los tres roles
 
 - **Dueño:** quien creó el negocio. Puede todo, incluidos los datos del negocio y las personas con más

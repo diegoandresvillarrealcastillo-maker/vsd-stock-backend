@@ -1,3 +1,6 @@
+import type { UnitOfMeasure } from '../../model/unit-of-measure.js';
+import type { ListRequest } from './catalog.js';
+
 export interface WarehouseRecord {
   readonly id: string;
   readonly name: string;
@@ -10,6 +13,52 @@ export interface StockChange {
   readonly delta: number;
   readonly reason: 'purchase' | 'adjustment';
   readonly note: string | null;
+}
+
+/** La existencia de un producto: lo que hay (la suma de sus movimientos) y el minimo que el negocio fijo. */
+export interface StockRecord {
+  readonly productId: string;
+  readonly name: string;
+  readonly sku: string;
+  readonly unit: UnitOfMeasure;
+  /** `false` si el producto esta archivado. */
+  readonly active: boolean;
+  /** Milesimas de la unidad. Un producto sin movimientos tiene cero. */
+  readonly quantityMilli: number;
+  /** Milesimas de la unidad, o `null` si el negocio no fijo un minimo. */
+  readonly minStockMilli: number | null;
+  /** Hay un minimo y la existencia esta por debajo de el (estrictamente menos: igual al minimo no avisa). */
+  readonly belowMinimum: boolean;
+}
+
+export interface StockFilter {
+  /** Parte del nombre o del SKU, sin importar mayusculas, o el codigo de barras completo. */
+  readonly search?: string;
+  readonly categoryId?: string;
+  readonly active?: boolean;
+  /** Solo los que tienen minimo y estan por debajo de el. */
+  readonly belowMinimum?: boolean;
+}
+
+export type StockMovementKind = 'sale' | 'purchase' | 'adjustment' | 'void';
+
+/** Un movimiento del libro, tal como quedo escrito. Nunca se edita. */
+export interface StockMovementRecord {
+  readonly id: string;
+  readonly operationId: string;
+  readonly productId: string;
+  readonly kind: StockMovementKind;
+  /** Milesimas de la unidad; negativo si resta. */
+  readonly deltaMilli: number;
+  /** La nota del movimiento: en un ajuste, el motivo; en una compra, la nota de la compra. */
+  readonly reason: string | null;
+  readonly createdAt: Date;
+}
+
+/** El historial va de lo mas nuevo a lo mas viejo; la posicion es (instante al milisegundo, id). */
+export interface MovementListRequest {
+  readonly limit: number;
+  readonly after?: readonly [string, string];
 }
 
 /**
@@ -25,4 +74,10 @@ export interface StockLedger {
    * una a la otra.
    */
   addMovements(operationId: string, changes: readonly StockChange[]): Promise<void>;
+  /** La existencia de cada producto, por nombre e id. Un producto sin movimientos aparece con cero. */
+  list(request: ListRequest & { filter: StockFilter }): Promise<StockRecord[]>;
+  /** El historial de un producto: de lo mas nuevo a lo mas viejo. */
+  movements(productId: string, request: MovementListRequest): Promise<StockMovementRecord[]>;
+  /** El primer movimiento que escribio una operacion, o `null` si no escribio ninguno. */
+  movementOfOperation(operationId: string): Promise<StockMovementRecord | null>;
 }

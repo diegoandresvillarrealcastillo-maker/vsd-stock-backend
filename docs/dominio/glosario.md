@@ -227,6 +227,10 @@ administrador (no al cajero).
 Un movimiento de stock que corrige la existencia (mercancía dañada, un conteo, un error). Reemplaza editar.
 Abrir una caja en unidades es un ajuste (ADR 0015).
 
+En la API un ajuste dice **cuánto sube o baja** la existencia (`deltaMilli`, nunca cero) y **por qué** (obligatorio, queda
+como la nota del movimiento); no dice cuánto debe haber. La existencia puede quedar en negativo: el libro cuenta lo que
+pasó y una persona lo corrige con otro ajuste.
+
 **Código:** `Adjustment`
 
 **Estado:** Decidido (ADR 0013 y ADR 0020)
@@ -250,7 +254,7 @@ A quien el negocio le compra la mercancía. Solo se guarda su nombre y, si se qu
 ### Alerta de stock mínimo
 
 El aviso de que la existencia de un producto bajó del mínimo que el negocio fijó (un campo opcional del
-producto). Si el plazo aprieta, se recorta después de la mascota y de los reportes.
+producto). Avisa cuando hay **estrictamente menos** que el mínimo: igual al mínimo todavía no avisa. Si el plazo aprieta, se recorta después de la mascota y de los reportes.
 
 **Código:** `LowStockAlert`
 

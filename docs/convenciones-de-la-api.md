@@ -120,6 +120,12 @@ Los de proveedores y compras (C2-06): `supplier-not-found` y `purchase-not-found
 `archived-product`, y `/lines/0/quantityMilli` `not-whole` (un producto que se cuenta en unidades enteras no admite
 decimales). Un producto repetido en dos líneas es `duplicate-product` en la segunda: se juntan las cantidades.
 
+Los ajustes de existencia (C2-07) usan los mismos problemas de campo: `/productId` `unknown-product` si el producto no
+existe en el negocio (un producto archivado sí se ajusta), `/deltaMilli` `zero-delta` (un ajuste que no cambia nada) y
+`/deltaMilli` `not-whole` en un producto que se cuenta en unidades enteras. El historial de un producto que no existe
+responde 404 `product-not-found`: no es una lista vacía. El cursor del historial lleva el instante al milisegundo y el `id`
+del último movimiento.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):
