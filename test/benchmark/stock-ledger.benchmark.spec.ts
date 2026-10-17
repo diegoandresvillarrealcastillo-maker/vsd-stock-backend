@@ -2,15 +2,10 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { asApplication, createAdminPool } from '../integration/support/database.js';
-import {
-  BUSINESS_A,
-  LEDGER_SCHEMA,
-  createLedgerDesign,
-  dropLedgerDesign,
-} from '../integration/support/ledger-design.js';
+import { BUSINESS_A, resetData, seedBusiness } from '../integration/support/seed.js';
 
 /**
- * Medicion del ADR 0013: cuanto cuesta leer la existencia sumando los
+ * Medicion del ADR 0013 sobre las tablas REALES (ADR 0021): cuanto cuesta leer la existencia sumando los
  * movimientos y cuanto cuesta mantener el saldo. NO es una prueba: no afirma
  * nada, imprime una tabla. Se corre con `npm run bench:stock` (necesita la base
  * de `npm run db:up`) y los numeros dependen del equipo: sirve el orden de
@@ -52,7 +47,7 @@ describe('stock ledger: read and write cost (ADR 0013)', () => {
   });
 
   afterAll(async () => {
-    await dropLedgerDesign(admin);
+    await resetData(admin);
     await admin.end();
   });
 
@@ -61,59 +56,68 @@ describe('stock ledger: read and write cost (ADR 0013)', () => {
 
     for (const movements of SIZES) {
       const products = productsFor(movements);
-      await createLedgerDesign(admin);
+      await resetData(admin);
+      const business = await seedBusiness(admin, BUSINESS_A);
+      await admin.query(
+        `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
+         SELECT ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, $1, 'P' || n, 'SKU-' || n,
+                'unit', 1000, 0
+           FROM generate_series(0, $2::int - 1) AS n`,
+        [BUSINESS_A, products],
+      );
+      // Todos los movimientos cuelgan de una sola operacion: se mide el costo del movimiento, no el de la operacion.
+      const operationId = randomUUID();
+      await admin.query(
+        `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'purchase', $3)`,
+        [BUSINESS_A, operationId, business.ownerId],
+      );
 
       // Carga masiva sin el disparador (un millon de disparos tardaria mas que lo que se mide);
       // despues se construye el saldo de una vez y se reactiva.
+      await admin.query(`ALTER TABLE stock_movement DISABLE TRIGGER apply_stock_movement`);
       await admin.query(
-        `ALTER TABLE ${LEDGER_SCHEMA}.stock_movement DISABLE TRIGGER apply_stock_movement`,
-      );
-      await admin.query(
-        `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-         SELECT $1::uuid, gen_random_uuid(),
+        `INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason)
+         SELECT $1::uuid, $4::uuid, $5::uuid,
                 ('00000000-0000-4000-8000-' || lpad((n % $3::int)::text, 12, '0'))::uuid,
                 CASE WHEN n % 5 = 0 THEN 12 ELSE -1 END,
                 CASE WHEN n % 5 = 0 THEN 'purchase' ELSE 'sale' END
            FROM generate_series(1, $2::int) AS n`,
-        [BUSINESS_A, movements, products],
+        [BUSINESS_A, movements, products, operationId, business.warehouseId],
       );
       await admin.query(
-        `INSERT INTO ${LEDGER_SCHEMA}.stock_balance (id_negocio, product_id, quantity)
-         SELECT id_negocio, product_id, sum(delta) FROM ${LEDGER_SCHEMA}.stock_movement GROUP BY 1, 2`,
+        `INSERT INTO stock_balance (id_negocio, warehouse_id, product_id, quantity)
+         SELECT id_negocio, warehouse_id, product_id, sum(delta) FROM stock_movement GROUP BY 1, 2, 3`,
       );
-      await admin.query(
-        `ALTER TABLE ${LEDGER_SCHEMA}.stock_movement ENABLE TRIGGER apply_stock_movement`,
-      );
-      await admin.query(`ANALYZE ${LEDGER_SCHEMA}.stock_movement`);
-      await admin.query(`ANALYZE ${LEDGER_SCHEMA}.stock_balance`);
+      await admin.query(`ALTER TABLE stock_movement ENABLE TRIGGER apply_stock_movement`);
+      await admin.query(`ANALYZE stock_movement`);
+      await admin.query(`ANALYZE stock_balance`);
 
       const product = '00000000-0000-4000-8000-000000000007';
       const reads = await asApplication(admin, BUSINESS_A, async (client) => {
         const sumOne = await timeEach(300, () =>
           client.query(
-            `SELECT COALESCE(sum(delta), 0) FROM ${LEDGER_SCHEMA}.stock_movement
+            `SELECT COALESCE(sum(delta), 0) FROM stock_movement
               WHERE id_negocio = $1 AND product_id = $2`,
             [BUSINESS_A, product],
           ),
         );
         const balanceOne = await timeEach(300, () =>
           client.query(
-            `SELECT quantity FROM ${LEDGER_SCHEMA}.stock_balance WHERE id_negocio = $1 AND product_id = $2`,
+            `SELECT quantity FROM stock_balance WHERE id_negocio = $1 AND product_id = $2`,
             [BUSINESS_A, product],
           ),
         );
         const sumAll = await timeEach(5, () =>
           client.query(
-            `SELECT product_id, sum(delta) FROM ${LEDGER_SCHEMA}.stock_movement
+            `SELECT product_id, sum(delta) FROM stock_movement
               WHERE id_negocio = $1 GROUP BY product_id`,
             [BUSINESS_A],
           ),
         );
         const balanceAll = await timeEach(5, () =>
-          client.query(
-            `SELECT product_id, quantity FROM ${LEDGER_SCHEMA}.stock_balance WHERE id_negocio = $1`,
-            [BUSINESS_A],
-          ),
+          client.query(`SELECT product_id, quantity FROM stock_balance WHERE id_negocio = $1`, [
+            BUSINESS_A,
+          ]),
         );
         return { sumOne, balanceOne, sumAll, balanceAll };
       });
@@ -121,22 +125,18 @@ describe('stock ledger: read and write cost (ADR 0013)', () => {
       // Costo de escribir un movimiento (una sola fila, con RLS), con y sin saldo.
       const writeOne = (client: pg.PoolClient) => () =>
         client.query(
-          `INSERT INTO ${LEDGER_SCHEMA}.stock_movement (id_negocio, operation_id, product_id, delta, reason)
-           VALUES ($1, $2, $3, -1, 'sale')`,
-          [BUSINESS_A, randomUUID(), product],
+          `INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason)
+           VALUES ($1, $2, $3, $4, -1, 'sale')`,
+          [BUSINESS_A, operationId, business.warehouseId, product],
         );
       const withBalance = await asApplication(admin, BUSINESS_A, (client) =>
         timeEach(500, writeOne(client)),
       );
-      await admin.query(
-        `ALTER TABLE ${LEDGER_SCHEMA}.stock_movement DISABLE TRIGGER apply_stock_movement`,
-      );
+      await admin.query(`ALTER TABLE stock_movement DISABLE TRIGGER apply_stock_movement`);
       const withoutBalance = await asApplication(admin, BUSINESS_A, (client) =>
         timeEach(500, writeOne(client)),
       );
-      await admin.query(
-        `ALTER TABLE ${LEDGER_SCHEMA}.stock_movement ENABLE TRIGGER apply_stock_movement`,
-      );
+      await admin.query(`ALTER TABLE stock_movement ENABLE TRIGGER apply_stock_movement`);
 
       // La fila caliente: 20 cajas vendiendo el MISMO producto sin parar, 100 ventas cada una,
       // cada venta en su propia transaccion. Muy por encima de lo que vende una tienda de barrio.

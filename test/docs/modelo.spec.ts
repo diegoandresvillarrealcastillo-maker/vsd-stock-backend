@@ -150,12 +150,15 @@ describe('docs/dominio/modelo-de-datos.md (ADR 0020)', () => {
     return [...names].sort();
   };
 
-  /** El texto de los esquemas de juguete que construyen las especificaciones ejecutables. */
-  const designSources = (): string[] => {
-    const support = join(ROOT, 'test/integration/support');
-    return readdirSync(support)
-      .filter((file) => file.endsWith('-design.ts'))
-      .map((file) => readFileSync(join(support, file), 'utf8'));
+  /** El SQL de las migraciones, en orden: lo que de verdad existe en la base (ADR 0021). */
+  const migrationSql = (): string => {
+    const directory = join(ROOT, 'prisma/migrations');
+    return readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .map((name) => readFileSync(join(directory, name, 'migration.sql'), 'utf8'))
+      .join('\n');
   };
 
   it('lists the tables of the delivery, each in one of the seven contexts', () => {
@@ -175,34 +178,30 @@ describe('docs/dominio/modelo-de-datos.md (ADR 0020)', () => {
     expect(entities()).toEqual(tables.map((table) => table.name).sort());
   });
 
-  it('contains the tables that the executable specifications of the cycle build', () => {
-    const built = new Set<string>();
-    for (const source of designSources()) {
-      for (const match of source.matchAll(/CREATE TABLE \$\{[A-Z_]+\}\.([a-z_]+)/g)) {
-        built.add(match[1] ?? '');
-      }
-    }
+  it('lists exactly the tables that the migrations create', () => {
+    const created = [...migrationSql().matchAll(/^CREATE TABLE "([a-z_]+)"/gm)]
+      .map((match) => match[1] ?? '')
+      .sort();
 
-    expect(built.size).toBeGreaterThanOrEqual(9);
-    expect([...built].filter((name) => !tables.some((table) => table.name === name))).toEqual([]);
+    expect(created).toHaveLength(20);
+    expect(created).toEqual(tables.map((table) => table.name).sort());
   });
 
-  it('draws every foreign key that the executable specifications enforce', () => {
-    const enforced: string[] = [];
-    for (const source of designSources()) {
-      for (const block of source.split(/CREATE TABLE \$\{[A-Z_]+\}\./).slice(1)) {
-        const table = /^([a-z_]+)/.exec(block)?.[1] ?? '';
-        // Hasta la linea que cierra la tabla: lo que sigue (funciones, disparadores) no son sus columnas.
-        const columns = block.split(/\n\s*\);/)[0] ?? '';
-        for (const match of columns.matchAll(/REFERENCES \$\{[A-Z_]+\}\.([a-z_]+)/g)) {
-          enforced.push([table, match[1] ?? ''].sort().join('|'));
-        }
-      }
-    }
+  it('draws exactly the relations between tables that the migrations enforce with foreign keys', () => {
+    // Una clave foranea: `ALTER TABLE "hija" ADD CONSTRAINT "x" FOREIGN KEY (...) REFERENCES "padre"(...)`.
+    const enforced = [
+      ...migrationSql().matchAll(
+        /^ALTER TABLE "([a-z_]+)" ADD CONSTRAINT "[a-z_]+" FOREIGN KEY \([^)]*\) REFERENCES "([a-z_]+)"/gm,
+      ),
+    ]
+      .map((match) => [match[1] ?? '', match[2] ?? ''].sort().join('|'))
+      .filter((pair) => !pair.split('|').includes('business'));
+    // Toda tabla cuelga de `business` por `id_negocio`; el diagrama dibuja solo las de primer nivel, y esas no
+    // se vigilan aqui: lo que importa es la relacion entre las demas.
+    const drawn = drawnRelations().filter((pair) => !pair.split('|').includes('business'));
 
-    expect(enforced.length).toBeGreaterThanOrEqual(2);
-    const drawn = drawnRelations();
-    expect(enforced.filter((pair) => !drawn.includes(pair))).toEqual([]);
+    expect(enforced.length).toBeGreaterThan(20);
+    expect([...new Set(drawn)].sort()).toEqual([...new Set(enforced)].sort());
   });
 
   it('keeps the table of names, which is the rule the tests rely on, in the document', () => {

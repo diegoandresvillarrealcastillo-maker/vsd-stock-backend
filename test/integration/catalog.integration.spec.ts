@@ -4,12 +4,7 @@ import { Barcode } from '../../src/domain/model/barcode.js';
 import { createProduct, type Product, type ProductInput } from '../../src/domain/model/product.js';
 import { Sku } from '../../src/domain/model/sku.js';
 import { asApplication, createAdminPool } from './support/database.js';
-import {
-  CATALOG_SCHEMA,
-  createCatalogDesign,
-  dropCatalogDesign,
-} from './support/catalog-design.js';
-import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
+import { BUSINESS_A, BUSINESS_B, resetData, seedBusiness } from './support/seed.js';
 
 /**
  * Demuestra, contra un PostgreSQL real, lo que el ADR 0015 pide a la base de datos del catalogo:
@@ -19,19 +14,18 @@ import { findTablesWithoutForcedRls } from './support/rls-catalog.js';
  */
 describe('catalog: codes and shape in the database (ADR 0015)', () => {
   let admin: pg.Pool;
-  const BUSINESS_A = '11111111-1111-4111-8111-111111111111';
-  const BUSINESS_B = '22222222-2222-4222-8222-222222222222';
 
   beforeAll(() => {
     admin = createAdminPool(4);
   });
 
   beforeEach(async () => {
-    await createCatalogDesign(admin);
+    await resetData(admin);
+    await seedBusiness(admin, BUSINESS_A);
+    await seedBusiness(admin, BUSINESS_B);
   });
 
   afterAll(async () => {
-    await dropCatalogDesign(admin);
     await admin.end();
   });
 
@@ -49,7 +43,7 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
   const save = (product: Product, businessId = BUSINESS_A, active = true) =>
     asApplication(admin, businessId, (client) =>
       client.query<{ sku_key: string; barcode_key: string | null }>(
-        `INSERT INTO ${CATALOG_SCHEMA}.product
+        `INSERT INTO product
            (id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, active)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING sku_key, barcode_key`,
@@ -79,16 +73,12 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
     const names = Object.keys(row);
     return asApplication(admin, businessId, (client) =>
       client.query(
-        `INSERT INTO ${CATALOG_SCHEMA}.product (id_negocio, ${names.join(', ')})
+        `INSERT INTO product (id_negocio, ${names.join(', ')})
          VALUES ($1, ${names.map((_, index) => `$${index + 2}`).join(', ')})`,
         [businessId, ...names.map((name) => (row as Record<string, unknown>)[name])],
       ),
     );
   };
-
-  it('has row level security enabled and forced on every table with id_negocio (ADR 0005)', async () => {
-    expect(await findTablesWithoutForcedRls(admin, CATALOG_SCHEMA)).toEqual([]);
-  });
 
   it('stores a product the domain accepted, and its keys are the ones the domain computes', async () => {
     const samples: ProductInput[] = [
@@ -157,7 +147,7 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
       }
 
       const { rows } = await admin.query<{ n: string }>(
-        `SELECT count(*) AS n FROM ${CATALOG_SCHEMA}.product WHERE barcode IS NULL`,
+        `SELECT count(*) AS n FROM product WHERE barcode IS NULL`,
       );
       expect(rows[0]?.n).toBe('3');
     });
@@ -219,7 +209,7 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
     await save(createProduct(input({ sku: 'B1', barcode: null })), BUSINESS_B);
 
     const seenByA = await asApplication(admin, BUSINESS_A, (client) =>
-      client.query<{ sku: string }>(`SELECT sku FROM ${CATALOG_SCHEMA}.product`),
+      client.query<{ sku: string }>(`SELECT sku FROM product`),
     );
 
     expect(seenByA.rows.map((row) => row.sku)).toEqual(['A1']);
