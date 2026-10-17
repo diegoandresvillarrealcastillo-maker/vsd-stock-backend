@@ -49,10 +49,16 @@ Las pruebas de integración necesitan un PostgreSQL real. Hace falta Docker:
 
 ```bash
 npm run db:up             # arranca la base local (solo escucha en 127.0.0.1)
-npm run test:integration
+npm run test:integration  # prepara la base solo: roles, esquema real y migraciones (ADR 0021)
 npm run bench:stock       # opcional: mide el costo de la existencia derivada (ADR 0013)
 npm run db:down
 ```
+
+Si cambias el modelo de datos: edita `prisma/schema.prisma`, escribe una **migración nueva** (nunca edites una ya
+aplicada; `prisma migrate diff` te da la parte estructural y lo demás va a mano) y corre `npm run test:integration`:
+una prueba compara el esquema de Prisma con la base migrada y otra el modelo documentado con las migraciones. Las
+migraciones las aplica **una persona** a un ambiente real, con `npm run db:migrate` (ver
+[`docs/ambientes.md`](docs/ambientes.md)).
 
 Husky corre ESLint y Prettier sobre lo que cambia antes de cada commit, y valida el mensaje. **No uses
 `--no-verify`**: el CI repite todo y no se puede saltar.
