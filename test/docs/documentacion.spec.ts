@@ -167,6 +167,35 @@ describe('documentation: environment variables', () => {
   );
 });
 
+describe('documentation: GitHub guide', () => {
+  const guide = (): string => read('docs/guia-github.md');
+  // La seccion de PR apilados: de la pila del Ciclo 1 salieron tres trampas y las tres se evitan con una regla.
+  const stacked = (): string =>
+    (
+      guide()
+        .split(/^## /m)
+        .find((block) => /^Cuando un cambio depende de otro/.test(block)) ?? ''
+    ).replace(/\s+/g, ' ');
+
+  it('has a section on stacked pull requests', () => {
+    expect(stacked()).not.toBe('');
+  });
+
+  it('says to check that the next PR points at desarrollo before merging it', () => {
+    expect(stacked()).toContain('su base ya dice `desarrollo`');
+  });
+
+  it('explains the approval that is dismissed after the merge-base changes, and how to fix it', () => {
+    expect(stacked()).toContain('The merge-base changed after approval');
+    expect(stacked()).toMatch(/cerrando y reabriendo el PR/);
+  });
+
+  it('explains why "Contrato con el backend" is red until the backend is merged', () => {
+    expect(stacked()).toContain('Contrato con el backend');
+    expect(stacked()).toMatch(/rama base del PR/);
+  });
+});
+
 describe('documentation: glossary', () => {
   const glossary = () => read('docs/dominio/glosario.md');
   // Cada termino es un encabezado de tercer nivel y todo lo que sigue hasta el proximo encabezado.

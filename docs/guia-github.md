@@ -23,6 +23,28 @@ Jira:** los tickets viven en los Issues de cada repositorio.
 
 El backend se fusiona **antes** que el frontend que depende de él.
 
+## Cuando un cambio depende de otro: PR apilados
+
+Si un cambio no se puede probar sin otro que aún no está fusionado (en el Ciclo 1, los ADR 0013 a 0020), su rama
+sale de la rama del primero y su PR tiene **como base esa rama**, no `desarrollo`. Se llaman apilados. Reglas:
+
+1. **El cuerpo del PR lo dice en la primera línea:** «apilado sobre #N» y que se fusiona después de él.
+2. **Se fusionan de uno en uno y en orden, de abajo hacia arriba.** Al fusionar el primero, GitHub borra su rama y
+   reorienta el siguiente PR hacia `desarrollo`. **Antes de fusionar el siguiente, comprueba que su base ya dice
+   `desarrollo`.** Si se fusiona un instante antes, su contenido entra en la rama vieja y no en `desarrollo`: pasó
+   con el PR #26 del backend, cuyo contenido llegó a `desarrollo` por el PR siguiente y dejó una rama remota con un
+   commit de fusión que `desarrollo` no tiene.
+3. **Un PR que contiene los commits de otro, en el mismo repositorio:** cuando el hermano se fusiona, la base que
+   GitHub guarda para el PR puede quedarse en el commit anterior. Lo reconoces porque «Files changed» sigue
+   mostrando los archivos del hermano ya fusionado y porque cada aprobación se descarta sola con el mensaje «The
+   merge-base changed after approval». **Se arregla cerrando y reabriendo el PR:** GitHub vuelve a calcular la base
+   (la lista de archivos baja a los propios del PR) y basta una aprobación nueva. No hace falta tocar ningún commit.
+4. **El trabajo «Contrato con el backend» del frontend compara contra la rama base del PR:** mientras el backend del
+   que depende no esté en `desarrollo`, sale en rojo, y es lo que debe pasar. Al fusionar el backend, vuelve a
+   ejecutarlo.
+5. Tras la última fusión, `git fetch --prune`, borra las ramas locales y comprueba que no queda ninguna rama remota
+   de la pila: lo que ya está en `desarrollo` no necesita rama.
+
 ## Issues
 
 El título lleva el prefijo del ciclo y un número que sigue la secuencia del ciclo: `[C0-04]`, `[C1-07]`. Los
