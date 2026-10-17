@@ -7,6 +7,7 @@ async function bootstrap(): Promise<void> {
   const app = await createApp({
     corsOrigins: config.corsOrigins,
     ...(config.database === undefined ? {} : { databaseUrl: config.database.url }),
+    ...(config.auth === undefined ? {} : { auth: config.auth }),
   });
   // Con SIGTERM (docker stop, el host) las conexiones a la base se cierran antes de salir.
   app.enableShutdownHooks();
@@ -23,6 +24,12 @@ async function bootstrap(): Promise<void> {
     config.database === undefined
       ? 'Base de datos: sin configurar (DATABASE_URL sin definir)'
       : `Base de datos: ${config.database.target}`,
+  );
+  // El emisor es publico (va en cada token); las claves que verifican se piden al servicio, no se guardan aqui.
+  logger.log(
+    config.auth === undefined
+      ? 'Identidad: sin configurar (AUTH_ISSUER y AUTH_JWKS_URL sin definir)'
+      : `Identidad: tokens de ${config.auth.issuer}`,
   );
 }
 

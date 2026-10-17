@@ -17,6 +17,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
         'Este documento es el contrato que une al backend con el frontend (ADR 0001).',
     )
     .setVersion(version)
+    .addBearerAuth()
     .build();
   // ProblemDetailsDto no lo devuelve ningun metodo con su tipo: se declara aparte para que quede en el contrato.
   return SwaggerModule.createDocument(app, config, { extraModels: [ProblemDetailsDto] });

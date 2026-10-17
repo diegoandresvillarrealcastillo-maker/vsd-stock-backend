@@ -6,3 +6,5 @@
  */
 export const GET_HEALTH = Symbol('GET_HEALTH');
 export const GET_READINESS = Symbol('GET_READINESS');
+export const AUTHENTICATE = Symbol('AUTHENTICATE');
+export const GET_ME = Symbol('GET_ME');

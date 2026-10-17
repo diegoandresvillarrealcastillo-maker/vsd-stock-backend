@@ -17,6 +17,8 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "vectors": "node scripts/calculation-vectors.ts",
     "vectors:check": "node scripts/calculation-vectors.ts --check",
+    "permissions": "node scripts/permissions.ts",
+    "permissions:check": "node scripts/permissions.ts --check",
     "bench:stock": "vitest run --config vitest.benchmark.config.mts --reporter=verbose",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
@@ -48,6 +50,7 @@
     "@nestjs/swagger": "^12.0.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "jose": "6.2.12",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

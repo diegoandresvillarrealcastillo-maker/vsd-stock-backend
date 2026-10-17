@@ -49,8 +49,9 @@ pero la entrega opera con una sola por negocio.
 
 ### Usuario
 
-Una persona con acceso a un negocio, con un rol y activa o dada de baja (tabla `app_user`). Cómo se
-identifica (Supabase Auth y la verificación del token contra su JWKS) se decide en el Ciclo 2.
+Una persona con acceso a un negocio, con un rol y activa o dada de baja (tabla `app_user`). Se identifica con
+Supabase Auth y la API verifica su token contra las claves públicas del servicio; el negocio y el rol salen de nuestra
+base de datos, no del token (ADR 0022).
 
 **Código:** `User`
 
@@ -83,11 +84,12 @@ da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`..
 
 El periodo en que una persona está identificada en un dispositivo. Una sesión caducada conserva lo guardado en
 el dispositivo, cifrado y con la interfaz bloqueada, para no perder ventas; cerrar sesión de forma explícita lo
-borra (_olvidar_, ADR 0018). Cómo se identifica a la persona se decide en el Ciclo 2.
+borra (_olvidar_, ADR 0018). El token de acceso vive solo en memoria; sin conexión, el mostrador se reanuda hasta
+72 horas después de la última verificación y luego la interfaz se bloquea (ADR 0022).
 
 **Código:** `Session`
 
-**Estado:** Requisito
+**Estado:** Decidido (ADR 0022)
 
 ## Catálogo
 

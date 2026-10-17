@@ -9,3 +9,9 @@ export const DATABASE_HEALTH = Symbol('DATABASE_HEALTH');
 
 /** Identificador de inyeccion del puerto de salida UnitOfWork. */
 export const UNIT_OF_WORK = Symbol('UNIT_OF_WORK');
+
+/** Identificador de inyeccion del puerto de salida TokenVerifier. */
+export const TOKEN_VERIFIER = Symbol('TOKEN_VERIFIER');
+
+/** Identificador de inyeccion del puerto de salida IdentityDirectory. */
+export const IDENTITY_DIRECTORY = Symbol('IDENTITY_DIRECTORY');

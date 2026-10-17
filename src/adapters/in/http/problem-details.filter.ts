@@ -6,8 +6,12 @@ import {
   HttpException,
   Logger,
 } from '@nestjs/common';
-import { buildProblem, PROBLEM_CONTENT_TYPE, type ProblemError } from './problem-details.js';
+import { ApiProblem } from './api-problem.js';
+import { problemOfDomainError } from './domain-errors.js';
+import { buildProblem, PROBLEM_CONTENT_TYPE } from './problem-details.js';
 import { REQUEST_ID_HEADER } from './request-id.js';
+
+export { ApiProblem };
 
 interface RequestWithPath {
   originalUrl?: string;
@@ -22,24 +26,6 @@ interface ProblemResponse {
   status(code: number): ProblemResponse;
   type(contentType: string): ProblemResponse;
   json(body: unknown): unknown;
-}
-
-/**
- * Un error de la API con un codigo propio del caso (`shift-closed`), un detalle para quien programa y, si hace
- * falta, los campos invalidos y cuanto esperar para reintentar. El filtro lo convierte en `application/problem+json`.
- */
-export class ApiProblem extends HttpException {
-  readonly detail: string;
-
-  constructor(
-    status: number,
-    readonly code: string,
-    detail: string,
-    readonly extras: { errors?: ProblemError[]; retryAfterSeconds?: number } = {},
-  ) {
-    super(detail, status);
-    this.detail = detail;
-  }
 }
 
 /** Lo que dijo la excepcion de Nest, como texto. */
@@ -76,7 +62,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         : undefined) ??
       randomUUID();
 
-    const status = exception instanceof HttpException ? exception.getStatus() : 500;
+    // Los errores del dominio (sin sesion, persona dada de baja, sin base) se traducen aqui una sola vez.
+    const own = exception instanceof ApiProblem ? exception : problemOfDomainError(exception);
+    const status =
+      own?.getStatus() ?? (exception instanceof HttpException ? exception.getStatus() : 500);
     if (status >= 500) {
       const reason = exception instanceof Error ? exception.message : String(exception);
       this.logger.error(
@@ -85,7 +74,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       );
     }
 
-    const own = exception instanceof ApiProblem ? exception : undefined;
     const target = request.originalUrl ?? request.url ?? '';
     // Nest dice «Cannot GET /ruta?telefono=300...»: la cadena de consulta puede llevar datos y no sale de aqui.
     const withoutQuery = (text: string): string =>
@@ -93,8 +81,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const problem = buildProblem({
       status,
       ...(own === undefined ? {} : { code: own.code }),
-      ...(exception instanceof HttpException
-        ? { detail: withoutQuery(own?.detail ?? messageOf(exception)) }
+      // El detalle es el del error del dominio ya traducido (`own`) o el de la excepcion de Nest.
+      ...(own !== undefined || exception instanceof HttpException
+        ? {
+            detail: withoutQuery(own?.detail ?? messageOf(exception as HttpException)),
+          }
         : {}),
       instance: target,
       traceId,
@@ -103,6 +94,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     if (own?.extras.retryAfterSeconds !== undefined) {
       response.setHeader('Retry-After', String(own.extras.retryAfterSeconds));
+    }
+    for (const [name, value] of Object.entries(own?.extras.headers ?? {})) {
+      response.setHeader(name, value);
     }
     response.status(problem.status).type(PROBLEM_CONTENT_TYPE).json(problem);
   }
