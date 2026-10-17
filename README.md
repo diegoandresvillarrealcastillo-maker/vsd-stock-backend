@@ -32,13 +32,20 @@ Responde `200` con un JSON como `{"status":"ok","timestamp":"2026-10-16T19:51:35
 `.env.example` como `.env` y ajústalo. **El `.env` no se sube nunca al repositorio.** Una variable
 ya definida en el entorno tiene prioridad sobre la del archivo.
 
-| Variable                 | Qué es                                                                                                         | Por defecto |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ----------- |
-| `PORT`                   | Puerto en el que escucha la API (entero entre 1 y 65535).                                                      | `3000`      |
-| `CORS_ORIGINS`           | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                | ninguno     |
-| `DATABASE_MIGRATION_URL` | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee. | ninguno     |
+| Variable                 | Qué es                                                                                                                                                                                 | Por defecto |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `PORT`                   | Puerto en el que escucha la API (entero entre 1 y 65535).                                                                                                                              | `3000`      |
+| `CORS_ORIGINS`           | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                                                                                        | ninguno     |
+| `DATABASE_URL`           | Conexión de la **aplicación** a la base de datos, con el rol `stock_app` (nunca el dueño de las tablas). Lleva contraseña. Sin ella la API arranca, pero `GET /v1/ready` responde 503. | ninguno     |
+| `DATABASE_MIGRATION_URL` | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee.                                                                         | ninguno     |
 
-Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra.
+Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra, **sin repetir su
+valor** cuando es una cadena de conexión (lleva la clave).
+
+- `GET /health` dice que el proceso está en pie y **no toca la base**: lo usa el contenedor y el cliente para saber si
+  hay conexión.
+- `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
+  `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 
 `DATABASE_MIGRATION_URL` es la única que lleva una contraseña en un ambiente real: va en tu `.env` y nunca en un
 chat, un Issue, un PR o un archivo del repositorio. Para la base local de Docker no hace falta (`npm run db:prepare`).
