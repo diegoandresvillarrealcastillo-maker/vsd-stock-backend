@@ -57,14 +57,15 @@ JWKS) se decide en el Ciclo 2.
 
 ### Rol
 
-Lo que una persona puede hacer en un negocio. Se piensan tres: **dueño**, **administrador** y **cajero**; qué
-puede hacer cada uno se define en el Ciclo 1. El único permiso que el encargo ya fija es que un cajero no ve
-utilidades ni borra ventas. Los permisos son una regla de negocio que vive en `application/`, con una prueba en
-negativo por cada regla: no basta que el dueño acceda, otro negocio debe ser rechazado.
+Lo que una persona puede hacer en un negocio. Son tres, fijos: **dueño**, **administrador** y **cajero**. Un cajero
+no ve utilidades ni anula ventas. Cada acción tiene su tabla de quién la puede hacer y si funciona sin conexión
+([Permisos](permisos.md)); se niega por omisión y el negocio se revisa antes que el rol. Los permisos son una regla
+de negocio que vive en `domain/`, con una prueba en negativo por cada regla: no basta que el dueño acceda, otro
+negocio debe ser rechazado (ADR 0017).
 
-**Código:** `Role`
+**Código:** `Role`, `Action` y `authorize`
 
-**Estado:** Hipótesis
+**Estado:** Decidido (ADR 0017)
 
 ### Dispositivo
 
@@ -80,7 +81,8 @@ da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`..
 ### Sesión
 
 El periodo en que una persona está identificada en un dispositivo. Una sesión caducada conserva lo guardado en
-el dispositivo, cerrado; cerrar sesión lo borra.
+el dispositivo, cifrado y con la interfaz bloqueada, para no perder ventas; cerrar sesión de forma explícita lo
+borra (_olvidar_, ADR 0018). Cómo se identifica a la persona se decide en el Ciclo 2.
 
 **Código:** `Session`
 
@@ -428,6 +430,17 @@ precios, los clientes.
 **Código:** `ReadCopy`
 
 **Estado:** Decidido (ADR 0009)
+
+### Olvidar
+
+Borrar del dispositivo todo lo de una persona en un solo paso: su base y la clave con que se cifró. Ocurre al
+cerrar sesión de forma explícita (avisando antes cuántas operaciones sin enviar se perderían) y al dar de baja a la
+persona o a su dispositivo (sincronizando antes lo pendiente). Un dispositivo olvidado se registra de nuevo y recibe un
+código nuevo (ADR 0016 y ADR 0018).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0018)
 
 ### Sincronización
 

@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Experimento: cifrado local de VSD Stock (ADR 0018)</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 1.5rem auto;
+        max-width: 60rem;
+        padding: 0 1rem;
+        line-height: 1.45;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid #bbb;
+        padding: 0.4rem 0.6rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .ok {
+        color: #0a6a2a;
+        font-weight: 600;
+      }
+      .falla {
+        color: #b00020;
+        font-weight: 600;
+      }
+      code {
+        background: #f0f0f0;
+        padding: 0 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Experimento: cifrado local (ADR 0018)</h1>
+    <p>
+      Comprueba, en este navegador, lo que el ADR 0018 afirma del cifrado de lo que VSD Stock guarda
+      en el dispositivo. No toca el código del producto: es un esqueleto desechable. Cómo correrlo
+      está en el
+      <code>README.md</code> de esta carpeta.
+    </p>
+    <p id="entorno"></p>
+    <p id="resumen" role="status"></p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Qué se comprueba</th>
+          <th>Resultado</th>
+          <th>Detalle</th>
+        </tr>
+      </thead>
+      <tbody id="resultados"></tbody>
+    </table>
+
+    <script>
+      'use strict';
+
+      // ------------------------------------------------------------------
+      // Parametros: ?fase=1|2 (que parte correr), ?rompe=... (sabotear a proposito
+      // el diseno para ver que el experimento lo detecta) y ?olvidar=1 (limpiar).
+      // ------------------------------------------------------------------
+      const params = new URLSearchParams(location.search);
+      const fase = params.get('fase') ?? '1';
+      const rompe = params.get('rompe') ?? '';
+
+      const DB_NAME = 'vsd-stock-experimento';
+      const STORE_RECORDS = 'registros';
+      const STORE_KEYS = 'claves';
+      const MARCA = 'ARROZ-500 Cliente Maria Lopez 4500 pesos';
+
+      const resultados = [];
+      window.__resultados = resultados;
+      window.__terminado = false;
+
+      function anotar(id, descripcion, ok, detalle) {
+        resultados.push({ id, descripcion, ok, detalle: String(detalle ?? '') });
+      }
+
+      const codificar = (texto) => new TextEncoder().encode(texto);
+
+      // ------------------------------------------------------------------
+      // IndexedDB minima
+      // ------------------------------------------------------------------
+      function abrirBase() {
+        return new Promise((resolve, reject) => {
+          const peticion = indexedDB.open(DB_NAME, 1);
+          peticion.onupgradeneeded = () => {
+            peticion.result.createObjectStore(STORE_RECORDS);
+            peticion.result.createObjectStore(STORE_KEYS);
+          };
+          peticion.onsuccess = () => resolve(peticion.result);
+          peticion.onerror = () => reject(peticion.error);
+        });
+      }
+
+      function pedir(base, almacen, modo, accion) {
+        return new Promise((resolve, reject) => {
+          const tx = base.transaction(almacen, modo);
+          const peticion = accion(tx.objectStore(almacen));
+          tx.oncomplete = () => resolve(peticion?.result);
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      }
+
+      const leer = (base, almacen, clave) => pedir(base, almacen, 'readonly', (s) => s.get(clave));
+      const escribir = (base, almacen, clave, valor) =>
+        pedir(base, almacen, 'readwrite', (s) => s.put(valor, clave));
+
+      // ------------------------------------------------------------------
+      // El diseno que se prueba: AES-GCM de 256 bits, clave NO extraible guardada
+      // en la propia base, IV aleatorio por registro y el nombre del registro
+      // como dato autenticado adicional (AAD).
+      // ------------------------------------------------------------------
+      async function obtenerClave(base) {
+        const guardada = await leer(base, STORE_KEYS, 'datos');
+        if (guardada) return guardada;
+        const extraible = rompe === 'extraible';
+        const clave = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, extraible, [
+          'encrypt',
+          'decrypt',
+        ]);
+        await escribir(base, STORE_KEYS, 'datos', clave);
+        return clave;
+      }
+
+      const IV_FIJO = new Uint8Array(12);
+
+      async function sellar(clave, nombre, valor) {
+        const iv = rompe === 'reutilizaIV' ? IV_FIJO : crypto.getRandomValues(new Uint8Array(12));
+        const parametros = { name: 'AES-GCM', iv };
+        if (rompe !== 'sinAAD') parametros.additionalData = codificar(nombre);
+        const cifrado = await crypto.subtle.encrypt(
+          parametros,
+          clave,
+          codificar(JSON.stringify(valor)),
+        );
+        return { iv, cifrado: new Uint8Array(cifrado) };
+      }
+
+      async function abrir(clave, nombre, registro) {
+        const parametros = { name: 'AES-GCM', iv: registro.iv };
+        if (rompe !== 'sinAAD') parametros.additionalData = codificar(nombre);
+        const plano = await crypto.subtle.decrypt(parametros, clave, registro.cifrado);
+        return JSON.parse(new TextDecoder().decode(plano));
+      }
+
+      async function guardar(base, clave, nombre, valor) {
+        const registro =
+          rompe === 'enClaro'
+            ? { iv: new Uint8Array(12), cifrado: codificar(JSON.stringify(valor)) }
+            : await sellar(clave, nombre, valor);
+        await escribir(base, STORE_RECORDS, nombre, registro);
+      }
+
+      // ------------------------------------------------------------------
+      // Utilidades de las comprobaciones
+      // ------------------------------------------------------------------
+      function contiene(bytes, aguja) {
+        const largo = aguja.length;
+        for (let i = 0; i + largo <= bytes.length; i += 1) {
+          let coincide = true;
+          for (let j = 0; j < largo; j += 1) {
+            if (bytes[i + j] !== aguja[j]) {
+              coincide = false;
+              break;
+            }
+          }
+          if (coincide) return true;
+        }
+        return false;
+      }
+
+      async function fallaCon(accion) {
+        try {
+          await accion();
+          return null;
+        } catch (error) {
+          return error?.name ?? String(error);
+        }
+      }
+
+      function cerrar(base) {
+        base.close();
+      }
+
+      // ------------------------------------------------------------------
+      // Fase 1: se crea la clave y se guardan datos
+      // ------------------------------------------------------------------
+      async function fase1() {
+        // Se parte de cero: ningun rastro de una corrida anterior.
+        await new Promise((resolve) => {
+          const peticion = indexedDB.deleteDatabase(DB_NAME);
+          peticion.onsuccess = peticion.onerror = peticion.onblocked = () => resolve();
+        });
+        const base = await abrirBase();
+        const clave = await obtenerClave(base);
+
+        anotar(
+          '1.1',
+          'El contexto es seguro (HTTPS o localhost): sin eso no existe WebCrypto',
+          window.isSecureContext === true && !!crypto.subtle,
+          `isSecureContext=${window.isSecureContext}`,
+        );
+
+        const error = await fallaCon(() => crypto.subtle.exportKey('raw', clave));
+        anotar(
+          '1.2',
+          'La clave NO se puede exportar (extractable=false)',
+          clave.extractable === false && error === 'InvalidAccessError',
+          `extractable=${clave.extractable}, exportKey -> ${error ?? 'se pudo exportar'}`,
+        );
+
+        await guardar(base, clave, 'venta:AA-000001', { marca: MARCA, total: 4500 });
+        const crudo = await leer(base, STORE_RECORDS, 'venta:AA-000001');
+        const bytes = new Uint8Array(crudo.cifrado);
+        const rastro =
+          contiene(bytes, codificar('ARROZ')) ||
+          contiene(bytes, codificar('Maria')) ||
+          contiene(bytes, codificar('total'));
+        anotar(
+          '1.3',
+          'Lo guardado en la base no contiene el texto original (ni el nombre de un campo)',
+          !rastro,
+          `${bytes.length} bytes guardados, rastro del texto: ${rastro ? 'SI' : 'no'}`,
+        );
+
+        const recuperado = await abrir(clave, 'venta:AA-000001', crudo);
+        anotar(
+          '1.4',
+          'Con la clave, el registro se descifra tal cual',
+          recuperado.marca === MARCA && recuperado.total === 4500,
+          JSON.stringify(recuperado).slice(0, 80),
+        );
+
+        // IV distintos: 10 000 cifrados del mismo texto no repiten el IV.
+        const ivs = new Set();
+        const textos = new Set();
+        for (let i = 0; i < 10000; i += 1) {
+          const sellado = await sellar(clave, 'prueba', { n: 1 });
+          ivs.add(sellado.iv.join(','));
+          textos.add(sellado.cifrado.join(','));
+        }
+        anotar(
+          '1.5',
+          'Cifrar 10 000 veces el mismo texto da 10 000 IV y 10 000 resultados distintos',
+          ivs.size === 10000 && textos.size === 10000,
+          `IV distintos: ${ivs.size}, resultados distintos: ${textos.size}`,
+        );
+
+        // Costo: 1 000 registros de unos 2 KB.
+        const relleno = 'x'.repeat(2000);
+        const inicio = performance.now();
+        for (let i = 0; i < 1000; i += 1) {
+          await guardar(base, clave, `venta:AA-${String(i + 2).padStart(6, '0')}`, { relleno, i });
+        }
+        const escritura = performance.now() - inicio;
+        const inicioLectura = performance.now();
+        for (let i = 0; i < 1000; i += 1) {
+          const nombre = `venta:AA-${String(i + 2).padStart(6, '0')}`;
+          await abrir(clave, nombre, await leer(base, STORE_RECORDS, nombre));
+        }
+        const lectura = performance.now() - inicioLectura;
+        anotar(
+          '1.6',
+          'Cifrar y guardar, o leer y descifrar, 1 000 registros de 2 KB cuesta menos de 5 ms por registro',
+          escritura / 1000 < 5 && lectura / 1000 < 5,
+          `escribir: ${(escritura / 1000).toFixed(2)} ms/registro, leer: ${(lectura / 1000).toFixed(2)} ms/registro`,
+        );
+
+        let persistente = 'no disponible';
+        if (navigator.storage?.persist) {
+          persistente = String(await navigator.storage.persisted());
+        }
+        const estimacion = navigator.storage?.estimate ? await navigator.storage.estimate() : null;
+        anotar(
+          '1.7',
+          'INFORMATIVO: el almacenamiento no es persistente por omision (el navegador puede borrarlo si falta espacio)',
+          true,
+          `persisted()=${persistente}, cuota=${estimacion ? Math.round(estimacion.quota / 1e6) + ' MB' : '?'}`,
+        );
+        cerrar(base);
+      }
+
+      // ------------------------------------------------------------------
+      // Fase 2: despues de recargar la pagina
+      // ------------------------------------------------------------------
+      async function fase2() {
+        const base = await abrirBase();
+        const clave = await leer(base, STORE_KEYS, 'datos');
+        anotar(
+          '2.1',
+          'Tras recargar la pagina la clave sigue ahi y sigue sin poder exportarse',
+          !!clave && clave.extractable === false,
+          clave ? `type=${clave.type}, extractable=${clave.extractable}` : 'no hay clave',
+        );
+        if (!clave) {
+          cerrar(base);
+          return;
+        }
+
+        const crudo = await leer(base, STORE_RECORDS, 'venta:AA-000001');
+        const recuperado = await abrir(clave, 'venta:AA-000001', crudo);
+        anotar(
+          '2.2',
+          'Tras recargar la pagina el registro se descifra',
+          recuperado.marca === MARCA,
+          JSON.stringify(recuperado).slice(0, 60),
+        );
+
+        // Alterar un solo bit del texto cifrado.
+        const alterado = { iv: crudo.iv, cifrado: new Uint8Array(crudo.cifrado) };
+        alterado.cifrado[3] ^= 1;
+        const errorAlterado = await fallaCon(() => abrir(clave, 'venta:AA-000001', alterado));
+        anotar(
+          '2.3',
+          'Alterar un solo bit de lo guardado hace que el descifrado FALLE (no devuelve datos corruptos)',
+          errorAlterado === 'OperationError',
+          `descifrar el registro alterado -> ${errorAlterado ?? 'se descifro'}`,
+        );
+
+        // Cambiar un registro por otro: lo que se descifra con otro nombre no debe valer.
+        const otro = await leer(base, STORE_RECORDS, 'venta:AA-000002');
+        const errorCambiado = await fallaCon(() => abrir(clave, 'venta:AA-000001', otro));
+        anotar(
+          '2.4',
+          'Copiar un registro cifrado al lugar de otro hace que el descifrado FALLE (el nombre va autenticado)',
+          errorCambiado === 'OperationError',
+          `descifrar el registro 2 como si fuera el 1 -> ${errorCambiado ?? 'se descifro'}`,
+        );
+
+        // Otra clave no abre lo de esta.
+        const otraClave = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+          'encrypt',
+          'decrypt',
+        ]);
+        const errorOtraClave = await fallaCon(() => abrir(otraClave, 'venta:AA-000001', crudo));
+        anotar(
+          '2.5',
+          'Una clave distinta no abre lo guardado',
+          errorOtraClave === 'OperationError',
+          `descifrar con otra clave -> ${errorOtraClave ?? 'se descifro'}`,
+        );
+
+        // Olvidar: borrar la base (con la clave adentro).
+        cerrar(base);
+        const nombresAntes = (await indexedDB.databases?.())?.map((d) => d.name) ?? [];
+        if (rompe !== 'sinOlvidar') {
+          await new Promise((resolve, reject) => {
+            const peticion = indexedDB.deleteDatabase(DB_NAME);
+            peticion.onsuccess = () => resolve();
+            peticion.onerror = () => reject(peticion.error);
+            peticion.onblocked = () => reject(new Error('bloqueada'));
+          });
+        }
+        const nombresDespues = (await indexedDB.databases?.())?.map((d) => d.name) ?? [];
+        anotar(
+          '2.6',
+          'Olvidar (deleteDatabase) borra la base: ya no aparece entre las bases del origen',
+          nombresAntes.includes(DB_NAME) && !nombresDespues.includes(DB_NAME),
+          `antes: [${nombresAntes}], despues: [${nombresDespues}]`,
+        );
+
+        const baseNueva = await abrirBase();
+        const claveVieja = await leer(baseNueva, STORE_KEYS, 'datos');
+        const registroViejo = await leer(baseNueva, STORE_RECORDS, 'venta:AA-000001');
+        anotar(
+          '2.7',
+          'Despues de olvidar no queda ni la clave ni un solo registro',
+          claveVieja === undefined && registroViejo === undefined,
+          `clave: ${claveVieja === undefined ? 'no hay' : 'SIGUE'}, registro: ${registroViejo === undefined ? 'no hay' : 'SIGUE'}`,
+        );
+        const claveNueva = await obtenerClave(baseNueva);
+        const errorViejo = await fallaCon(() => abrir(claveNueva, 'venta:AA-000001', crudo));
+        anotar(
+          '2.8',
+          'Una copia del texto cifrado que alguien se hubiera llevado no se abre con la clave nueva',
+          errorViejo === 'OperationError',
+          `descifrar la copia con la clave nueva -> ${errorViejo ?? 'se descifro'}`,
+        );
+        cerrar(baseNueva);
+        await new Promise((resolve) => {
+          const peticion = indexedDB.deleteDatabase(DB_NAME);
+          peticion.onsuccess = peticion.onerror = peticion.onblocked = () => resolve();
+        });
+      }
+
+      // ------------------------------------------------------------------
+      async function principal() {
+        const entorno = document.getElementById('entorno');
+        entorno.textContent = `Fase ${fase}${rompe ? ` · sabotaje: ${rompe}` : ''} · ${navigator.userAgent}`;
+        try {
+          if (fase === '1') await fase1();
+          else if (fase === '2') await fase2();
+          else anotar('0', 'Fase desconocida', false, fase);
+        } catch (error) {
+          anotar(
+            '!',
+            'El experimento se detuvo con un error',
+            false,
+            `${error?.name}: ${error?.message}`,
+          );
+        }
+        const cuerpo = document.getElementById('resultados');
+        for (const fila of resultados) {
+          const tr = document.createElement('tr');
+          for (const texto of [fila.id, fila.descripcion, fila.ok ? 'SI' : 'FALLA', fila.detalle]) {
+            const td = document.createElement('td');
+            td.textContent = texto;
+            tr.appendChild(td);
+          }
+          tr.children[2].className = fila.ok ? 'ok' : 'falla';
+          cuerpo.appendChild(tr);
+        }
+        const fallas = resultados.filter((fila) => !fila.ok).length;
+        document.getElementById('resumen').textContent =
+          fallas === 0
+            ? `Todo bien: ${resultados.length} comprobaciones.`
+            : `${fallas} de ${resultados.length} comprobaciones FALLAN.`;
+        window.__terminado = true;
+      }
+
+      principal();
+    </script>
+  </body>
+</html>
