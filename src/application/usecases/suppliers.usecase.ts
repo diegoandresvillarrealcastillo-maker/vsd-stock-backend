@@ -62,10 +62,10 @@ export class SuppliersUseCase implements Suppliers {
     // Un identificador que no es un UUID no es de nadie: no se le pregunta nada a la base.
     if (!isUuid(supplierId)) throw new SupplierNotFoundError();
 
-    return this.work.inBusiness(actor.businessId, async (scope) => {
-      if ((await scope.suppliers.find(supplierId)) === null) throw new SupplierNotFoundError();
-      return scope.suppliers.update(supplierId, change);
-    });
+    // El repositorio lanza `SupplierNotFoundError` si no existe en este negocio.
+    return this.work.inBusiness(actor.businessId, (scope) =>
+      scope.suppliers.update(supplierId, change),
+    );
   }
 
   async remove(session: Session, supplierId: string): Promise<void> {
@@ -73,9 +73,6 @@ export class SuppliersUseCase implements Suppliers {
     ensureCan(actor, 'purchase:create');
     if (!isUuid(supplierId)) throw new SupplierNotFoundError();
 
-    await this.work.inBusiness(actor.businessId, async (scope) => {
-      if ((await scope.suppliers.find(supplierId)) === null) throw new SupplierNotFoundError();
-      await scope.suppliers.remove(supplierId);
-    });
+    await this.work.inBusiness(actor.businessId, (scope) => scope.suppliers.remove(supplierId));
   }
 }
