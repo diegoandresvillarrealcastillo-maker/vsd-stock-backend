@@ -9,6 +9,7 @@ con una sola numeración de decisiones.
 | [Decisiones de arquitectura (ADR)](adr/README.md) | Qué decidimos, por qué, qué alternativas descartamos y qué perdemos. Un ADR no se edita.              |
 | [Glosario del dominio](dominio/glosario.md)       | Cómo se llama cada cosa del negocio, en español y en el código, y qué tan firme es cada término.      |
 | [Mapa de contextos](dominio/mapa-de-contextos.md) | En qué partes se divide el sistema, cómo se hablan y qué entra en la entrega.                         |
+| [Permisos](dominio/permisos.md)                   | Qué puede hacer cada rol y qué funciona sin conexión (la tabla se compara con el código).             |
 | [Plan de ambientes](ambientes.md)                 | Local, DEV, PRE y PROD (en pausa); variables de entorno; los pasos manuales para quien opera paneles. |
 | [Guía de GitHub](guia-github.md)                  | Tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa.                              |
 
