@@ -44,6 +44,43 @@ describe('application wiring', () => {
     expect(response.status).toBe(404);
   });
 
+  it('answers that 404 as a problem+json with a stable code and a trace id (ADR 0019)', async () => {
+    const response = await fetch(`${baseUrl}/does-not-exist?token=secreto`);
+    const problem = (await response.json()) as Record<string, unknown>;
+
+    expect(response.headers.get('content-type')).toContain('application/problem+json');
+    expect(problem).toMatchObject({
+      type: 'urn:vsd-stock:problem:not-found',
+      status: 404,
+      code: 'not-found',
+      instance: '/does-not-exist',
+    });
+    expect(problem['traceId']).toBe(response.headers.get('x-request-id'));
+    expect(JSON.stringify(problem)).not.toContain('secreto');
+  });
+
+  it('echoes the request id the caller sent and makes one when it sent none', async () => {
+    const sent = await fetch(`${baseUrl}/health`, {
+      headers: { 'X-Request-Id': 'device-0001-try-2' },
+    });
+    const made = await fetch(`${baseUrl}/health`);
+
+    expect(sent.headers.get('x-request-id')).toBe('device-0001-try-2');
+    expect(made.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('never lets a response to GET /health be cached: the connection check must be live (ADR 0009)', async () => {
+    const response = await fetch(`${baseUrl}/health`);
+
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('never lets an error be cached either', async () => {
+    const response = await fetch(`${baseUrl}/does-not-exist`);
+
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('emits no CORS header when no origin is configured, even if the caller sends one', async () => {
     const response = await fetch(`${baseUrl}/health`, {
       headers: { Origin: 'http://localhost:5173' },
@@ -89,6 +126,15 @@ describe('application wiring: CORS', () => {
     const response = await fetch(`${baseUrl}/health`, { headers: { Origin: ALLOWED } });
 
     expect(response.headers.get('vary')?.toLowerCase()).toContain('origin');
+  });
+
+  it('lets the browser read the headers a client needs: Retry-After, X-Request-Id and Idempotent-Replayed', async () => {
+    const response = await fetch(`${baseUrl}/health`, { headers: { Origin: ALLOWED } });
+    const exposed = (response.headers.get('access-control-expose-headers') ?? '').toLowerCase();
+
+    for (const header of ['retry-after', 'x-request-id', 'idempotent-replayed']) {
+      expect(exposed, header).toContain(header);
+    }
   });
 
   it('does not allow credentials: the API will use a token in a header, not cookies', async () => {

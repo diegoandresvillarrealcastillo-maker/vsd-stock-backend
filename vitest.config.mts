@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // El tsconfig.json deja fuera los *.spec.ts, y sin el no se transpilan los decoradores de Nest: una prueba
+  // que declara su propio controlador (como la del filtro de errores) fallaria al cargarse.
+  oxc: { decorator: { legacy: true } },
   test: {
     environment: 'node',
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],

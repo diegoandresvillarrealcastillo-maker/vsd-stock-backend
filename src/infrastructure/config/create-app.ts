@@ -1,5 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { noStoreMiddleware } from '../../adapters/in/http/no-store.js';
+import { ProblemDetailsFilter } from '../../adapters/in/http/problem-details.filter.js';
+import { requestIdMiddleware } from '../../adapters/in/http/request-id.js';
 import { AppModule } from './app.module.js';
 
 export interface CreateAppOptions {
@@ -20,6 +23,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<NestExp
   );
   // No anunciamos el framework en cada respuesta.
   app.disable('x-powered-by');
+  // Cada peticion lleva un identificador y todo error sale como application/problem+json (ADR 0019).
+  app.use(requestIdMiddleware);
+  // Ninguna respuesta se guarda en una cache; un /health guardado diria que hay conexion cuando no la hay.
+  app.use(noStoreMiddleware);
+  app.useGlobalFilters(new ProblemDetailsFilter());
 
   const corsOrigins = options.corsOrigins ?? [];
   if (corsOrigins.length > 0) {
@@ -29,6 +37,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<NestExp
     app.enableCors({
       origin: [...corsOrigins],
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      // Sin esto el navegador esconde estas cabeceras al cliente de otro origen: Retry-After lo exige el
+      // ADR 0009, X-Request-Id une una queja con el registro e Idempotent-Replayed dice que fue una repeticion.
+      exposedHeaders: ['Retry-After', 'X-Request-Id', 'Idempotent-Replayed'],
       maxAge: PREFLIGHT_MAX_AGE_SECONDS,
     });
   }
