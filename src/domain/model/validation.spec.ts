@@ -57,7 +57,7 @@ describe('InputReader', () => {
 
     it('says a missing field is required', () => {
       expect(errorsOf(read, {}, ['name'])).toEqual([
-        { pointer: '/name', code: 'required', detail: 'El nombre es obligatorio.' },
+        { pointer: '/name', code: 'required', detail: 'Falta el nombre.' },
       ]);
     });
 
@@ -96,10 +96,10 @@ describe('InputReader', () => {
     it('reads only what the caller sent: an inherited name such as constructor is a missing field', () => {
       expect(
         errorsOf((r) => r.text('constructor', { label: 'El dato', max: 10 }), {}, ['constructor']),
-      ).toEqual([{ pointer: '/constructor', code: 'required', detail: 'El dato es obligatorio.' }]);
+      ).toEqual([{ pointer: '/constructor', code: 'required', detail: 'Falta el dato.' }]);
     });
 
-    it.each(['a\u0000b', 'a\nb', 'a\u0007b', 'a\u007fb', 'a\u0085b', 'a\u009fb'])(
+    it.each(['a\u0000b', 'a\nb', 'a\u0007b', 'a\u001fb', 'a\u007fb', 'a\u0085b', 'a\u009fb'])(
       'refuses control characters (%j)',
       (value) => {
         expect(errorsOf(read, { name: value }, ['name'])).toEqual([
@@ -166,7 +166,7 @@ describe('InputReader', () => {
 
     it('says a missing one is required', () => {
       expect(errorsOf((r) => r.oneOf('role', roles, { label: 'El rol' }), {}, ['role'])).toEqual([
-        { pointer: '/role', code: 'required', detail: 'El rol es obligatorio.' },
+        { pointer: '/role', code: 'required', detail: 'Falta el rol.' },
       ]);
     });
 
@@ -260,7 +260,7 @@ describe('InputReader', () => {
 
     it('says a required one is missing', () => {
       expect(errorsOf((r) => r.email('email', { label: 'El correo' }), {}, ['email'])).toEqual([
-        { pointer: '/email', code: 'required', detail: 'El correo es obligatorio.' },
+        { pointer: '/email', code: 'required', detail: 'Falta el correo.' },
       ]);
     });
 

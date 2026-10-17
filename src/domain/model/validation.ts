@@ -43,6 +43,9 @@ const MAX_EMAIL_LENGTH = 254;
 /** Una forma minima: algo, una arroba, y un dominio con al menos un punto en medio. Quien confirma el correo es el servicio de identidad. */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
+/** «El nombre» pasa a «el nombre» para seguir a una palabra, sin tocar siglas como «El SKU». */
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+
 /** RFC 6901: `~` y `/` no pueden ir tal cual dentro de un segmento del puntero. */
 const escapePointer = (segment: string): string =>
   segment.replaceAll('~', '~0').replaceAll('/', '~1');
@@ -221,7 +224,7 @@ export class InputReader {
   private missing(key: string, options: Labelled, optional: boolean): boolean {
     if (this.source === undefined) return optional;
     if (!optional)
-      this.fail(`/${escapePointer(key)}`, 'required', `${options.label} es obligatorio.`);
+      this.fail(`/${escapePointer(key)}`, 'required', `Falta ${lowerFirst(options.label)}.`);
     return optional;
   }
 

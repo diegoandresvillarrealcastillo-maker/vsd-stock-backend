@@ -90,18 +90,21 @@ describe('the request for a page', () => {
     expect(read({ cursor })).toEqual({ limit: 50, after: ['Ana', 'id-1'] });
   });
 
-  it.each(['basura', '', ['a', 'b'], encodeCursor(['una sola parte'])])(
-    'refuses the cursor %j without saying what is inside a good one',
-    (cursor) => {
-      expect(errorsOf({ cursor })).toEqual([
-        {
-          pointer: '/cursor',
-          code: 'invalid-cursor',
-          detail: 'El cursor no es válido. Pide la lista desde el principio.',
-        },
-      ]);
-    },
-  );
+  it.each([
+    'basura',
+    '',
+    ['a', 'b'],
+    [encodeCursor(['Ana', 'id-1'])],
+    encodeCursor(['una sola parte']),
+  ])('refuses the cursor %j without saying what is inside a good one', (cursor) => {
+    expect(errorsOf({ cursor })).toEqual([
+      {
+        pointer: '/cursor',
+        code: 'invalid-cursor',
+        detail: 'El cursor no es válido. Pide la lista desde el principio.',
+      },
+    ]);
+  });
 
   it('reports a bad limit and a bad cursor together', () => {
     expect(errorsOf({ limit: '0', cursor: 'basura' }).map((e) => e.pointer)).toEqual([
