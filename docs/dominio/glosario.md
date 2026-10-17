@@ -531,6 +531,18 @@ genera el backend de su propio código y el frontend deriva de él sus tipos.
 
 **Estado:** Decidido (ADR 0001)
 
+### Problema
+
+Cómo contesta la API a todo error: un `application/problem+json` (RFC 9457) con un `code` estable por el que el
+cliente decide, el estado HTTP, un identificador de seguimiento (`traceId`, el mismo `X-Request-Id` de la
+petición) y, si la validación falla, los campos inválidos. Un error inesperado nunca revela su causa. Las demás
+convenciones de la API (versión, enteros, instantes, idempotencia, paginación) están en
+[Convenciones de la API](../convenciones-de-la-api.md) (ADR 0019).
+
+**Código:** `Problem` y `ProblemDetailsDto`
+
+**Estado:** Decidido (ADR 0019)
+
 ### Puerto
 
 Una interfaz que el dominio declara para lo que necesita de afuera (un reloj, un almacén, una API) o para lo que

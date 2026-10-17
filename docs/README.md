@@ -10,6 +10,7 @@ con una sola numeración de decisiones.
 | [Glosario del dominio](dominio/glosario.md)                          | Cómo se llama cada cosa del negocio, en español y en el código, y qué tan firme es cada término.      |
 | [Mapa de contextos](dominio/mapa-de-contextos.md)                    | En qué partes se divide el sistema, cómo se hablan y qué entra en la entrega.                         |
 | [Permisos](dominio/permisos.md)                                      | Qué puede hacer cada rol y qué funciona sin conexión (la tabla se compara con el código).             |
+| [Convenciones de la API](convenciones-de-la-api.md)                  | Versión, errores, dinero, fechas, idempotencia, paginación y cabeceras, con ejemplos.                 |
 | [Experimento de cifrado local](experimentos/cifrado-local/README.md) | Cómo se comprobó en un navegador real el cifrado y el olvido del ADR 0018, con qué resultado.         |
 | [Plan de ambientes](ambientes.md)                                    | Local, DEV, PRE y PROD (en pausa); variables de entorno; los pasos manuales para quien opera paneles. |
 | [Guía de GitHub](guia-github.md)                                     | Tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa.                              |
