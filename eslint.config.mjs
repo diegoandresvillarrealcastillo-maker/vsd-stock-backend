@@ -13,7 +13,15 @@ export default tseslint.config(
   {
     // Los archivos de configuracion en .mjs quedan fuera del analisis con
     // tipos: no forman parte del codigo del proyecto y no estan en tsconfig.
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '*.config.mjs', 'eslint/**'],
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      '*.config.mjs',
+      'eslint/**',
+      // Codigo que genera Prisma a partir de prisma/schema.prisma: no se revisa ni se edita.
+      'src/generated/**',
+    ],
   },
 
   js.configs.recommended,

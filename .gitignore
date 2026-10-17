@@ -29,6 +29,9 @@ node_modules/
 
 # ---------- Pruebas y cobertura ----------
 coverage/
+
+# Cliente de Prisma: se genera de prisma/schema.prisma (npm run prisma:generate, y solo al instalar).
+src/generated/
 .nyc_output/
 test-results/
 

@@ -17,6 +17,8 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.spec.ts',
+        // Cliente que genera Prisma: no es codigo nuestro.
+        'src/generated/**',
         // Arranque del proceso: solo se puede ejercitar levantando un
         // servidor que escuche de verdad. El cableado lo cubre la prueba
         // de integracion sobre AppModule.
