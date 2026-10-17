@@ -1,5 +1,14 @@
 import { DatabaseNotConfiguredError } from '../../../domain/model/database-not-configured-error.js';
 import {
+  BarcodeTakenError,
+  CategoryInUseError,
+  CategoryNameTakenError,
+  CategoryNotFoundError,
+  ProductNotFoundError,
+  SkuTakenError,
+  UnitLockedError,
+} from '../../../domain/model/catalog-errors.js';
+import {
   AlreadyMemberError,
   ForbiddenError,
   InvitationExpiredError,
@@ -71,7 +80,7 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
   if (error instanceof DatabaseNotConfiguredError) {
     return new ApiProblem(503, 'database-not-configured', 'La base de datos no está configurada.');
   }
-  return problemOfPeopleError(error);
+  return problemOfPeopleError(error) ?? problemOfCatalogError(error);
 }
 
 /** Los errores de negocio y personas (ADR 0023). */
@@ -119,6 +128,40 @@ function problemOfPeopleError(error: unknown): ApiProblem | undefined {
       409,
       'invitation-not-pending',
       'Esa persona no tiene una invitación pendiente que renovar.',
+    );
+  }
+  return undefined;
+}
+
+/** Los errores del catalogo (ADR 0015). */
+function problemOfCatalogError(error: unknown): ApiProblem | undefined {
+  if (error instanceof CategoryNotFoundError) {
+    return new ApiProblem(404, 'category-not-found', 'No existe esa categoría en este negocio.');
+  }
+  if (error instanceof ProductNotFoundError) {
+    return new ApiProblem(404, 'product-not-found', 'No existe ese producto en este negocio.');
+  }
+  if (error instanceof CategoryNameTakenError) {
+    return new ApiProblem(409, 'category-name-taken', 'Ya hay una categoría con ese nombre.');
+  }
+  if (error instanceof CategoryInUseError) {
+    return new ApiProblem(
+      409,
+      'category-in-use',
+      'La categoría todavía tiene productos. Muévelos o archívalos antes de borrarla.',
+    );
+  }
+  if (error instanceof SkuTakenError) {
+    return new ApiProblem(409, 'sku-taken', 'Ya hay un producto con ese SKU.');
+  }
+  if (error instanceof BarcodeTakenError) {
+    return new ApiProblem(409, 'barcode-taken', 'Ya hay un producto con ese código de barras.');
+  }
+  if (error instanceof UnitLockedError) {
+    return new ApiProblem(
+      409,
+      'unit-locked',
+      'La unidad no cambia cuando el producto ya tiene movimientos de existencias.',
     );
   }
   return undefined;

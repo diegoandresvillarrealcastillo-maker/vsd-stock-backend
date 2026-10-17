@@ -413,6 +413,448 @@
           "people"
         ]
       }
+    },
+    "/v1/categories": {
+      "get": {
+        "description": "Ordenadas por nombre. Las ven los tres roles. Pagina por cursor (ADR 0019).",
+        "operationId": "CategoriesController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Las categorías del negocio",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Es de la gerencia (`product:manage`). El nombre es único en el negocio sin importar mayúsculas (409 `category-name-taken`).",
+        "operationId": "CategoriesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear una categoría",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/categories/{categoryId}": {
+      "patch": {
+        "description": "Es de la gerencia (`product:manage`).",
+        "operationId": "CategoriesController_rename",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Renombrar una categoría",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "delete": {
+        "description": "Es de la gerencia (`product:manage`). Responde 409 `category-in-use` si todavía tiene productos: se mueven o se archivan antes.",
+        "operationId": "CategoriesController_remove",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "La categoría se borró."
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Borrar una categoría",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products": {
+      "get": {
+        "description": "Ordenados por nombre. Los ven los tres roles. `search` busca una parte del nombre o del SKU sin importar mayúsculas, o un código de barras completo. Pagina por cursor (ADR 0019).",
+        "operationId": "ProductsController_list",
+        "parameters": [
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Sin este filtro se devuelven activos y archivados."
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los productos del negocio",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Es de la gerencia (`product:manage`). Nace activo. Responde 409 `sku-taken` o `barcode-taken` si ya hay otro con ese código, y 400 `validation-failed` con todos los campos que no sirven.",
+        "operationId": "ProductsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear un producto",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{productId}": {
+      "get": {
+        "description": "Lo ven los tres roles.",
+        "operationId": "ProductsController_get",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un producto",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "patch": {
+        "description": "Es de la gerencia (`product:manage`; cambiar el precio pide además `price:update`). Archivar es `active: false`: un producto con historia no se borra. La unidad no cambia si el producto ya tiene movimientos (409 `unit-locked`).",
+        "operationId": "ProductsController_update",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambiar un producto",
+        "tags": [
+          "catalog"
+        ]
+      }
     }
   },
   "info": {
@@ -752,6 +1194,293 @@
           "active": {
             "type": "boolean",
             "description": "`false` da de baja a la persona (o revoca su invitación); `true` la reactiva. No se puede dar de baja al último dueño."
+          }
+        }
+      },
+      "CategoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Granos"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt"
+        ]
+      },
+      "CategoryPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CategoryRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Granos",
+            "description": "Único en el negocio sin importar mayúsculas."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ProductDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Arroz 500 g"
+          },
+          "sku": {
+            "type": "string",
+            "example": "ARR-500"
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true,
+            "example": "7701234567897"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "kilogram",
+              "gram",
+              "pound",
+              "liter",
+              "milliliter"
+            ]
+          },
+          "unitPrice": {
+            "type": "integer",
+            "example": 3200,
+            "description": "Pesos enteros, con el IVA incluido."
+          },
+          "taxRateBp": {
+            "type": "integer",
+            "enum": [
+              0,
+              500,
+              1900
+            ]
+          },
+          "active": {
+            "type": "boolean",
+            "description": "`false` si está archivado."
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "minStockMilli": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Milésimas de la unidad."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sku",
+          "barcode",
+          "unit",
+          "unitPrice",
+          "taxRateBp",
+          "active",
+          "categoryId",
+          "minStockMilli",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ProductPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CreateProductRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Arroz 500 g"
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "ARR-500",
+            "description": "El código interno del negocio: letras sin acento, dígitos y `. _ / -`, con espacios sueltos entre grupos. Único en el negocio sin importar mayúsculas."
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true,
+            "example": "7701234567897",
+            "description": "GTIN de 8, 12, 13 o 14 dígitos con su dígito de control. Único en el negocio: un UPC-A y el EAN-13 que le antepone un cero son el mismo. `null` o ausente: sin código de barras."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "kilogram",
+              "gram",
+              "pound",
+              "liter",
+              "milliliter"
+            ],
+            "description": "Cada presentación (unidad, paca, caja) es otro producto."
+          },
+          "unitPrice": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "example": 3200,
+            "description": "Pesos enteros, con el IVA incluido (ADR 0014)."
+          },
+          "taxRateBp": {
+            "type": "integer",
+            "enum": [
+              0,
+              500,
+              1900
+            ],
+            "example": 0,
+            "description": "La tarifa de IVA en puntos básicos: 0 (0 %), 500 (5 %) o 1900 (19 %)."
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "minStockMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true,
+            "description": "Existencia mínima en milésimas de la unidad, para la alerta de stock mínimo."
+          }
+        },
+        "required": [
+          "name",
+          "sku",
+          "unit",
+          "unitPrice",
+          "taxRateBp"
+        ]
+      },
+      "UpdateProductRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true,
+            "description": "`null` borra el código de barras."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "kilogram",
+              "gram",
+              "pound",
+              "liter",
+              "milliliter"
+            ],
+            "description": "No cambia si el producto ya tiene movimientos de existencias (409 `unit-locked`)."
+          },
+          "unitPrice": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Cambiar el precio es de la gerencia (`price:update`)."
+          },
+          "taxRateBp": {
+            "type": "integer",
+            "enum": [
+              0,
+              500,
+              1900
+            ]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "`null` quita la categoría."
+          },
+          "minStockMilli": {
+            "type": "integer",
+            "nullable": true,
+            "description": "`null` quita el mínimo."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "`false` archiva el producto (no se vende, conserva su historia); `true` lo reactiva. Un producto no se borra."
           }
         }
       },

@@ -14,3 +14,5 @@ export const REDEEM_INVITATION = Symbol('REDEEM_INVITATION');
 export const LIST_USERS = Symbol('LIST_USERS');
 export const UPDATE_USER = Symbol('UPDATE_USER');
 export const REGENERATE_INVITATION = Symbol('REGENERATE_INVITATION');
+export const CATEGORIES = Symbol('CATEGORIES');
+export const PRODUCTS = Symbol('PRODUCTS');
