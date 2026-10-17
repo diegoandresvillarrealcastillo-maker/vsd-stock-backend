@@ -32,11 +32,25 @@ Responde `200` con un JSON como `{"status":"ok","timestamp":"2026-10-16T19:51:35
 `.env.example` como `.env` y ajústalo. **El `.env` no se sube nunca al repositorio.** Una variable
 ya definida en el entorno tiene prioridad sobre la del archivo.
 
-| Variable | Qué es                                                    | Por defecto |
-| -------- | --------------------------------------------------------- | ----------- |
-| `PORT`   | Puerto en el que escucha la API (entero entre 1 y 65535). | `3000`      |
+| Variable       | Qué es                                                                                          | Por defecto |
+| -------------- | ----------------------------------------------------------------------------------------------- | ----------- |
+| `PORT`         | Puerto en el que escucha la API (entero entre 1 y 65535).                                       | `3000`      |
+| `CORS_ORIGINS` | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador. | ninguno     |
 
 Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra.
+
+### CORS: qué origen poner
+
+El navegador solo deja que una página lea las respuestas de la API si ésta nombra el origen de la página. Para
+trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
+`CORS_ORIGINS=http://localhost:5173`, que ya viene en `.env.example`.
+
+- Cada origen se escribe como lo envía el navegador: `esquema://host[:puerto]`, en minúsculas, **sin ruta ni
+  barra final** (`https://stock.example.com`, no `https://stock.example.com/`).
+- **No existe el comodín `*`**: un valor mal escrito o el comodín detienen el arranque.
+- Sin la variable no se permite ningún origen. Si el frontend muestra «sin conexión» con la API en pie, lo
+  primero que hay que mirar es esto; el arranque registra qué orígenes permite.
+- Decisión y alternativas: [ADR 0012](docs/adr/0012-cors-con-lista-explicita-de-origenes-y-sin-credenciales.md).
 
 ## Scripts
 

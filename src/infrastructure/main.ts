@@ -4,9 +4,15 @@ import { readConfig } from './config/env.js';
 
 async function bootstrap(): Promise<void> {
   const config = readConfig(process.env);
-  const app = await createApp();
+  const app = await createApp({ corsOrigins: config.corsOrigins });
   await app.listen(config.port);
-  new Logger('Bootstrap').log(`vsd-stock-backend escuchando en el puerto ${config.port}`);
+  const logger = new Logger('Bootstrap');
+  logger.log(`vsd-stock-backend escuchando en el puerto ${config.port}`);
+  logger.log(
+    config.corsOrigins.length === 0
+      ? 'CORS: ningun origen permitido (CORS_ORIGINS sin definir)'
+      : `CORS: permitidos ${config.corsOrigins.join(', ')}`,
+  );
 }
 
 bootstrap().catch((error: unknown) => {
