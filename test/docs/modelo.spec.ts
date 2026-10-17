@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -132,19 +132,30 @@ describe('docs/dominio/modelo-de-datos.md (ADR 0020)', () => {
     context: (match[2] ?? '').trim(),
   }));
 
-  const entities = (): string[] => {
-    const diagram = /```mermaid\s+erDiagram([\s\S]*?)```/.exec(model)?.[1] ?? '';
-    const names = new Set<string>();
+  const diagram = /```mermaid\s+erDiagram([\s\S]*?)```/.exec(model)?.[1] ?? '';
+
+  /** Las relaciones dibujadas, sin importar el sentido: `cash_shift|sale`. */
+  const drawnRelations = (): string[] =>
     // Una relacion: `BUSINESS ||--o{ BRANCH : tiene` (entidad, conector, entidad, dos puntos).
-    for (const match of diagram.matchAll(/^\s*([A-Z][A-Z_]*)\s+\S+\s+([A-Z][A-Z_]*)\s*:/gm)) {
-      names.add((match[1] ?? '').toLowerCase());
-      names.add((match[2] ?? '').toLowerCase());
-    }
+    [...diagram.matchAll(/^\s*([A-Z][A-Z_]*)\s+\S+\s+([A-Z][A-Z_]*)\s*:/gm)].map((match) =>
+      [(match[1] ?? '').toLowerCase(), (match[2] ?? '').toLowerCase()].sort().join('|'),
+    );
+
+  const entities = (): string[] => {
+    const names = new Set(drawnRelations().flatMap((pair) => pair.split('|')));
     // Una entidad sin relaciones: `OPERATION {`.
     for (const match of diagram.matchAll(/^\s*([A-Z][A-Z_]*)\s*\{/gm)) {
       names.add((match[1] ?? '').toLowerCase());
     }
     return [...names].sort();
+  };
+
+  /** El texto de los esquemas de juguete que construyen las especificaciones ejecutables. */
+  const designSources = (): string[] => {
+    const support = join(ROOT, 'test/integration/support');
+    return readdirSync(support)
+      .filter((file) => file.endsWith('-design.ts'))
+      .map((file) => readFileSync(join(support, file), 'utf8'));
   };
 
   it('lists the tables of the delivery, each in one of the seven contexts', () => {
@@ -166,19 +177,32 @@ describe('docs/dominio/modelo-de-datos.md (ADR 0020)', () => {
 
   it('contains the tables that the executable specifications of the cycle build', () => {
     const built = new Set<string>();
-    const support = join(ROOT, 'test/integration/support');
-    for (const file of readdirSync(support)) {
-      const path = join(support, file);
-      if (!existsSync(path) || !file.endsWith('-design.ts')) continue;
-      for (const match of readFileSync(path, 'utf8').matchAll(
-        /CREATE TABLE \$\{[A-Z_]+\}\.([a-z_]+)/g,
-      )) {
+    for (const source of designSources()) {
+      for (const match of source.matchAll(/CREATE TABLE \$\{[A-Z_]+\}\.([a-z_]+)/g)) {
         built.add(match[1] ?? '');
       }
     }
 
     expect(built.size).toBeGreaterThanOrEqual(9);
     expect([...built].filter((name) => !tables.some((table) => table.name === name))).toEqual([]);
+  });
+
+  it('draws every foreign key that the executable specifications enforce', () => {
+    const enforced: string[] = [];
+    for (const source of designSources()) {
+      for (const block of source.split(/CREATE TABLE \$\{[A-Z_]+\}\./).slice(1)) {
+        const table = /^([a-z_]+)/.exec(block)?.[1] ?? '';
+        // Hasta la linea que cierra la tabla: lo que sigue (funciones, disparadores) no son sus columnas.
+        const columns = block.split(/\n\s*\);/)[0] ?? '';
+        for (const match of columns.matchAll(/REFERENCES \$\{[A-Z_]+\}\.([a-z_]+)/g)) {
+          enforced.push([table, match[1] ?? ''].sort().join('|'));
+        }
+      }
+    }
+
+    expect(enforced.length).toBeGreaterThanOrEqual(2);
+    const drawn = drawnRelations();
+    expect(enforced.filter((pair) => !drawn.includes(pair))).toEqual([]);
   });
 
   it('keeps the table of names, which is the rule the tests rely on, in the document', () => {

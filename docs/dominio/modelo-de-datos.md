@@ -8,7 +8,9 @@ del 2026-11-16.
 > **Es el modelo, no el esquema de Prisma.** El Ciclo 2 lo traduce a `schema.prisma` y a migraciones, empezando por
 > las pruebas que ya existen: los esquemas de juguete de `test/integration/support/*-design.ts` se apuntan a las
 > tablas reales. Una prueba (`test/docs/modelo.spec.ts`) comprueba que todas las tablas que esos esquemas construyen
-> están en este documento y que el diagrama dibuja exactamente las tablas de la lista.
+> están en este documento, que el diagrama dibuja exactamente las tablas de la lista y que dibuja cada clave foránea
+> que esos esquemas exigen. Las demás relaciones del diagrama no las vigila ninguna prueba todavía (el Ciclo 2 las
+> convierte en claves foráneas reales): las fija la revisión.
 
 ## Reglas de nombres
 
