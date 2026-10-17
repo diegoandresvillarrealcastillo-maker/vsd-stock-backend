@@ -1,5 +1,6 @@
-import type { Decision, Principal } from '../domain/model/authorization.js';
+import { authorize, type Decision, type Principal } from '../domain/model/authorization.js';
 import { ForbiddenError, NoMembershipError } from '../domain/model/people-errors.js';
+import type { Action } from '../domain/model/role.js';
 import { UserInactiveError, type Session } from '../domain/ports/in/authenticate.js';
 
 /** Lo que la base acepta en `app_user.email` (ADR 0021): de 3 a 254 caracteres, sin espacios alrededor. */
@@ -25,6 +26,13 @@ export function requireMember(session: Session): Principal {
 /** Deja pasar una decision favorable y convierte una negativa en `ForbiddenError`, con el motivo para el registro. */
 export function ensureAllowed(decision: Decision): void {
   if (!decision.allowed) throw new ForbiddenError(decision.reason);
+}
+
+/** Deja pasar a quien puede hacer `action` en su propio negocio (ADR 0017) y niega a quien no, con el motivo para el registro. */
+export function ensureCan(principal: Principal, action: Action): void {
+  ensureAllowed(
+    authorize(principal, action, { businessId: principal.businessId }, { online: true }),
+  );
 }
 
 /**

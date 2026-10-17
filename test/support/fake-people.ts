@@ -4,7 +4,9 @@ import type {
   PeopleRepository,
   PersonRecord,
 } from '../../src/domain/ports/out/people.js';
+import type { CatalogRepository } from '../../src/domain/ports/out/catalog.js';
 import type { BusinessScope, UnitOfWork } from '../../src/domain/ports/out/unit-of-work.js';
+import { FakeCatalog } from './fake-catalog.js';
 
 /** El orden en que la base lista a las personas: por nombre y luego por id. */
 const byNameThenId = (a: PersonRecord, b: PersonRecord): number =>
@@ -107,6 +109,7 @@ export class FakePeople implements PeopleRepository {
 export function fakeUnitOfWork(
   people: PeopleRepository,
   businessName: string | null = 'Tienda La Esquina',
+  catalog: CatalogRepository = new FakeCatalog(),
 ): UnitOfWork & { openedFor: string[] } {
   const openedFor: string[] = [];
   return {
@@ -120,6 +123,7 @@ export function fakeUnitOfWork(
             Promise.resolve(businessName === null ? null : { id: businessId, name: businessName }),
         },
         people,
+        catalog,
       };
       return work(scope);
     },
