@@ -106,7 +106,14 @@ configuración llega por variables de entorno (ADR 0011).
 
 ## Documentación
 
+Todo está indexado en [`docs/README.md`](docs/README.md). La documentación que es de todo el proyecto, no solo
+del backend, vive aquí.
+
 - Cómo contribuir (ramas, commits, PR, comprobaciones): [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md). Todos los ADR del proyecto, también
   los del frontend, viven aquí.
-- Flujo de trabajo, con su porqué: [ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md).
+- Flujo de trabajo, con su porqué: [ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md); y su cómo, en la
+  [guía de GitHub](docs/guia-github.md).
+- El vocabulario del negocio: [glosario](docs/dominio/glosario.md) y
+  [mapa de contextos](docs/dominio/mapa-de-contextos.md).
+- Dónde corre cada cosa y qué hay que hacer a mano: [plan de ambientes](docs/ambientes.md).

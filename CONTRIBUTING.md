@@ -1,7 +1,10 @@
 # Cómo contribuir al backend de VSD Stock
 
 Esta guía resume el flujo. Las decisiones y su porqué están en el
-[ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md); si algo de aquí lo contradice, manda el ADR.
+[ADR 0010](docs/adr/0010-flujo-de-trabajo-en-github.md); si algo de aquí lo contradice, manda el ADR. El detalle
+de GitHub (tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa) está en la
+[guía de GitHub](docs/guia-github.md), y el vocabulario del negocio, en el
+[glosario](docs/dominio/glosario.md).
 
 ## Antes de empezar
 
