@@ -6,7 +6,7 @@ const errorsOf = (
   work: (reader: InputReader) => void,
   input: unknown,
   allowed: string[],
-): FieldError[] => {
+): readonly FieldError[] => {
   try {
     const reader = new InputReader(input, allowed);
     work(reader);
@@ -154,6 +154,16 @@ describe('InputReader', () => {
       }
     });
 
+    it('lets an optional one be absent, and still checks it when it is there', () => {
+      const absent = new InputReader({}, ['role']);
+      expect(absent.oneOf('role', roles, { label: 'El rol', optional: true })).toBeUndefined();
+      expect(() => absent.finish()).not.toThrow();
+
+      const wrong = new InputReader({ role: 'owner' }, ['role']);
+      wrong.oneOf('role', roles, { label: 'El rol', optional: true });
+      expect(() => wrong.finish()).toThrow(ValidationFailedError);
+    });
+
     it('says a missing one is required', () => {
       expect(errorsOf((r) => r.oneOf('role', roles, { label: 'El rol' }), {}, ['role'])).toEqual([
         { pointer: '/role', code: 'required', detail: 'El rol es obligatorio.' },
@@ -179,6 +189,16 @@ describe('InputReader', () => {
       expect(
         new InputReader({ active: true }, ['active']).boolean('active', { label: 'Activa' }),
       ).toBe(true);
+    });
+
+    it('lets an optional one be absent, and still checks it when it is there', () => {
+      const absent = new InputReader({}, ['active']);
+      expect(absent.boolean('active', { label: 'Activa', optional: true })).toBeUndefined();
+      expect(() => absent.finish()).not.toThrow();
+
+      const wrong = new InputReader({ active: 'si' }, ['active']);
+      wrong.boolean('active', { label: 'Activa', optional: true });
+      expect(() => wrong.finish()).toThrow(ValidationFailedError);
     });
 
     it.each(['true', 1, 0, null])('refuses %j, which is not a boolean', (value) => {

@@ -128,12 +128,21 @@ export class InputReader {
   oneOf<const T extends readonly [string, ...string[]]>(
     key: string,
     allowed: T,
+    options: Labelled & { readonly optional: true },
+  ): T[number] | undefined;
+  oneOf<const T extends readonly [string, ...string[]]>(
+    key: string,
+    allowed: T,
     options: Labelled,
-  ): T[number] {
+  ): T[number];
+  oneOf<const T extends readonly [string, ...string[]]>(
+    key: string,
+    allowed: T,
+    options: Labelled & { readonly optional?: boolean },
+  ): T[number] | undefined {
     const raw = this.raw(key);
     if (raw === undefined) {
-      this.missing(key, options, false);
-      return allowed[0];
+      return this.missing(key, options, options.optional === true) ? undefined : allowed[0];
     }
     if (typeof raw !== 'string' || !(allowed as readonly string[]).includes(raw)) {
       return this.reject(
@@ -146,11 +155,12 @@ export class InputReader {
     return raw;
   }
 
-  boolean(key: string, options: Labelled): boolean {
+  boolean(key: string, options: Labelled & { readonly optional: true }): boolean | undefined;
+  boolean(key: string, options: Labelled): boolean;
+  boolean(key: string, options: Labelled & { readonly optional?: boolean }): boolean | undefined {
     const raw = this.raw(key);
     if (raw === undefined) {
-      this.missing(key, options, false);
-      return false;
+      return this.missing(key, options, options.optional === true) ? undefined : false;
     }
     if (typeof raw !== 'boolean') {
       return this.reject(
