@@ -1,5 +1,9 @@
 import type { CatalogRepository } from './catalog.js';
+import type { OperationRegistry } from './operations.js';
 import type { PeopleRepository } from './people.js';
+import type { PurchaseRepository } from './purchases.js';
+import type { StockLedger } from './stock.js';
+import type { SupplierRepository } from './suppliers.js';
 
 /** Lo minimo que se sabe de un negocio. */
 export interface BusinessSummary {
@@ -23,6 +27,10 @@ export interface BusinessScope {
   readonly business: BusinessReader;
   readonly people: PeopleRepository;
   readonly catalog: CatalogRepository;
+  readonly suppliers: SupplierRepository;
+  readonly purchases: PurchaseRepository;
+  readonly stock: StockLedger;
+  readonly operations: OperationRegistry;
 }
 
 /**
