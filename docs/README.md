@@ -4,14 +4,15 @@ Dónde está cada cosa. Los dos repositorios (`vsd-stock-backend` y `vsd-stock-f
 `README.md` y su `CONTRIBUTING.md`; **la documentación que es de todo el proyecto vive aquí**, en el backend,
 con una sola numeración de decisiones.
 
-| Documento                                         | Qué responde                                                                                          |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [Decisiones de arquitectura (ADR)](adr/README.md) | Qué decidimos, por qué, qué alternativas descartamos y qué perdemos. Un ADR no se edita.              |
-| [Glosario del dominio](dominio/glosario.md)       | Cómo se llama cada cosa del negocio, en español y en el código, y qué tan firme es cada término.      |
-| [Mapa de contextos](dominio/mapa-de-contextos.md) | En qué partes se divide el sistema, cómo se hablan y qué entra en la entrega.                         |
-| [Permisos](dominio/permisos.md)                   | Qué puede hacer cada rol y qué funciona sin conexión (la tabla se compara con el código).             |
-| [Plan de ambientes](ambientes.md)                 | Local, DEV, PRE y PROD (en pausa); variables de entorno; los pasos manuales para quien opera paneles. |
-| [Guía de GitHub](guia-github.md)                  | Tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa.                              |
+| Documento                                                            | Qué responde                                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [Decisiones de arquitectura (ADR)](adr/README.md)                    | Qué decidimos, por qué, qué alternativas descartamos y qué perdemos. Un ADR no se edita.              |
+| [Glosario del dominio](dominio/glosario.md)                          | Cómo se llama cada cosa del negocio, en español y en el código, y qué tan firme es cada término.      |
+| [Mapa de contextos](dominio/mapa-de-contextos.md)                    | En qué partes se divide el sistema, cómo se hablan y qué entra en la entrega.                         |
+| [Permisos](dominio/permisos.md)                                      | Qué puede hacer cada rol y qué funciona sin conexión (la tabla se compara con el código).             |
+| [Experimento de cifrado local](experimentos/cifrado-local/README.md) | Cómo se comprobó en un navegador real el cifrado y el olvido del ADR 0018, con qué resultado.         |
+| [Plan de ambientes](ambientes.md)                                    | Local, DEV, PRE y PROD (en pausa); variables de entorno; los pasos manuales para quien opera paneles. |
+| [Guía de GitHub](guia-github.md)                                     | Tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa.                              |
 
 **Del backend:** [`README.md`](../README.md) (cómo correrlo y su arquitectura), [`CONTRIBUTING.md`](../CONTRIBUTING.md)
 y el contrato [`openapi.json`](../openapi.json).
