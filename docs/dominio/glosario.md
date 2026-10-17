@@ -81,7 +81,8 @@ da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`..
 ### Sesión
 
 El periodo en que una persona está identificada en un dispositivo. Una sesión caducada conserva lo guardado en
-el dispositivo, cerrado; cerrar sesión lo borra.
+el dispositivo, cifrado y con la interfaz bloqueada, para no perder ventas; cerrar sesión de forma explícita lo
+borra (_olvidar_, ADR 0018). Cómo se identifica a la persona se decide en el Ciclo 2.
 
 **Código:** `Session`
 
@@ -429,6 +430,17 @@ precios, los clientes.
 **Código:** `ReadCopy`
 
 **Estado:** Decidido (ADR 0009)
+
+### Olvidar
+
+Borrar del dispositivo todo lo de una persona en un solo paso: su base y la clave con que se cifró. Ocurre al
+cerrar sesión de forma explícita (avisando antes cuántas operaciones sin enviar se perderían) y al dar de baja a la
+persona o a su dispositivo (sincronizando antes lo pendiente). Un dispositivo olvidado se registra de nuevo y recibe un
+código nuevo (ADR 0016 y ADR 0018).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0018)
 
 ### Sincronización
 

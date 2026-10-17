@@ -27,6 +27,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0015](0015-catalogo-unidades-cantidades-y-codigos.md)                  | Catálogo sin variantes: unidades, cantidades y códigos         | Aceptada |
 | [0016](0016-folios-por-dispositivo-y-hora-corregida.md)                 | Folios por dispositivo y hora corregida con el servidor        | Aceptada |
 | [0017](0017-roles-permisos-y-modo-sin-conexion.md)                      | Tres roles, permisos por omisión negados y mostrador sin red   | Aceptada |
+| [0018](0018-cifrado-local-y-olvido-del-dispositivo.md)                  | Cifrado de lo guardado en el dispositivo y olvido en un paso   | Aceptada |
 
 ## Reglas
 
