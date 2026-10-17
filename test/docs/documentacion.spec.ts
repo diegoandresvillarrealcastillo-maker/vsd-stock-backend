@@ -202,7 +202,10 @@ describe('documentation: glossary', () => {
     expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
   });
 
-  it('says in its introduction that it does not freeze the model', () => {
-    expect(glossary()).toMatch(/no congela el modelo/i);
+  it('says in its introduction how firm the model is, so nobody takes a hypothesis for a decision', () => {
+    // Hasta el Ciclo 1 decia que no congelaba el modelo; el ADR 0020 lo congelo y test/docs/modelo.spec.ts vigila
+    // lo que quedo congelado y lo que no.
+    expect(glossary()).toMatch(/ADR 0020/);
+    expect(glossary()).toMatch(/fuera de la entrega/i);
   });
 });

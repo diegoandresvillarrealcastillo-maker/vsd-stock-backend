@@ -4,8 +4,9 @@ Cómo se parte el dominio en partes que se pueden entender, probar y construir p
 entre sí. Un **contexto** es una parte del sistema donde cada palabra del [glosario](glosario.md) tiene un
 solo significado.
 
-> **Es una hipótesis, no un diseño cerrado.** No congela el modelo: los contextos, sus fronteras y sus
-> relaciones se discuten y se congelan en el Ciclo 1 con un ADR. Lo único ya decidido es lo que cita un ADR.
+> **Está congelado** para lo que entra en la entrega (ADR 0020): los contextos, sus fronteras y sus relaciones no
+> cambian sin otro ADR que lo reemplace. Las tablas que los implementan están en el
+> [modelo de datos](modelo-de-datos.md).
 
 ## El mapa
 
@@ -60,8 +61,8 @@ los usan todos, y por eso su definición vive en un solo lugar, en el glosario.
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Identidad y acceso → todos                | El negocio y el rol de quien llama, sacados del **token verificado**, nunca de lo que declare el cliente. | Lo fija la API en cada transacción; la base lo hace cumplir (ADR 0005).    |
 | Catálogo → Inventario y Ventas            | Qué productos existen y a qué precio.                                                                     | Se refieren al producto por su identificador (UUID, ADR 0004).             |
-| Ventas → Inventario                       | Cada venta saca mercancía: genera movimientos de stock. Una venta ya hecha nunca se rechaza (ADR 0009).   | En la misma transacción que la venta. _Hipótesis._                         |
-| Ventas → Caja                             | Un cobro en efectivo entra al turno abierto. Anular una venta compensa, no borra.                         | En la misma transacción que la venta. _Hipótesis._                         |
+| Ventas → Inventario                       | Cada venta saca mercancía: genera movimientos de stock. Una venta ya hecha nunca se rechaza (ADR 0009).   | En la misma transacción que la venta (ADR 0013).                           |
+| Ventas → Caja                             | Un cobro en efectivo entra al turno abierto. Anular una venta compensa, no borra.                         | En la misma transacción que la venta (ADR 0013).                           |
 | Inventario, Ventas, Caja → Reportes       | Los hechos de los que se derivan las cifras.                                                              | Los reportes **leen**; no hay nada que sincronizar hacia atrás.            |
 | Sincronización → Ventas, Inventario, Caja | Operaciones del dispositivo, cada una con su `operationId`.                                               | Cada operación es una unidad de trabajo; reenviarla no duplica (ADR 0009). |
 
@@ -93,14 +94,22 @@ flujo de caja completo, conteo físico, devoluciones parciales, sucursales y bod
 exportar o eliminar la cuenta (queda como deuda con su ADR). Si el plazo aprieta, se recorta antes la mascota,
 después los reportes y después las alertas; **la calidad no se recorta**.
 
-## Preguntas abiertas para el Ciclo 1
+## Preguntas resueltas
 
-1. ¿Hay variantes de producto, o una unidad de medida basta para el primer negocio?
-2. ¿Cómo se mantiene el saldo de existencias derivado sin perder la idempotencia?
-3. ¿Cómo se numeran los folios para que dos cajas sin conexión no choquen, y qué ve la persona mientras tanto?
-4. ¿Qué hora vale en una operación sin conexión (la del dispositivo, con qué tolerancia) y cuál guarda el servidor?
-5. ¿El impuesto va en el producto o en la línea de venta, y cómo se redondea?
-6. ¿Qué puede hacer exactamente cada rol?
-7. ¿Qué se puede y qué no se puede hacer sin conexión, funcionalidad por funcionalidad?
-8. ¿Una venta y sus movimientos de stock y de caja son realmente una sola transacción, y qué pasa si falla
-   la mitad?
+Las ocho preguntas que dejó abiertas el Ciclo 0 las cerró el Ciclo 1, cada una con su ADR y, donde se pudo, con una
+prueba contra PostgreSQL real, una simulación o un navegador real.
+
+| #   | Pregunta                                                                                     | Decisión                                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ¿Hay variantes de producto, o una unidad de medida basta para el primer negocio?             | No hay variantes: cada presentación es otro producto con su código. Seis unidades y cantidades en milésimas. [ADR 0015](../adr/0015-catalogo-unidades-cantidades-y-codigos.md)   |
+| 2   | ¿Cómo se mantiene el saldo de existencias derivado sin perder la idempotencia?               | Un disparador lo mantiene en la misma transacción y la aplicación solo lo lee. [ADR 0013](../adr/0013-existencia-derivada-y-venta-como-una-sola-operacion.md)                    |
+| 3   | ¿Cómo se numeran los folios para que dos cajas sin conexión no choquen, y qué ve la persona? | Código de dispositivo más una serie (`AA-000142`); no cambia al sincronizar. [ADR 0016](../adr/0016-folios-por-dispositivo-y-hora-corregida.md)                                  |
+| 4   | ¿Qué hora vale en una operación sin conexión y cuál guarda el servidor?                      | La del dispositivo corregida con la diferencia medida contra el servidor; se guardan tres horas y las marcas. [ADR 0016](../adr/0016-folios-por-dispositivo-y-hora-corregida.md) |
+| 5   | ¿El impuesto va en el producto o en la línea de venta, y cómo se redondea?                   | La tarifa va en el producto y se copia a la línea; el IVA va incluido y se redondea con una sola regla. [ADR 0014](../adr/0014-dinero-impuestos-y-redondeo.md)                   |
+| 6   | ¿Qué puede hacer exactamente cada rol?                                                       | Tres roles fijos y 23 acciones, negadas por omisión. [ADR 0017](../adr/0017-roles-permisos-y-modo-sin-conexion.md)                                                               |
+| 7   | ¿Qué se puede y qué no se puede hacer sin conexión, funcionalidad por funcionalidad?         | El mostrador sigue; la administración espera la conexión. [ADR 0017](../adr/0017-roles-permisos-y-modo-sin-conexion.md)                                                          |
+| 8   | ¿Una venta y sus movimientos de stock y de caja son realmente una sola transacción?          | Sí: todo o nada, y reenviarla no duplica. [ADR 0013](../adr/0013-existencia-derivada-y-venta-como-una-sola-operacion.md)                                                         |
+
+Y lo que el [ADR 0009](../adr/0009-motor-offline-y-libro-de-movimientos.md) dejó para este ciclo: el cifrado local y
+cuándo se olvida lo guardado, en el [ADR 0018](../adr/0018-cifrado-local-y-olvido-del-dispositivo.md); la forma de
+hablar de la API, en el [ADR 0019](../adr/0019-convenciones-de-la-api.md).
