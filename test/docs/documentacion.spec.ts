@@ -90,6 +90,64 @@ describe('documentation: indexes', () => {
   });
 });
 
+describe('documentation: ADR format', () => {
+  const adrs = readdirSync(join(ROOT, 'docs/adr'))
+    .filter((name) => /^\d{4}-.+\.md$/.test(name))
+    .sort()
+    .map((name) => ({ name, text: read(`docs/adr/${name}`) }));
+
+  it('finds the ADRs (so the checks below mean something)', () => {
+    expect(adrs.length).toBeGreaterThanOrEqual(13);
+  });
+
+  it('numbers the ADRs without gaps or repetitions', () => {
+    expect(adrs.map((adr) => Number(adr.name.slice(0, 4)))).toEqual(
+      adrs.map((_, index) => index + 1),
+    );
+  });
+
+  it('titles every ADR with its own number', () => {
+    const wrong = adrs
+      .filter((adr) => !adr.text.startsWith(`# ADR ${adr.name.slice(0, 4)} — `))
+      .map((adr) => adr.name);
+
+    expect(wrong).toEqual([]);
+  });
+
+  it('states status, date and cycle in the header', () => {
+    const incomplete = adrs
+      .filter(
+        (adr) =>
+          !/^- \*\*Estado:\*\* (Propuesta|Aceptada|Reemplazada|Rechazada)$/m.test(adr.text) ||
+          !/^- \*\*Fecha:\*\* \d{4}-\d{2}-\d{2}$/m.test(adr.text) ||
+          !/^- \*\*Ciclo:\*\* \d+$/m.test(adr.text),
+      )
+      .map((adr) => adr.name);
+
+    expect(incomplete).toEqual([]);
+  });
+
+  it.each(['Contexto', 'Decisión', 'Alternativas consideradas', 'Consecuencias'])(
+    'has the section "%s" in every ADR',
+    (section) => {
+      const without = adrs
+        .filter((adr) => !new RegExp(`^## ${section}$`, 'm').test(adr.text))
+        .map((adr) => adr.name);
+
+      expect(without).toEqual([]);
+    },
+  );
+
+  it('says what we lose: every ADR from 0013 on has an "En contra" section', () => {
+    // Los anteriores no se editan (un ADR no se edita) y se escribieron antes de este control.
+    const without = adrs
+      .filter((adr) => Number(adr.name.slice(0, 4)) >= 13 && !/^### En contra$/m.test(adr.text))
+      .map((adr) => adr.name);
+
+    expect(without).toEqual([]);
+  });
+});
+
 describe('documentation: environment variables', () => {
   const variables = [...read('.env.example').matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(
     (match) => match[1] ?? '',
