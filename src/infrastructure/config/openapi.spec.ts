@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { findConventionViolations } from '../../adapters/in/http/api-conventions.js';
 import { buildOpenApiDocument, serializeOpenApi } from './build-openapi.js';
 import { createApp } from './create-app.js';
 
@@ -34,6 +35,36 @@ describe('OpenAPI contract', () => {
         timestamp: { type: 'string', format: 'date-time' },
       },
     });
+  });
+
+  it('publishes the error format as a schema, so that the frontend can type it', () => {
+    const schema = buildOpenApiDocument(app).components?.schemas?.['ProblemDetailsDto'];
+
+    expect(schema).toMatchObject({
+      type: 'object',
+      required: ['type', 'title', 'status', 'detail', 'instance', 'code', 'traceId'],
+      properties: {
+        type: { type: 'string' },
+        status: { type: 'integer' },
+        code: { type: 'string' },
+        traceId: { type: 'string' },
+        errors: { type: 'array' },
+      },
+    });
+  });
+
+  it('declares a problem+json default response on GET /health', () => {
+    const response = buildOpenApiDocument(app).paths['/health']?.get?.responses?.['default'];
+
+    expect(response).toMatchObject({
+      content: {
+        'application/problem+json': { schema: { $ref: '#/components/schemas/ProblemDetailsDto' } },
+      },
+    });
+  });
+
+  it('follows every convention of the API (ADR 0019)', () => {
+    expect(findConventionViolations(buildOpenApiDocument(app))).toEqual([]);
   });
 
   it('takes its version from package.json, the single source of truth', () => {

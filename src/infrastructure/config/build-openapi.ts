@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { ProblemDetailsDto } from '../../adapters/in/http/problem-details.dto.js';
 
 // La version del contrato es la del paquete: una sola fuente de verdad.
 const { version } = JSON.parse(
@@ -17,7 +18,8 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     )
     .setVersion(version)
     .build();
-  return SwaggerModule.createDocument(app, config);
+  // ProblemDetailsDto no lo devuelve ningun metodo con su tipo: se declara aparte para que quede en el contrato.
+  return SwaggerModule.createDocument(app, config, { extraModels: [ProblemDetailsDto] });
 }
 
 /** Serializacion unica del contrato: el archivo versionado y la comprobacion usan esta. */
