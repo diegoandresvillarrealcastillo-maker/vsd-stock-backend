@@ -114,6 +114,10 @@ export function fakeUnitOfWork(
   purchasing: FakePurchasing = new FakePurchasing(),
 ): UnitOfWork & { openedFor: string[] } {
   const openedFor: string[] = [];
+  // El libro de existencias lista los productos del catalogo de mentira, si lo hay.
+  if (purchasing.stock.catalog === undefined && catalog instanceof FakeCatalog) {
+    purchasing.stock.catalog = catalog;
+  }
   return {
     openedFor,
     inBusiness: (businessId, work) => {
