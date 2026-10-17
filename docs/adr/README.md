@@ -25,6 +25,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0013](0013-existencia-derivada-y-venta-como-una-sola-operacion.md)     | La existencia es un saldo derivado y la venta es una operación | Aceptada |
 | [0014](0014-dinero-impuestos-y-redondeo.md)                             | Dinero en pesos enteros, IVA incluido y una regla de redondeo  | Aceptada |
 | [0015](0015-catalogo-unidades-cantidades-y-codigos.md)                  | Catálogo sin variantes: unidades, cantidades y códigos         | Aceptada |
+| [0016](0016-folios-por-dispositivo-y-hora-corregida.md)                 | Folios por dispositivo y hora corregida con el servidor        | Aceptada |
 
 ## Reglas
 
