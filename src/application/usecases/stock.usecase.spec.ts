@@ -172,7 +172,11 @@ describe('StockUseCase', () => {
 
       const names: string[] = [];
       let cursor: string | null | undefined;
+      let pages = 0;
       do {
+        pages += 1;
+        // Un cursor que no avanza no debe colgar la prueba: la hace fallar.
+        expect(pages).toBeLessThan(10);
         const page = await useCase.list(
           memberSession('cashier'),
           cursor ? { limit: '3', cursor } : { limit: '3' },
@@ -272,7 +276,11 @@ describe('StockUseCase', () => {
 
       const deltas: number[] = [];
       let cursor: string | null | undefined;
+      let pages = 0;
       do {
+        pages += 1;
+        // Un cursor que no avanza no debe colgar la prueba: la hace fallar.
+        expect(pages).toBeLessThan(10);
         const page = await useCase.movements(
           memberSession('owner'),
           cursor ? { productId: RICE, limit: '2', cursor } : { productId: RICE, limit: '2' },

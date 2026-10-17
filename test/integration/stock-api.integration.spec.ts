@@ -417,7 +417,7 @@ describe('stock, adjustments and history, end to end (C2-07)', () => {
 
       const names: string[] = [];
       let query = '?limit=2';
-      for (;;) {
+      for (let guard = 0; guard < 20; guard += 1) {
         const page = await call('GET', `/v1/stock${query}`, owner);
         names.push(...page.body.items.map((i) => i.name));
         if (page.body.nextCursor === null) break;
@@ -471,7 +471,7 @@ describe('stock, adjustments and history, end to end (C2-07)', () => {
 
       const deltas: number[] = [];
       let query = `?productId=${rice}&limit=2`;
-      for (;;) {
+      for (let guard = 0; guard < 20; guard += 1) {
         const page = await call('GET', `/v1/stock-movements${query}`, owner);
         deltas.push(...page.body.items.map((m) => m.deltaMilli));
         if (page.body.nextCursor === null) break;

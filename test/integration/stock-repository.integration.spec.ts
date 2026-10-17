@@ -11,6 +11,7 @@ import { BUSINESS_A, BUSINESS_B, resetData, seedBusiness } from './support/seed.
 import { select } from './support/sql.js';
 
 interface NewProduct {
+  id?: string;
   name: string;
   sku: string;
   unit?: string;
@@ -49,7 +50,7 @@ describe('stock and its history against PostgreSQL (C2-07)', () => {
   });
 
   const newProduct = async (businessId: string, product: NewProduct): Promise<string> => {
-    const id = randomUUID();
+    const id = product.id ?? randomUUID();
     await admin.query(
       `INSERT INTO product (id, id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, category_id,
                             min_stock_milli, active)
@@ -133,15 +134,31 @@ describe('stock and its history against PostgreSQL (C2-07)', () => {
     });
 
     it('sorts by name and then id, in pages that follow the position', async () => {
-      const names = ['Bebida', 'Aseo', 'Granos', 'Aseo', 'Dulces'];
+      const names = ['Bebida', 'Aseo', 'Granos', 'Dulces'];
       for (const [i, name] of names.entries()) await newProduct(BUSINESS_A, { name, sku: `S${i}` });
+      // Dos con el mismo nombre, insertados al reves de como se ordenan sus ids: solo el desempate por id los acomoda.
+      const second = '00000000-0000-4000-8000-0000000000b2';
+      const first = '00000000-0000-4000-8000-0000000000a1';
+      await newProduct(BUSINESS_A, { id: second, name: 'Aseo', sku: 'S-B' });
+      await newProduct(BUSINESS_A, { id: first, name: 'Aseo', sku: 'S-A' });
       const all = await list(BUSINESS_A);
-      expect(all.map((r) => r.name)).toEqual(['Aseo', 'Aseo', 'Bebida', 'Dulces', 'Granos']);
-      expect(all[0]!.productId < all[1]!.productId).toBe(true);
+      expect(all.map((r) => r.name)).toEqual([
+        'Aseo',
+        'Aseo',
+        'Aseo',
+        'Bebida',
+        'Dulces',
+        'Granos',
+      ]);
+      expect(
+        all
+          .filter((r) => r.name === 'Aseo' && [first, second].includes(r.productId))
+          .map((r) => r.productId),
+      ).toEqual([first, second]);
 
       const seen: string[] = [];
       let after: [string, string] | undefined;
-      for (;;) {
+      for (let guard = 0; guard < 20; guard += 1) {
         const page = await list(BUSINESS_A, {}, 2, after);
         seen.push(...page.map((r) => r.productId));
         if (page.length < 2) break;
@@ -352,11 +369,12 @@ describe('stock and its history against PostgreSQL (C2-07)', () => {
 
       const walked: string[] = [];
       let after: [string, string] | undefined;
-      for (;;) {
+      for (let guard = 0; guard < 20; guard += 1) {
         const page = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
           s.stock.movements(rice, { limit: 3, ...(after === undefined ? {} : { after }) }),
         );
         walked.push(...page.map((m) => m.id));
+        expect(page.length).toBeLessThanOrEqual(3);
         if (page.length < 3) break;
         const last = page[page.length - 1]!;
         after = [last.createdAt.toISOString(), last.id];

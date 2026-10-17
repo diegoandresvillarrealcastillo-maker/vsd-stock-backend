@@ -310,6 +310,13 @@ describe('StockAdjustmentsUseCase', () => {
       );
     });
 
+    it('says so when the movement it just wrote cannot be read back, instead of answering with nothing', async () => {
+      const { purchasing, useCase } = setup();
+      purchasing.stock.movementOfOperation = () => Promise.resolve(null);
+
+      await expect(useCase.adjust(memberSession('owner'), body())).rejects.toThrow(/vanished/);
+    });
+
     it('is a different adjustment with a different operation id, even with the same data', async () => {
       const { purchasing, useCase } = setup();
       await useCase.adjust(memberSession('owner'), body());
