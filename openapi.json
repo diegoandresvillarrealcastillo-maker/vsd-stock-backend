@@ -33,6 +33,39 @@
           "health"
         ]
       }
+    },
+    "/v1/ready": {
+      "get": {
+        "description": "No requiere sesión. Comprueba lo que el servicio necesita para trabajar: hoy, la base de datos. Responde 503 con `database-unavailable` si la base no responde y con `database-not-configured` si nunca se configuró.",
+        "operationId": "ReadinessController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "El servicio está listo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReportDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Comprueba que el servicio puede atender peticiones de negocio",
+        "tags": [
+          "health"
+        ]
+      }
     }
   },
   "info": {
@@ -65,6 +98,38 @@
         },
         "required": [
           "status",
+          "timestamp"
+        ]
+      },
+      "ReadinessReportDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok",
+            "description": "Siempre «ok» en una respuesta 200: si el servicio no está listo, responde 503."
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "up"
+            ],
+            "example": "up",
+            "description": "La base de datos responde."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-17T15:30:00.000Z",
+            "description": "Instante en que se comprobó, en ISO 8601 y en UTC."
+          }
+        },
+        "required": [
+          "status",
+          "database",
           "timestamp"
         ]
       },

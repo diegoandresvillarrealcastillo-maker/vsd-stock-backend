@@ -3,6 +3,15 @@ export interface AppConfig {
   readonly port: number;
   /** Origenes (esquema://host[:puerto]) a los que se les permite leer las respuestas desde un navegador. */
   readonly corsOrigins: readonly string[];
+  /** La base de datos de la aplicacion; sin ella la API arranca, pero no atiende nada de negocio. */
+  readonly database: DatabaseConfig | undefined;
+}
+
+export interface DatabaseConfig {
+  /** La cadena de conexion completa: lleva la contrasena, asi que nunca se imprime. */
+  readonly url: string;
+  /** A donde apunta, sin la contrasena: `usuario@host:puerto/base`. Es lo unico que se registra. */
+  readonly target: string;
 }
 
 const DEFAULT_PORT = 3000;
@@ -17,6 +26,7 @@ export function readConfig(env: Readonly<Record<string, string | undefined>>): A
   return {
     port: readPort(env['PORT']),
     corsOrigins: readCorsOrigins(env['CORS_ORIGINS']),
+    database: readDatabase(env['DATABASE_URL']),
   };
 }
 
@@ -72,4 +82,33 @@ function isOrigin(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * La conexion de la aplicacion (rol `stock_app`, ADR 0005). Opcional: sin ella la API arranca y /health responde,
+ * que es lo que necesita el contenedor para comprobarse. El mensaje de error nunca repite el valor: lleva la clave.
+ */
+function readDatabase(raw: string | undefined): DatabaseConfig | undefined {
+  if (raw === undefined || raw === '') {
+    return undefined;
+  }
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      'DATABASE_URL debe ser una cadena de conexion postgresql://usuario:clave@host:puerto/base',
+    );
+  }
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+    throw new Error(
+      'DATABASE_URL debe empezar por postgresql:// (se oculta el valor recibido: lleva la clave)',
+    );
+  }
+  const port = url.port === '' ? '5432' : url.port;
+  const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  return {
+    url: raw,
+    target: `${decodeURIComponent(url.username)}@${url.hostname}:${port}/${database}`,
+  };
 }

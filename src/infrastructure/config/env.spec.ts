@@ -72,3 +72,54 @@ describe('readConfig: CORS_ORIGINS', () => {
     ).toThrow(/CORS_ORIGINS/);
   });
 });
+
+describe('readConfig: DATABASE_URL', () => {
+  const PASSWORD = 'ContrasenaLarga123';
+  const url = `postgresql://stock_app.abcdef:${PASSWORD}@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`;
+
+  it('has no database when DATABASE_URL is not set', () => {
+    expect(readConfig({}).database).toBeUndefined();
+  });
+
+  it('has no database when DATABASE_URL is empty (a copied .env.example)', () => {
+    expect(readConfig({ DATABASE_URL: '' }).database).toBeUndefined();
+  });
+
+  it('reads the connection string and describes where it goes without the password', () => {
+    const database = readConfig({ DATABASE_URL: url }).database;
+
+    expect(database?.url).toBe(url);
+    expect(database?.target).toBe(
+      'stock_app.abcdef@aws-0-sa-east-1.pooler.supabase.com:5432/postgres',
+    );
+    expect(database?.target).not.toContain(PASSWORD);
+  });
+
+  it('accepts the postgres:// scheme and defaults the port', () => {
+    expect(
+      readConfig({ DATABASE_URL: 'postgres://stock_app@localhost/stock_test' }).database?.target,
+    ).toBe('stock_app@localhost:5432/stock_test');
+  });
+
+  it.each(['esto no es una url', 'mysql://u:p@localhost/db', 'http://localhost'])(
+    'rejects DATABASE_URL=%j with a message that names the variable',
+    (value) => {
+      expect(() => readConfig({ DATABASE_URL: value })).toThrow(/DATABASE_URL/);
+    },
+  );
+
+  it('never repeats a malformed connection string either, because it still carries the password', () => {
+    const attempt = () =>
+      readConfig({ DATABASE_URL: `postgresql://stock_app:${PASSWORD}@host:no-es-un-puerto/base` });
+
+    expect(attempt).toThrow(/DATABASE_URL/);
+    expect(attempt).not.toThrow(PASSWORD);
+  });
+
+  it('never repeats the connection string in the error, because it carries the password', () => {
+    const attempt = () => readConfig({ DATABASE_URL: `mysql://u:${PASSWORD}@localhost/db` });
+
+    expect(attempt).toThrow(/DATABASE_URL/);
+    expect(attempt).not.toThrow(PASSWORD);
+  });
+});
