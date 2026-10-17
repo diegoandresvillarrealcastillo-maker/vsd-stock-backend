@@ -50,6 +50,11 @@ valor** cuando es una cadena de conexión (lleva la clave).
 - `GET /v1/me` dice quién es la persona que demuestra el token (`Authorization: Bearer ...`) y, si ya tiene negocio, el
   suyo y su rol, que salen de la base de datos y no del token ([ADR 0022](docs/adr/0022-identidad-y-sesion.md)). Las
   tres `AUTH_*` se configuran **juntas o ninguna**; la API no guarda ningún secreto de identidad.
+- `POST /v1/businesses` abre un negocio para quien aún no tiene uno (queda como su dueño, con una sucursal y una
+  bodega «Principal»). `POST /v1/invitations` invita a alguien y devuelve su **código una sola vez** (el servidor
+  solo guarda su hash); `POST /v1/invitations/redeem` lo canjea; `GET /v1/users` lista a las personas y
+  `PATCH /v1/users/{userId}` cambia su rol, nombre o alta; `POST /v1/users/{userId}/invitation` renueva un código
+  perdido ([ADR 0023](docs/adr/0023-negocio-personas-e-invitaciones.md)). Todas piden el token de una persona.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 
