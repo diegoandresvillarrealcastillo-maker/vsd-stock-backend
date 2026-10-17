@@ -1,3 +1,4 @@
+import type { CatalogRepository } from './catalog.js';
 import type { PeopleRepository } from './people.js';
 
 /** Lo minimo que se sabe de un negocio. */
@@ -21,6 +22,7 @@ export interface BusinessScope {
   readonly businessId: string;
   readonly business: BusinessReader;
   readonly people: PeopleRepository;
+  readonly catalog: CatalogRepository;
 }
 
 /**

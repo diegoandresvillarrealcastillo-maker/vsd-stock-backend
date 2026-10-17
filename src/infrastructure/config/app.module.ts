@@ -12,17 +12,23 @@ import {
   InvitationsController,
   UsersController,
 } from '../../adapters/in/http/business-people.controller.js';
+import {
+  CategoriesController,
+  ProductsController,
+} from '../../adapters/in/http/catalog.controller.js';
 import { HealthController } from '../../adapters/in/http/health.controller.js';
 import { MeController } from '../../adapters/in/http/me.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
 import {
   AUTHENTICATE,
+  CATEGORIES,
   CREATE_BUSINESS,
   GET_HEALTH,
   GET_ME,
   GET_READINESS,
   INVITE_USER,
   LIST_USERS,
+  PRODUCTS,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
   UPDATE_USER,
@@ -39,12 +45,14 @@ import { PrismaIdentityDirectory } from '../../adapters/out/persistence/prisma-i
 import { PrismaInvitationRedeemer } from '../../adapters/out/persistence/prisma-invitation-redeemer.js';
 import { PrismaUnitOfWork } from '../../adapters/out/persistence/prisma-unit-of-work.js';
 import { AuthenticateUseCase } from '../../application/usecases/authenticate.usecase.js';
+import { CategoriesUseCase } from '../../application/usecases/categories.usecase.js';
 import { CreateBusinessUseCase } from '../../application/usecases/create-business.usecase.js';
 import { GetHealthUseCase } from '../../application/usecases/get-health.usecase.js';
 import { GetMeUseCase } from '../../application/usecases/get-me.usecase.js';
 import { GetReadinessUseCase } from '../../application/usecases/get-readiness.usecase.js';
 import { InviteUserUseCase } from '../../application/usecases/invite-user.usecase.js';
 import { ListUsersUseCase } from '../../application/usecases/list-users.usecase.js';
+import { ProductsUseCase } from '../../application/usecases/products.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
 import { UpdateUserUseCase } from '../../application/usecases/update-user.usecase.js';
@@ -189,6 +197,20 @@ export class AppModule {
       },
     ];
 
+    // Catalogo (ADR 0015).
+    const catalogProviders: Provider[] = [
+      {
+        provide: CATEGORIES,
+        useFactory: (work: UnitOfWork) => new CategoriesUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+      {
+        provide: PRODUCTS,
+        useFactory: (work: UnitOfWork) => new ProductsUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+    ];
+
     return {
       module: AppModule,
       controllers: [
@@ -198,12 +220,15 @@ export class AppModule {
         BusinessesController,
         InvitationsController,
         UsersController,
+        CategoriesController,
+        ProductsController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
         ...databaseProviders,
         ...identityProviders,
         ...peopleProviders,
+        ...catalogProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,

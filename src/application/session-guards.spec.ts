@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ForbiddenError, NoMembershipError } from '../domain/model/people-errors.js';
 import { UserInactiveError, type Session } from '../domain/ports/in/authenticate.js';
-import { ensureAllowed, normalizedEmail, requireMember } from './session-guards.js';
+import { ensureAllowed, ensureCan, normalizedEmail, requireMember } from './session-guards.js';
 
 const identity = {
   subject: '9b2f6c1e-0d5a-4c1b-8f3e-2a7d6e5c4b3a',
@@ -63,6 +63,37 @@ describe('ensureAllowed', () => {
       expect(error).toBeInstanceOf(ForbiddenError);
       expect((error as ForbiddenError).reason).toBe('role');
     }
+  });
+});
+
+describe('ensureCan', () => {
+  const principal = (role: 'owner' | 'admin' | 'cashier') => ({
+    userId: '11111111-1111-4111-8111-111111111111',
+    businessId: '22222222-2222-4222-8222-222222222222',
+    role,
+    active: true,
+  });
+
+  it('lets a role do what the permission table gives it (ADR 0017)', () => {
+    expect(() => ensureCan(principal('cashier'), 'product:view')).not.toThrow();
+    expect(() => ensureCan(principal('admin'), 'product:manage')).not.toThrow();
+    expect(() => ensureCan(principal('owner'), 'business:settings')).not.toThrow();
+  });
+
+  it('refuses a role the table does not give it, with the reason for the log', () => {
+    expect.assertions(2);
+    try {
+      ensureCan(principal('cashier'), 'product:manage');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ForbiddenError);
+      expect((error as ForbiddenError).reason).toBe('role');
+    }
+  });
+
+  it('refuses a person who was deactivated, whatever the role', () => {
+    expect(() => ensureCan({ ...principal('owner'), active: false }, 'product:view')).toThrow(
+      ForbiddenError,
+    );
   });
 });
 

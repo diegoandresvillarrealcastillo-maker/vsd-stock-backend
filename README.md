@@ -55,6 +55,11 @@ valor** cuando es una cadena de conexión (lleva la clave).
   solo guarda su hash); `POST /v1/invitations/redeem` lo canjea; `GET /v1/users` lista a las personas y
   `PATCH /v1/users/{userId}` cambia su rol, nombre o alta; `POST /v1/users/{userId}/invitation` renueva un código
   perdido ([ADR 0023](docs/adr/0023-negocio-personas-e-invitaciones.md)). Todas piden el token de una persona.
+- `GET`, `POST`, `PATCH` y `DELETE` de `/v1/categories` y `GET`, `POST` y `PATCH` de `/v1/products` son el catálogo
+  ([ADR 0015](docs/adr/0015-catalogo-unidades-cantidades-y-codigos.md)): los tres roles lo ven, la gerencia lo cambia. El SKU
+  y el código de barras son únicos por negocio (el servidor los compara sin mayúsculas y con los 14 dígitos del GTIN), un
+  producto con historia se **archiva** (`active: false`) y no se borra, y su unidad no cambia si ya tiene movimientos.
+  `GET /v1/products` busca por nombre, SKU o código de barras completo, filtra por categoría y por alta y pagina por cursor.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

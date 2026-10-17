@@ -1,3 +1,5 @@
+import { isUuid } from './uuid.js';
+
 /** Un dato de la peticion que no sirve: donde esta (puntero JSON), que le pasa (codigo estable) y como decirlo. */
 export interface FieldError {
   readonly pointer: string;
@@ -36,6 +38,9 @@ const hasControlCharacter = (text: string): boolean => {
   }
   return false;
 };
+
+/** Un UUID escrito mide treinta y seis caracteres. */
+const UUID_TEXT_LENGTH = 36;
 
 /** Lo que la base acepta en `app_user.email`. */
 const MAX_EMAIL_LENGTH = 254;
@@ -199,6 +204,53 @@ export class InputReader {
       );
     }
     return raw;
+  }
+
+  /** Un identificador (UUID) escrito como texto. */
+  uuid(key: string, options: Labelled & { readonly optional: true }): string | undefined;
+  uuid(key: string, options: Labelled): string;
+  uuid(key: string, options: Labelled & { readonly optional?: boolean }): string | undefined {
+    const before = this.errors.length;
+    const text = this.text(key, { label: options.label, max: UUID_TEXT_LENGTH, optional: true });
+    if (text === undefined) {
+      return this.missing(key, options, options.optional === true) ? undefined : '';
+    }
+    if (this.errors.length > before) return '';
+    if (!isUuid(text)) {
+      return this.reject(
+        key,
+        'invalid-id',
+        `${options.label} no tiene la forma de un identificador.`,
+        '',
+      );
+    }
+    return text;
+  }
+
+  /** Si el campo llego como `null`, que en una peticion quiere decir «ninguno», distinto de no haber llegado. */
+  isNull(key: string): boolean {
+    return this.raw(key) === null;
+  }
+
+  /**
+   * Convierte un valor ya leido con una funcion del dominio que lanza `RangeError` cuando lo rechaza (un SKU, un codigo de
+   * barras). El rechazo queda como error del campo, con la frase que se indica; cualquier otro fallo es un defecto y sigue
+   * su camino.
+   */
+  convert<T>(
+    key: string,
+    failure: { readonly code: string; readonly detail: string },
+    convert: () => T,
+    placeholder: T,
+  ): T {
+    try {
+      return convert();
+    } catch (error) {
+      if (error instanceof RangeError) {
+        return this.reject(key, failure.code, failure.detail, placeholder);
+      }
+      throw error;
+    }
   }
 
   /** Para una regla que mira varios campos a la vez y que el lector no conoce. */

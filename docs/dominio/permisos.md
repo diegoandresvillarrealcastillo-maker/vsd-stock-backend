@@ -16,6 +16,9 @@ lee una persona.
 > persona usan `user:manage-cashiers` si la persona es cajero y `user:manage-admins` si es administrador o dueño; para
 > cambiar un rol hace falta poder con el de antes **y** con el de después. El negocio nunca se queda sin un dueño activo.
 
+> **Dónde se aplican las acciones del catálogo** (ADR 0015): ver productos y categorías es `product:view`, de los tres
+> roles; crear, cambiar y archivar es `product:manage`; cambiar el precio de un producto pide además `price:update`.
+
 ## Los tres roles
 
 - **Dueño:** quien creó el negocio. Puede todo, incluidos los datos del negocio y las personas con más
