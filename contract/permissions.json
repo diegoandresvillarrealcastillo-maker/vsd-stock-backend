@@ -1,0 +1,178 @@
+{
+  "description": "Que puede hacer cada rol y si se puede hacer sin conexion (ADR 0017). La fuente es src/domain/model/role.ts; no se edita a mano: se regenera con `node scripts/permissions.ts`.",
+  "version": 1,
+  "roles": [
+    "owner",
+    "admin",
+    "cashier"
+  ],
+  "actions": {
+    "sale:create": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "payment:collect-cash": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "shift:open": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "shift:close": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "sale:view-own-shift": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "stock:view": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "product:view": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": true
+    },
+    "shift:close-other": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "sale:view-all": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "sale:void": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "stock:adjust": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "purchase:create": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "cash-movement:create": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "product:manage": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "price:update": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "report:sales": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "report:stock": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "report:profit": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "user:manage-cashiers": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    },
+    "user:manage-admins": {
+      "roles": [
+        "owner"
+      ],
+      "offline": false
+    },
+    "business:settings": {
+      "roles": [
+        "owner"
+      ],
+      "offline": false
+    },
+    "device:enroll": {
+      "roles": [
+        "owner",
+        "admin",
+        "cashier"
+      ],
+      "offline": false
+    },
+    "device:revoke": {
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "offline": false
+    }
+  }
+}
