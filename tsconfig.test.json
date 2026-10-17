@@ -12,11 +12,15 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": ".",
+    // scripts/*.ts corre directamente en Node 24 (importa con la extension .ts) y las
+    // pruebas lo importan igual.
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src/**/*.ts",
     "test/**/*.ts",
+    "scripts/**/*.ts",
     "vitest.config.mts",
     "vitest.integration.config.mts",
     "vitest.benchmark.config.mts"
