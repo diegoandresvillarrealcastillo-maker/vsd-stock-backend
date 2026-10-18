@@ -50,13 +50,17 @@ npm run dev               # http://localhost:5173
 «Sin conexión» con el backend en marcha, mira la consola del navegador: casi siempre es `CORS_ORIGINS`
 ([ADR 0012](adr/0012-cors-con-lista-explicita-de-origenes-y-sin-credenciales.md)).
 
-**Base de datos de trabajo** (solo para las pruebas de integración):
+**Base de datos de trabajo** (para las pruebas de integración y para ver el esquema real):
 
 ```bash
 npm run db:up             # PostgreSQL 17 en Docker, publicado solo en 127.0.0.1:5433
-npm run test:integration
+npm run db:prepare        # crea los roles y el esquema real (las migraciones, aplicadas con Prisma)
+npm run test:integration  # también prepara la base solo; db:prepare es para mirarla con otra herramienta
 npm run db:down
 ```
+
+`db:prepare` y las pruebas **borran y recrean el esquema `public`** de esa base: por eso se niegan a correr contra
+cualquier base que no sea local y cuyo nombre no termine en `_test`.
 
 No lleva contraseña ni datos reales: es una base desechable. En Windows, Docker Desktop puede instalarse por
 usuario y no arrancar solo: si `npm run db:up` dice que no encuentra el demonio, ábrelo a mano.
@@ -67,15 +71,16 @@ Cada ambiente configura estas variables **en su propio panel**, nunca en el repo
 variable nueva la documenta aquí y en el README en el mismo PR (una prueba lo comprueba para las del
 `.env.example` del backend).
 
-| Variable       | Repositorio | Cuándo se fija  | Qué es                                                                                          | Local                   | PRE                                                           |
-| -------------- | ----------- | --------------- | ----------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------- |
-| `PORT`         | backend     | Al arrancar     | Puerto en el que escucha la API.                                                                | `3000`                  | El que dé el host.                                            |
-| `CORS_ORIGINS` | backend     | Al arrancar     | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador. | `http://localhost:5173` | La dirección **exacta** del frontend de PRE, sin barra final. |
-| `VITE_API_URL` | frontend    | **Al compilar** | Dirección de la API. Todo lo que lleva el prefijo `VITE_` llega al navegador: nunca un secreto. | `http://localhost:3000` | La dirección de la API de PRE.                                |
+| Variable                 | Repositorio | Cuándo se fija  | Qué es                                                                                                                                                                                   | Local                                    | PRE                                                                                              |
+| ------------------------ | ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `PORT`                   | backend     | Al arrancar     | Puerto en el que escucha la API.                                                                                                                                                         | `3000`                                   | El que dé el host.                                                                               |
+| `CORS_ORIGINS`           | backend     | Al arrancar     | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                                                                                          | `http://localhost:5173`                  | La dirección **exacta** del frontend de PRE, sin barra final.                                    |
+| `VITE_API_URL`           | frontend    | **Al compilar** | Dirección de la API. Todo lo que lleva el prefijo `VITE_` llega al navegador: nunca un secreto.                                                                                          | `http://localhost:3000`                  | La dirección de la API de PRE.                                                                   |
+| `DATABASE_MIGRATION_URL` | backend     | Al migrar       | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee. Lleva contraseña: va en tu `.env`, nunca en un chat ni en el repositorio. | No hace falta: usa `npm run db:prepare`. | La conexión del rol `postgres` por el **pooler de sesión** (puerto 5432); la aplica una persona. |
 
-**Todavía no existen** (llegan con el ciclo que las necesita, cada una con su ADR y su lugar en esta tabla): la
-cadena de conexión a la base de datos, la dirección con la que la API verifica los tokens de Supabase y las
-claves de identidad.
+**Todavía no existen** (llegan con el ticket que las necesita, cada una con su ADR y su lugar en esta tabla): la
+cadena de conexión de la **aplicación** a la base de datos (`DATABASE_URL`, rol `stock_app`, ticket C2-02) y las de
+la verificación de identidad (`AUTH_ISSUER`, `AUTH_JWKS_URL` y `AUTH_AUDIENCE`, ticket C2-03).
 
 - Una variable mal escrita **detiene el arranque** con un mensaje que la nombra. Es a propósito.
 - `CORS_ORIGINS` y `VITE_API_URL` tienen que **coincidir entre sí**: cada una nombra al otro lado. Si se
@@ -102,10 +107,23 @@ del ciclo que prepare PRE** (ADR 0011). Cada punto dice qué hacer y qué compro
    anterior de VSD Stock el host directo solo publicaba IPv6 y no resolvía desde algunas redes, así que
    confírmalo al crearlo. El ADR 0005 permite el pooler en modo transacción.
 3. **Crear el rol de la aplicación** (`stock_app`, sin privilegios: no propietario de las tablas, no
-   superusuario, sin `BYPASSRLS`, ADR 0005) con el SQL que entregue el ticket del Ciclo 2.
-4. **Aplicar las migraciones, una persona.** Antes de aplicar, **comprueba a qué host apunta la conexión**: una
-   migración sobre el ambiente equivocado no se deshace. Una migración ya aplicada no se edita (el ajuste va en
-   una nueva) y `prisma migrate reset` está prohibido.
+   superusuario, sin `BYPASSRLS`, ADR 0005). En el SQL Editor, con una contraseña de 32 letras y números que solo
+   vive en tu gestor de contraseñas (borra después la consulta guardada, porque lleva la contraseña):
+
+   ```sql
+   create role stock_app login password 'PEGA_AQUI_LA_CONTRASENA'
+     nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+   grant usage on schema public to stock_app;
+   ```
+
+   Apaga también la **Data API** (Integrations → Data API) y quita los permisos por omisión del esquema `public`
+   (ADR 0021): el paso a paso con todo el SQL está en el ticket C2-13.
+
+4. **Aplicar las migraciones, una persona**, con `npm run db:migrate`. Pon en tu `.env`
+   `DATABASE_MIGRATION_URL` (rol `postgres`, pooler de sesión, puerto 5432). El comando **muestra a qué host apunta la
+   conexión, sin la contraseña, y pide escribir el host para confirmar**: una migración sobre el ambiente equivocado
+   no se deshace. Una migración ya aplicada no se edita (el ajuste va en una nueva) y `prisma migrate reset` está
+   prohibido. La migración se niega a correr si falta el rol `stock_app`.
 5. **Crear el servicio de la API** con la imagen del backend y fijar sus variables (`PORT`, `CORS_ORIGINS`
    con la dirección del frontend de PRE y, cuando existan, las de base de datos y de identidad). La comprobación
    de salud del host debe apuntar a `GET /health`. _Comprobar:_ `GET /health` responde `200` y un JSON con

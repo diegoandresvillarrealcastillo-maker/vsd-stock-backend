@@ -9,3 +9,10 @@
 
 [extend]
 useDefault = true
+
+# Contrasenas FALSAS de las pruebas. Sirven para comprobar que ningun mensaje, registro o respuesta repite una cadena de
+# conexion (que en la vida real lleva la clave): la prueba necesita una clave reconocible para poder buscarla. No son de
+# ningun servicio. Se nombra cada valor exacto; no se perdona ninguna regla ni ninguna ruta.
+[[allowlists]]
+description = "Contrasenas falsas de las pruebas que vigilan que no se filtre una cadena de conexion"
+regexes = ['''^(S3cretoLargo123|ContrasenaLarga123|SecretoLargo123)$''']

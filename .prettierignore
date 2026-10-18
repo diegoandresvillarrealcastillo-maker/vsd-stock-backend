@@ -1,5 +1,7 @@
 dist/
 coverage/
+# Codigo generado por Prisma.
+src/generated/
 node_modules/
 package-lock.json
 

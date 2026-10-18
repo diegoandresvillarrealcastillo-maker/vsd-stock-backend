@@ -16,6 +16,12 @@ COPY package.json package-lock.json ./
 # --ignore-scripts: sin husky ni otros scripts de instalacion dentro de la imagen.
 RUN npm ci --ignore-scripts
 
+# El cliente de Prisma se genera del esquema (no se versiona). Primero el esquema y la configuracion, para que esta
+# capa solo se rehaga cuando cambian; el CLI sale de las dependencias de desarrollo, que aqui si estan instaladas.
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+RUN npx prisma generate
+
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
