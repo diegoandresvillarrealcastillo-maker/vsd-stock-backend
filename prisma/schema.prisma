@@ -74,7 +74,7 @@ model AppUser {
   role                String
   active              Boolean   @default(true)
   /// SHA-256 del secreto de la invitacion; nunca el secreto.
-  invitationHash      String?   @map("invitation_hash")
+  invitationHash      String?   @unique @map("invitation_hash")
   invitationExpiresAt DateTime? @map("invitation_expires_at") @db.Timestamptz(6)
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   deactivatedAt       DateTime? @map("deactivated_at") @db.Timestamptz(6)

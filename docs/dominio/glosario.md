@@ -57,6 +57,17 @@ base de datos, no del token (ADR 0022).
 
 **Estado:** Decidido (ADR 0017 y ADR 0020)
 
+### Invitación
+
+Cómo entra a un negocio quien no lo creó: el dueño o un administrador invita a alguien con un rol y recibe un
+**código** de ochenta bits (`0123-4567-89AB-CDEF`) que se muestra una sola vez y se entrega en persona. Quien lo recibe se
+registra en el servicio de identidad y lo canjea; sirve una sola vez y vence a los siete días. El servidor solo guarda el
+hash del código. Una invitación pendiente es una fila de `app_user` sin identidad (ADR 0023).
+
+**Código:** `invitationCodeFromBytes` y `normalizeInvitationCode`
+
+**Estado:** Decidido (ADR 0023)
+
 ### Rol
 
 Lo que una persona puede hacer en un negocio. Son tres, fijos: **dueño**, **administrador** y **cajero**. Un cajero

@@ -104,6 +104,16 @@ Y, cuando el error es de validación, la lista de los campos inválidos:
 
 Un caso propio usa su propio `code` (`shift-closed`, `operation-id-reused`) con el estado que le corresponda.
 
+El 410 (`gone`) es para lo que existió y ya no sirve, como una invitación vencida. Los códigos propios del negocio y las
+personas ([ADR 0023](adr/0023-negocio-personas-e-invitaciones.md)) son: `already-member` (409), `no-membership` (403),
+`person-not-found` (404), `last-owner` (409), `invitation-not-found` (404), `invitation-expired` (410) e
+`invitation-not-pending` (409). Un 400 `validation-failed` trae en `errors` **todos** los campos que no sirven.
+
+Los del catálogo ([ADR 0015](adr/0015-catalogo-unidades-cantidades-y-codigos.md)): `category-not-found` y
+`product-not-found` (404), `category-name-taken`, `category-in-use`, `sku-taken`, `barcode-taken` y `unit-locked` (409).
+Una categoría que no existe al crear o cambiar un producto no es un 404 de la ruta sino un 400 del campo
+(`/categoryId`, código `unknown-category`).
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

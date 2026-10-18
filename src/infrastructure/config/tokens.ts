@@ -15,3 +15,12 @@ export const TOKEN_VERIFIER = Symbol('TOKEN_VERIFIER');
 
 /** Identificador de inyeccion del puerto de salida IdentityDirectory. */
 export const IDENTITY_DIRECTORY = Symbol('IDENTITY_DIRECTORY');
+
+/** Identificador de inyeccion del puerto de salida BusinessSetup. */
+export const BUSINESS_SETUP = Symbol('BUSINESS_SETUP');
+
+/** Identificador de inyeccion del puerto de salida InvitationRedeemer. */
+export const INVITATION_REDEEMER = Symbol('INVITATION_REDEEMER');
+
+/** Identificador de inyeccion del puerto de salida InvitationCodes. */
+export const INVITATION_CODES = Symbol('INVITATION_CODES');

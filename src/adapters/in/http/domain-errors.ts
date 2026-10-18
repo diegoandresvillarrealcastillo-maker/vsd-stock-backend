@@ -1,4 +1,24 @@
 import { DatabaseNotConfiguredError } from '../../../domain/model/database-not-configured-error.js';
+import {
+  BarcodeTakenError,
+  CategoryInUseError,
+  CategoryNameTakenError,
+  CategoryNotFoundError,
+  ProductNotFoundError,
+  SkuTakenError,
+  UnitLockedError,
+} from '../../../domain/model/catalog-errors.js';
+import {
+  AlreadyMemberError,
+  ForbiddenError,
+  InvitationExpiredError,
+  InvitationNotFoundError,
+  InvitationNotPendingError,
+  LastOwnerError,
+  NoMembershipError,
+  PersonNotFoundError,
+} from '../../../domain/model/people-errors.js';
+import { ValidationFailedError } from '../../../domain/model/validation.js';
 import { AuthenticationError, UserInactiveError } from '../../../domain/ports/in/authenticate.js';
 import { ApiProblem } from './api-problem.js';
 
@@ -59,6 +79,90 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
   }
   if (error instanceof DatabaseNotConfiguredError) {
     return new ApiProblem(503, 'database-not-configured', 'La base de datos no está configurada.');
+  }
+  return problemOfPeopleError(error) ?? problemOfCatalogError(error);
+}
+
+/** Los errores de negocio y personas (ADR 0023). */
+function problemOfPeopleError(error: unknown): ApiProblem | undefined {
+  if (error instanceof ValidationFailedError) {
+    return new ApiProblem(
+      400,
+      'validation-failed',
+      'La petición trae datos que no sirven. Revisa los campos indicados.',
+      { errors: error.errors.map((item) => ({ ...item })) },
+    );
+  }
+  if (error instanceof AlreadyMemberError) {
+    return new ApiProblem(409, 'already-member', 'La persona ya trabaja en un negocio.');
+  }
+  if (error instanceof NoMembershipError) {
+    return new ApiProblem(403, 'no-membership', 'Primero crea un negocio o canjea una invitación.');
+  }
+  // El motivo (rol, baja...) es para el registro: al cliente se le dice una sola cosa.
+  if (error instanceof ForbiddenError) {
+    return new ApiProblem(403, 'forbidden', 'Tu rol no permite hacer esto.');
+  }
+  if (error instanceof PersonNotFoundError) {
+    return new ApiProblem(404, 'person-not-found', 'No existe esa persona en este negocio.');
+  }
+  if (error instanceof LastOwnerError) {
+    return new ApiProblem(409, 'last-owner', 'El negocio no puede quedarse sin un dueño activo.');
+  }
+  if (error instanceof InvitationNotFoundError) {
+    return new ApiProblem(
+      404,
+      'invitation-not-found',
+      'No hay una invitación pendiente con ese código.',
+    );
+  }
+  if (error instanceof InvitationExpiredError) {
+    return new ApiProblem(
+      410,
+      'invitation-expired',
+      'La invitación venció. Pide un código nuevo a quien te invitó.',
+    );
+  }
+  if (error instanceof InvitationNotPendingError) {
+    return new ApiProblem(
+      409,
+      'invitation-not-pending',
+      'Esa persona no tiene una invitación pendiente que renovar.',
+    );
+  }
+  return undefined;
+}
+
+/** Los errores del catalogo (ADR 0015). */
+function problemOfCatalogError(error: unknown): ApiProblem | undefined {
+  if (error instanceof CategoryNotFoundError) {
+    return new ApiProblem(404, 'category-not-found', 'No existe esa categoría en este negocio.');
+  }
+  if (error instanceof ProductNotFoundError) {
+    return new ApiProblem(404, 'product-not-found', 'No existe ese producto en este negocio.');
+  }
+  if (error instanceof CategoryNameTakenError) {
+    return new ApiProblem(409, 'category-name-taken', 'Ya hay una categoría con ese nombre.');
+  }
+  if (error instanceof CategoryInUseError) {
+    return new ApiProblem(
+      409,
+      'category-in-use',
+      'La categoría todavía tiene productos. Muévelos o archívalos antes de borrarla.',
+    );
+  }
+  if (error instanceof SkuTakenError) {
+    return new ApiProblem(409, 'sku-taken', 'Ya hay un producto con ese SKU.');
+  }
+  if (error instanceof BarcodeTakenError) {
+    return new ApiProblem(409, 'barcode-taken', 'Ya hay un producto con ese código de barras.');
+  }
+  if (error instanceof UnitLockedError) {
+    return new ApiProblem(
+      409,
+      'unit-locked',
+      'La unidad no cambia cuando el producto ya tiene movimientos de existencias.',
+    );
   }
   return undefined;
 }
