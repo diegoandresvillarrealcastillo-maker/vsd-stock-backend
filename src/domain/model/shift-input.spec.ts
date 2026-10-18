@@ -114,6 +114,13 @@ describe('closing a shift', () => {
     ]);
   });
 
+  it('counts up to what the database accepts and not a peso more', () => {
+    expect(closing({ ...validClosing, countedAmount: MAX_PESOS }).countedAmount).toBe(MAX_PESOS);
+    expect(codes(errorsOf(closing, { ...validClosing, countedAmount: MAX_PESOS + 1 }))).toEqual([
+      '/countedAmount:out-of-range',
+    ]);
+  });
+
   it('does not take the shift or the device from the body: the shift is in the address', () => {
     expect(codes(errorsOf(closing, { ...validClosing, shiftId: SHIFT }))).toEqual([
       '/shiftId:unknown-field',
@@ -139,6 +146,16 @@ describe('moving cash outside a sale', () => {
       reason: 'Pago al proveedor de bebidas',
     });
     expect(movement({ ...validMovement, direction: 'in' }).direction).toBe('in');
+  });
+
+  it('writes the identifiers of a movement in lowercase, however they came', () => {
+    const read = movement({
+      ...validMovement,
+      operationId: OPERATION.toUpperCase(),
+      shiftId: SHIFT.toUpperCase(),
+    });
+    expect(read.operationId).toBe(OPERATION);
+    expect(read.shiftId).toBe(SHIFT);
   });
 
   it('refuses a direction that is neither in nor out', () => {

@@ -165,6 +165,17 @@ describe('shifts and cash against PostgreSQL (C3-02)', () => {
       ).rejects.toBeInstanceOf(ShiftIdReusedError);
     });
 
+    it('does not hide what it does not know: a device that does not exist is an error, not a shift', async () => {
+      const error: unknown = await open(BUSINESS_A, shiftOf(a.ownerId, randomUUID())).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(ShiftAlreadyOpenError);
+      expect(error).not.toBeInstanceOf(ShiftIdReusedError);
+      expect(await select(admin, 'SELECT id FROM cash_shift')).toEqual([]);
+    });
+
     it('closes it all at once: when, how much was counted and who closed it', async () => {
       const shift = shiftOf(a.ownerId, a.deviceId);
       await open(BUSINESS_A, shift);
