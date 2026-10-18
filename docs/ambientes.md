@@ -201,8 +201,14 @@ migración **no** se revierte sola; por eso se aplica con cuidado y a mano.
   una se filtre a otra); la seguridad por fila está forzada y sin decir de qué negocio se pregunta no se ve nada; `anon`,
   `authenticated` y `service_role` no tienen privilegios sobre las tablas; la aplicación no puede cambiar ni borrar el
   historial; y el proyecto firma con una clave asimétrica (ES256).
-- **Lo que sigue sin comprobarse:** una sesión real de una persona (entrar y renovar el token), el correo de
-  confirmación y los límites de uso, y los hosts de la API y de la web (Ciclo 3).
+- **El recorrido con personas reales: 2026-10-18, Diego, las 24 filas dieron lo esperado** contra el Supabase de PRE, con la
+  API y la web corriendo en su máquina (crear cuenta, abrir un negocio, catálogo, ajustes, compras, invitar y canjear
+  como cajero, y los límites del cajero). Es la primera vez que la API verifica tokens reales de Supabase. El detalle está en
+  el [historial de corridas](https://github.com/diegoandresvillarrealcastillo-maker/vsd-stock-frontend/blob/desarrollo/docs/recorrido-del-ciclo-2.md#historial-de-corridas)
+  del frontend.
+- **Lo que sigue sin comprobarse:** que el token se renueve solo (vence a la hora y el recorrido dura menos), el correo de
+  confirmación y los límites de uso (en PRE «Confirm email» está apagado a propósito), un teléfono, y los hosts de la API y
+  de la web (Ciclo 3).
 
 `verify:pre` se vuelve a correr cuando cambie el esquema, el proyecto o la documentación de Supabase en la que se apoya.
 Dos cosas que se aprendieron en esta primera corrida:
