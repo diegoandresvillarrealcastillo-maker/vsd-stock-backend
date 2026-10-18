@@ -4,6 +4,7 @@ import {
   CategoryNameTakenError,
   CategoryNotFoundError,
 } from '../../domain/model/catalog-errors.js';
+import { encodeCursor } from '../../domain/model/pagination.js';
 import { ForbiddenError, NoMembershipError } from '../../domain/model/people-errors.js';
 import { ValidationFailedError } from '../../domain/model/validation.js';
 import { UserInactiveError } from '../../domain/ports/in/authenticate.js';
@@ -101,6 +102,19 @@ describe('CategoriesUseCase', () => {
         expect(second.items.map((c) => c.name)).toEqual(['Granos']);
         expect(second.nextCursor).toBeNull();
       }
+    });
+
+    it('refuses a cursor whose id is not a UUID, which the database could not compare', async () => {
+      const { useCase } = setup();
+
+      const failure = await useCase
+        .list(memberSession('owner'), { cursor: encodeCursor(['Granos', 'no-es-un-uuid']) })
+        .catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ValidationFailedError);
+      expect((failure as ValidationFailedError).errors.map((e) => e.code)).toEqual([
+        'invalid-cursor',
+      ]);
     });
 
     it('refuses a bad cursor and a limit out of range together', async () => {

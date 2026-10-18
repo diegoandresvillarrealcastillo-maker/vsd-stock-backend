@@ -19,6 +19,9 @@ lee una persona.
 > **Dónde se aplican las acciones del catálogo** (ADR 0015): ver productos y categorías es `product:view`, de los tres
 > roles; crear, cambiar y archivar es `product:manage`; cambiar el precio de un producto pide además `price:update`.
 
+> **Dónde se aplican las acciones de proveedores y compras** (C2-06): la lista de proveedores y las compras (registrar,
+> listar y ver) son `purchase:create`, de la gerencia; ver la bodega es `stock:view`, de los tres roles.
+
 ## Los tres roles
 
 - **Dueño:** quien creó el negocio. Puede todo, incluidos los datos del negocio y las personas con más

@@ -60,6 +60,13 @@ valor** cuando es una cadena de conexión (lleva la clave).
   y el código de barras son únicos por negocio (el servidor los compara sin mayúsculas y con los 14 dígitos del GTIN), un
   producto con historia se **archiva** (`active: false`) y no se borra, y su unidad no cambia si ya tiene movimientos.
   `GET /v1/products` busca por nombre, SKU o código de barras completo, filtra por categoría y por alta y pagina por cursor.
+- `GET`, `POST`, `PATCH` y `DELETE` de `/v1/suppliers` son los proveedores (solo nombre y un contacto; uno con compras no
+  se borra), `GET /v1/warehouse` es la bodega única del negocio y `POST /v1/purchases` registra una **compra**: la compra,
+  sus líneas (cantidad en milésimas y costo por unidad) y los movimientos que suben la existencia se guardan en la misma
+  transacción, y el saldo lo sube el disparador de la base. Es idempotente por `operationId`
+  ([ADR 0019](docs/adr/0019-convenciones-de-la-api.md)): repetirla da `200` con la misma compra y
+  `Idempotent-Replayed: true`, y con otros datos `409 operation-id-reused`. `GET /v1/purchases` (de la más nueva a la más
+  vieja, por cursor) y `GET /v1/purchases/{id}` las consultan. Todo es de la gerencia salvo ver la bodega.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

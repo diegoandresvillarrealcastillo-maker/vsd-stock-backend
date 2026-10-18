@@ -855,6 +855,420 @@
           "catalog"
         ]
       }
+    },
+    "/v1/suppliers": {
+      "get": {
+        "description": "Ordenados por nombre. Es de la gerencia (`purchase:create`). Pagina por cursor (ADR 0019).",
+        "operationId": "SuppliersController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los proveedores del negocio",
+        "tags": [
+          "purchasing"
+        ]
+      },
+      "post": {
+        "description": "Es de la gerencia (`purchase:create`). Solo lleva nombre y un contacto opcional.",
+        "operationId": "SuppliersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear un proveedor",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/v1/suppliers/{supplierId}": {
+      "patch": {
+        "description": "Es de la gerencia (`purchase:create`). Al menos un campo; `contact: null` lo borra.",
+        "operationId": "SuppliersController_update",
+        "parameters": [
+          {
+            "name": "supplierId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambiar un proveedor",
+        "tags": [
+          "purchasing"
+        ]
+      },
+      "delete": {
+        "description": "Es de la gerencia (`purchase:create`). Responde 409 `supplier-in-use` si ya tiene compras: son historia y no se tocan.",
+        "operationId": "SuppliersController_remove",
+        "parameters": [
+          {
+            "name": "supplierId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "El proveedor se borró."
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Borrar un proveedor",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/v1/purchases": {
+      "post": {
+        "description": "Es de la gerencia (`purchase:create`). La compra, sus líneas y la entrada de existencias se guardan juntas o no se guarda nada. Es idempotente por `operationId` (ADR 0019): la primera vez responde 201; repetirla con los mismos datos responde 200 con la misma compra y `Idempotent-Replayed: true`, sin sumar otra vez; con otros datos, 409 `operation-id-reused`. Los problemas de los campos salen juntos en 400 `validation-failed`, con el puntero de cada línea (`/lines/1/productId`).",
+        "operationId": "PurchasesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePurchaseRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La compra ya se había registrado con este `operationId`: es la misma de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registrar una compra",
+        "tags": [
+          "purchasing"
+        ]
+      },
+      "get": {
+        "description": "De la más nueva a la más vieja, sin las líneas pero con cuántas tiene cada una (`lineCount`). Es de la gerencia (`purchase:create`). Pagina por cursor (ADR 0019).",
+        "operationId": "PurchasesController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasePageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Las compras del negocio",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/v1/purchases/{purchaseId}": {
+      "get": {
+        "description": "Es de la gerencia (`purchase:create`).",
+        "operationId": "PurchasesController_get",
+        "parameters": [
+          {
+            "name": "purchaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Una compra con sus líneas",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/v1/warehouse": {
+      "get": {
+        "description": "En v2 hay una sola, creada junto con el negocio. La ven los tres roles.",
+        "operationId": "WarehouseController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La bodega del negocio",
+        "tags": [
+          "purchasing"
+        ]
+      }
     }
   },
   "info": {
@@ -1483,6 +1897,297 @@
             "description": "`false` archiva el producto (no se vende, conserva su historia); `true` lo reactiva. Un producto no se borra."
           }
         }
+      },
+      "SupplierDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Distribuidora El Sol"
+          },
+          "contact": {
+            "type": "string",
+            "nullable": true,
+            "example": "300 123 4567"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "contact",
+          "createdAt"
+        ]
+      },
+      "SupplierPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "SupplierRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Distribuidora El Sol"
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 200,
+            "nullable": true,
+            "example": "300 123 4567",
+            "description": "Un teléfono, un correo o lo que sirva para llamar. Al cambiar, `null` lo borra."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PurchaseLineRequestDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Un producto activo del negocio. No puede repetirse en otra línea: júntalas."
+          },
+          "quantityMilli": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000,
+            "example": 24000,
+            "description": "Milésimas de la unidad del producto: 24 unidades son 24000 y kilo y medio es 1500. Los productos que se cuentan en unidades enteras no admiten decimales."
+          },
+          "unitCost": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "example": 2500,
+            "description": "Pesos enteros que costó cada unidad."
+          }
+        },
+        "required": [
+          "productId",
+          "quantityMilli",
+          "unitCost"
+        ]
+      },
+      "CreatePurchaseRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La llave de idempotencia: la genera el cliente una vez por compra. Repetir la petición con el mismo `operationId` y los mismos datos devuelve la misma compra (200 y `Idempotent-Replayed: true`) sin sumar de nuevo; con otros datos, 409 `operation-id-reused`."
+          },
+          "supplierId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Un proveedor del negocio. Es opcional."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "lines": {
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Un producto por línea.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseLineRequestDto"
+            }
+          }
+        },
+        "required": [
+          "operationId",
+          "lines"
+        ]
+      },
+      "PurchaseLineDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantityMilli": {
+            "type": "integer",
+            "description": "Milésimas de la unidad del producto."
+          },
+          "unitCost": {
+            "type": "integer",
+            "description": "Pesos enteros por unidad."
+          }
+        },
+        "required": [
+          "productId",
+          "quantityMilli",
+          "unitCost"
+        ]
+      },
+      "PurchaseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "lines": {
+            "description": "Ordenadas por producto.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseLineDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "warehouseId",
+          "supplierId",
+          "note",
+          "createdAt",
+          "createdByUserId",
+          "lines"
+        ]
+      },
+      "PurchaseSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supplierId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "lineCount": {
+            "type": "integer",
+            "description": "Cuántas líneas tiene la compra."
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "warehouseId",
+          "supplierId",
+          "note",
+          "createdAt",
+          "createdByUserId",
+          "lineCount"
+        ]
+      },
+      "PurchasePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseSummaryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "WarehouseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Principal"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
       },
       "ProblemErrorDto": {
         "type": "object",

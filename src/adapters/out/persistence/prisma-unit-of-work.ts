@@ -6,7 +6,12 @@ import type {
 } from '../../../domain/ports/out/unit-of-work.js';
 import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
 import { PrismaCatalogRepository } from './prisma-catalog.js';
+import { PrismaOperationRegistry } from './prisma-operations.js';
 import { PrismaPeopleRepository } from './prisma-people.js';
+import { PrismaPurchaseRepository } from './prisma-purchases.js';
+import { PrismaStockLedger } from './prisma-stock.js';
+import { PrismaSupplierRepository } from './prisma-suppliers.js';
+import { retryOnConflict } from './retry-on-conflict.js';
 
 /** La transaccion de Prisma, ya con el negocio fijado. Solo la usan los repositorios de este adaptador. */
 export type PrismaTransaction = Prisma.TransactionClient;
@@ -31,6 +36,9 @@ class PrismaBusinessReader implements BusinessReader {
  * Unidad de trabajo sobre Prisma y PostgreSQL. Cada llamada abre UNA transaccion y, antes de cualquier consulta, fija
  * `app.id_negocio` con `set_config(..., true)`: el valor es local a la transaccion, asi que no sobrevive a ella ni se
  * filtra a quien reuse la conexion (ADR 0005). La seguridad por fila de la base hace el resto.
+ *
+ * Si la transaccion pierde contra otra (interbloqueo o fallo de serializacion) se vuelve a intentar entera, hasta tres
+ * veces: lo que hizo se deshizo con ella, asi que repetirla no duplica nada (ADR 0013).
  */
 export class PrismaUnitOfWork implements UnitOfWork {
   constructor(private readonly prisma: PrismaClient) {}
@@ -42,6 +50,10 @@ export class PrismaUnitOfWork implements UnitOfWork {
         business: new PrismaBusinessReader(tx),
         people: new PrismaPeopleRepository(tx, businessId),
         catalog: new PrismaCatalogRepository(tx, businessId),
+        suppliers: new PrismaSupplierRepository(tx, businessId),
+        purchases: new PrismaPurchaseRepository(tx, businessId),
+        stock: new PrismaStockLedger(tx, businessId),
+        operations: new PrismaOperationRegistry(tx, businessId),
       }),
     );
   }
@@ -58,12 +70,14 @@ export class PrismaUnitOfWork implements UnitOfWork {
     if (!UUID.test(businessId)) {
       throw new RangeError('The value is not a valid business identifier (a UUID is expected)');
     }
-    return this.prisma.$transaction(
-      async (tx) => {
-        await tx.$queryRaw`SELECT set_config('app.id_negocio', ${businessId}, true)`;
-        return work(tx);
-      },
-      { maxWait: MAX_WAIT_MS, timeout: TIMEOUT_MS },
+    return retryOnConflict(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT set_config('app.id_negocio', ${businessId}, true)`;
+          return work(tx);
+        },
+        { maxWait: MAX_WAIT_MS, timeout: TIMEOUT_MS },
+      ),
     );
   }
 }

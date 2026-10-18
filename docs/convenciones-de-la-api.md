@@ -114,6 +114,12 @@ Los del catálogo ([ADR 0015](adr/0015-catalogo-unidades-cantidades-y-codigos.md
 Una categoría que no existe al crear o cambiar un producto no es un 404 de la ruta sino un 400 del campo
 (`/categoryId`, código `unknown-category`).
 
+Los de proveedores y compras (C2-06): `supplier-not-found` y `purchase-not-found` (404), `supplier-in-use` (409) y
+`operation-id-reused` (409, ver [Idempotencia](#idempotencia)). Lo que solo la base puede saber de una compra llega como
+400 del campo, con el puntero de la línea: `/supplierId` `unknown-supplier`, `/lines/1/productId` `unknown-product` o
+`archived-product`, y `/lines/0/quantityMilli` `not-whole` (un producto que se cuenta en unidades enteras no admite
+decimales). Un producto repetido en dos líneas es `duplicate-product` en la segunda: se juntan las cantidades.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):
@@ -140,6 +146,14 @@ dispositivo, ADR 0009):
   **`Idempotent-Replayed: true`**; no crea nada dos veces.
 - **El mismo `operationId` con un cuerpo distinto** es un defecto del cliente: responde **`409`** con el código
   `operation-id-reused`, para que el cliente no crea que se aplicó lo nuevo.
+- **Qué es «el mismo cuerpo»:** la huella se calcula sobre lo que el servidor ya leyó y validó, sin el `operationId`: el
+  orden de las claves, las mayúsculas de los identificadores y los espacios sobrantes no la cambian. En la base se guarda
+  solo esa huella (SHA-256) con la clase de operación y quién la hizo, nunca el cuerpo.
+- **Si la operación se rechaza** (400, 403, 409...) no queda nada: el `operationId` sigue libre y se puede reintentar con
+  los datos corregidos. Reclamarlo y aplicarlo ocurren en la misma transacción.
+- **Dos iguales a la vez:** la segunda espera a la primera y responde `200` con lo que ella hizo. Si dos transacciones
+  chocan entre sí (interbloqueo o fallo de serialización), el servidor repite la transacción entera hasta tres veces antes
+  de responder error.
 - Un envío en lote (`POST /v1/sync`, que se define con el motor del Ciclo 3) responde `200` con un resultado por
   operación, cada uno con su propio estado y, si falló, su `ProblemDetails`.
 
@@ -154,6 +168,8 @@ GET /v1/products?limit=50&cursor=eyJ…
 
 - `limit` va de 1 a 200 y por omisión es 50. El cursor es **opaco**: el cliente no lo lee ni lo arma.
 - El orden es estable (por instante y por `id`). **No hay total:** contarlo es caro y inconsistente.
+- Un cursor que el servidor no hizo, o cuyo `id` no es un UUID, responde 400 `validation-failed` con `/cursor` `invalid-cursor`.
+  Las compras van de la más nueva a la más vieja y su cursor lleva el instante al milisegundo y el `id`.
 
 ## Cabeceras
 

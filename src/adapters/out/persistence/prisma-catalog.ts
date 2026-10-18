@@ -200,6 +200,14 @@ export class PrismaCatalogRepository implements CatalogRepository {
     return row === null ? null : productOf(row);
   }
 
+  async findProducts(ids: readonly string[]): Promise<ProductRecord[]> {
+    const rows = await this.tx.product.findMany({
+      where: { id: { in: [...ids] } },
+      select: PRODUCT_SELECT,
+    });
+    return rows.map(productOf);
+  }
+
   async hasStockMovements(productId: string): Promise<boolean> {
     return (await this.tx.stockMovement.count({ where: { productId }, take: 1 })) > 0;
   }

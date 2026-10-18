@@ -397,6 +397,146 @@ describe('InputReader', () => {
     });
   });
 
+  describe('lists', () => {
+    const lines = (r: InputReader) =>
+      r.items('lines', { label: 'El listado de líneas', min: 1, max: 3 });
+
+    it('hands back the items of a list as they came', () => {
+      const reader = new InputReader({ lines: [{ a: 1 }, 'x', 7] }, ['lines']);
+
+      expect(lines(reader)).toEqual([{ a: 1 }, 'x', 7]);
+      expect(() => reader.finish()).not.toThrow();
+    });
+
+    it('says a missing list is required', () => {
+      expect(errorsOf((r) => lines(r), {}, ['lines'])).toEqual([
+        { pointer: '/lines', code: 'required', detail: 'Falta el listado de líneas.' },
+      ]);
+    });
+
+    it.each([null, 'texto', 5, { 0: 'a' }])('says %j is not a list', (value) => {
+      expect(errorsOf((r) => lines(r), { lines: value }, ['lines'])).toEqual([
+        {
+          pointer: '/lines',
+          code: 'invalid-type',
+          detail: 'El listado de líneas debe ser una lista.',
+        },
+      ]);
+    });
+
+    it('asks for at least the minimum and accepts exactly the maximum', () => {
+      expect(errorsOf((r) => lines(r), { lines: [] }, ['lines'])).toEqual([
+        {
+          pointer: '/lines',
+          code: 'too-few',
+          detail: 'El listado de líneas debe tener al menos 1 elemento.',
+        },
+      ]);
+      expect(errorsOf((r) => lines(r), { lines: [1, 2, 3] }, ['lines'])).toEqual([]);
+      expect(errorsOf((r) => lines(r), { lines: [1, 2, 3, 4] }, ['lines'])).toEqual([
+        {
+          pointer: '/lines',
+          code: 'too-many',
+          detail: 'El listado de líneas no puede pasar de 3 elementos.',
+        },
+      ]);
+    });
+
+    it('says «elementos» in the plural for a minimum above one', () => {
+      const two = (r: InputReader) =>
+        r.items('lines', { label: 'El listado de líneas', min: 2, max: 3 });
+
+      expect(errorsOf((r) => two(r), { lines: [1] }, ['lines'])[0]?.detail).toBe(
+        'El listado de líneas debe tener al menos 2 elementos.',
+      );
+    });
+  });
+
+  describe('within', () => {
+    it('reads an object inside another and reports its problems at the right pointer', () => {
+      const reader = new InputReader({ lines: [{ qty: 'x' }, { qty: 2 }] }, ['lines']);
+      const items = reader.items('lines', { label: 'El listado de líneas', min: 1, max: 5 });
+
+      items.forEach((item, index) => {
+        const line = reader.within(`/lines/${index}`, item, ['qty']);
+        line.integer('qty', { label: 'La cantidad', min: 1, max: 10 });
+      });
+
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors).toEqual([
+          {
+            pointer: '/lines/0/qty',
+            code: 'invalid-type',
+            detail: 'La cantidad debe ser un número entero.',
+          },
+        ]);
+      }
+    });
+
+    it('refuses an item that is not an object, and a field it does not know, inside the item', () => {
+      const reader = new InputReader({}, []);
+      reader.within('/lines/0', 'texto', ['qty']);
+      const second = reader.within('/lines/1', { qty: 1, extra: true }, ['qty']);
+      second.integer('qty', { label: 'La cantidad', min: 1, max: 10 });
+
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors).toEqual([
+          {
+            pointer: '/lines/0',
+            code: 'invalid-type',
+            detail: 'La petición debe ser un objeto JSON.',
+          },
+          {
+            pointer: '/lines/1/extra',
+            code: 'unknown-field',
+            detail: 'El campo «extra» no existe en esta petición.',
+          },
+        ]);
+      }
+    });
+
+    it('writes the whole path when an object inside another has an object inside it', () => {
+      const reader = new InputReader({}, []);
+      reader
+        .within('/orders/0', {}, ['lines'])
+        .within('/lines/2', {}, ['qty'])
+        .integer('qty', { label: 'La cantidad', min: 1, max: 9 });
+
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors.map((e) => e.pointer)).toEqual([
+          '/orders/0/lines/2/qty',
+        ]);
+      }
+    });
+
+    it('keeps the order in which problems were found, across the parent and its children', () => {
+      const reader = new InputReader({ note: 5 }, ['note']);
+      reader.text('note', { label: 'La nota', max: 5 });
+      reader
+        .within('/lines/0', {}, ['qty'])
+        .integer('qty', { label: 'La cantidad', min: 1, max: 9 });
+
+      try {
+        reader.finish();
+        expect.unreachable();
+      } catch (error) {
+        expect((error as ValidationFailedError).errors.map((e) => e.pointer)).toEqual([
+          '/note',
+          '/lines/0/qty',
+        ]);
+      }
+    });
+  });
+
   describe('null', () => {
     it('tells a field sent as null, which means «none», apart from one that was not sent', () => {
       const reader = new InputReader({ barcode: null, name: 'x' }, ['barcode', 'name', 'sku']);

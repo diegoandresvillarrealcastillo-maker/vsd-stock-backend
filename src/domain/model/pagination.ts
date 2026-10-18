@@ -1,3 +1,4 @@
+import { isUuid } from './uuid.js';
 import type { InputReader } from './validation.js';
 
 /** ADR 0019: de 1 a 200 por pagina y 50 si no se dice. */
@@ -44,11 +45,36 @@ export function decodeCursor(cursor: string, arity: number): string[] | undefine
   return parts;
 }
 
+/** Si la posicion de un cursor termina en un UUID: la ultima parte de toda lista es el id de la fila, y la base lo compara. */
+export function endsInUuid(position: readonly string[]): boolean {
+  return isUuid(position[position.length - 1]);
+}
+
+const ISO_MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+
+/**
+ * Si la posicion es (un instante como lo escribe `toISOString()`, un id): la de las listas que van de lo mas nuevo a lo
+ * mas viejo. Un instante que no existe (el 30 de febrero) no pasa: la base no sabria compararlo.
+ */
+export function timeThenUuid(position: readonly string[]): boolean {
+  if (position.length !== 2) return false;
+  const [moment, id] = position as [string, string];
+  if (!ISO_MOMENT.test(moment) || !isUuid(id)) return false;
+  const parsed = new Date(moment);
+  // Fecha invalida es NaN; una que JavaScript corrige (30 de febrero -> 2 de marzo) no escribe lo mismo al volver.
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === moment;
+}
+
 /**
  * Lee `limit` y `cursor` de los parametros de una URL (siempre texto). Anota los problemas en el lector, junto con los
- * de los demas parametros, en vez de lanzar por su cuenta.
+ * de los demas parametros, en vez de lanzar por su cuenta. `fits` deja a cada lista rechazar una posicion que la base
+ * no podria comparar (un id que no es UUID): un cursor que este servidor no hizo es un 400, no un error de la base.
  */
-export function readPageRequest(reader: InputReader, arity: number): PageRequest {
+export function readPageRequest(
+  reader: InputReader,
+  arity: number,
+  fits: (position: readonly string[]) => boolean = () => true,
+): PageRequest {
   let limit = DEFAULT_PAGE_SIZE;
   const rawLimit = reader.raw('limit');
   if (rawLimit !== undefined) {
@@ -68,7 +94,8 @@ export function readPageRequest(reader: InputReader, arity: number): PageRequest
   const rawCursor = reader.raw('cursor');
   if (rawCursor !== undefined) {
     after = typeof rawCursor === 'string' ? decodeCursor(rawCursor, arity) : undefined;
-    if (after === undefined) {
+    if (after === undefined || !fits(after)) {
+      after = undefined;
       // No se dice que tenia mal: un cursor propio es opaco y uno ajeno no es asunto del cliente.
       reader.fail(
         '/cursor',

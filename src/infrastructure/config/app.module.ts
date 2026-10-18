@@ -18,6 +18,11 @@ import {
 } from '../../adapters/in/http/catalog.controller.js';
 import { HealthController } from '../../adapters/in/http/health.controller.js';
 import { MeController } from '../../adapters/in/http/me.controller.js';
+import {
+  PurchasesController,
+  SuppliersController,
+  WarehouseController,
+} from '../../adapters/in/http/purchasing.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
 import {
   AUTHENTICATE,
@@ -29,9 +34,12 @@ import {
   INVITE_USER,
   LIST_USERS,
   PRODUCTS,
+  PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
+  SUPPLIERS,
   UPDATE_USER,
+  WAREHOUSE,
 } from '../../adapters/in/http/tokens.js';
 import { SystemClock } from '../../adapters/out/clock/system-clock.js';
 import { JoseTokenVerifier } from '../../adapters/out/identity/jose-token-verifier.js';
@@ -53,9 +61,12 @@ import { GetReadinessUseCase } from '../../application/usecases/get-readiness.us
 import { InviteUserUseCase } from '../../application/usecases/invite-user.usecase.js';
 import { ListUsersUseCase } from '../../application/usecases/list-users.usecase.js';
 import { ProductsUseCase } from '../../application/usecases/products.usecase.js';
+import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { SuppliersUseCase } from '../../application/usecases/suppliers.usecase.js';
 import { UpdateUserUseCase } from '../../application/usecases/update-user.usecase.js';
+import { WarehouseUseCase } from '../../application/usecases/warehouse.usecase.js';
 import type { Clock } from '../../domain/ports/out/clock.js';
 import type { BusinessSetup } from '../../domain/ports/out/business-setup.js';
 import type { DatabaseHealth } from '../../domain/ports/out/database-health.js';
@@ -211,6 +222,25 @@ export class AppModule {
       },
     ];
 
+    // Proveedores, bodega y compras (C2-06, ADR 0013 y 0019).
+    const purchasingProviders: Provider[] = [
+      {
+        provide: SUPPLIERS,
+        useFactory: (work: UnitOfWork) => new SuppliersUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+      {
+        provide: PURCHASES,
+        useFactory: (work: UnitOfWork) => new PurchasesUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+      {
+        provide: WAREHOUSE,
+        useFactory: (work: UnitOfWork) => new WarehouseUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+    ];
+
     return {
       module: AppModule,
       controllers: [
@@ -222,6 +252,9 @@ export class AppModule {
         UsersController,
         CategoriesController,
         ProductsController,
+        SuppliersController,
+        PurchasesController,
+        WarehouseController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
@@ -229,6 +262,7 @@ export class AppModule {
         ...identityProviders,
         ...peopleProviders,
         ...catalogProviders,
+        ...purchasingProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,
