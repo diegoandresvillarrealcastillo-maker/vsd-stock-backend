@@ -7,6 +7,7 @@ import type {
 import type { CatalogRepository } from '../../src/domain/ports/out/catalog.js';
 import type { BusinessScope, UnitOfWork } from '../../src/domain/ports/out/unit-of-work.js';
 import { FakeCatalog } from './fake-catalog.js';
+import { FakeCash } from './fake-cash.js';
 import { FakeDevices } from './fake-devices.js';
 import { FakePurchasing } from './fake-purchasing.js';
 
@@ -114,6 +115,7 @@ export function fakeUnitOfWork(
   catalog: CatalogRepository = new FakeCatalog(),
   purchasing: FakePurchasing = new FakePurchasing(),
   devices: FakeDevices = new FakeDevices(),
+  cash: FakeCash = new FakeCash(),
 ): UnitOfWork & { openedFor: string[] } {
   const openedFor: string[] = [];
   // El libro de existencias lista los productos del catalogo de mentira, si lo hay.
@@ -137,6 +139,8 @@ export function fakeUnitOfWork(
         stock: purchasing.stock,
         operations: purchasing.operations,
         devices,
+        shifts: cash.shifts,
+        cashMovements: cash.movements,
       };
       return work(scope);
     },

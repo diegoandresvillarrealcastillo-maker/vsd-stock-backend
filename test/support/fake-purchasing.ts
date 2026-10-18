@@ -265,7 +265,10 @@ export class FakeStock implements StockLedger {
 
 /** El registro de operaciones en memoria: la primera vez reclama, la misma operacion con el mismo cuerpo repite. */
 export class FakeOperations implements OperationRegistry {
-  readonly claims = new Map<string, { kind: string; fingerprint: string; userId: string }>();
+  readonly claims = new Map<
+    string,
+    { kind: string; fingerprint: string; userId: string; request: OperationClaimRequest }
+  >();
 
   claim(request: OperationClaimRequest): Promise<OperationClaim> {
     const known = this.claims.get(request.operationId);
@@ -274,6 +277,7 @@ export class FakeOperations implements OperationRegistry {
         kind: request.kind,
         fingerprint: request.fingerprint,
         userId: request.userId,
+        request,
       });
       return Promise.resolve('claimed');
     }

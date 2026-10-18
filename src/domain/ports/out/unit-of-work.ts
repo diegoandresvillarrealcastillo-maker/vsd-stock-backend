@@ -3,6 +3,7 @@ import type { DeviceRepository } from './devices.js';
 import type { OperationRegistry } from './operations.js';
 import type { PeopleRepository } from './people.js';
 import type { PurchaseRepository } from './purchases.js';
+import type { CashMovementRepository, ShiftRepository } from './shifts.js';
 import type { StockLedger } from './stock.js';
 import type { SupplierRepository } from './suppliers.js';
 
@@ -33,6 +34,8 @@ export interface BusinessScope {
   readonly stock: StockLedger;
   readonly operations: OperationRegistry;
   readonly devices: DeviceRepository;
+  readonly shifts: ShiftRepository;
+  readonly cashMovements: CashMovementRepository;
 }
 
 /**
