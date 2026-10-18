@@ -45,6 +45,29 @@ describe('InputReader', () => {
     });
   });
 
+  describe('counting the problems found so far', () => {
+    it('starts at zero, counts each problem once and includes those found inside an object within', () => {
+      const reader = new InputReader({ name: 7, inner: { age: 'x' } }, ['name', 'inner']);
+      expect(reader.errorCount()).toBe(0);
+
+      reader.text('name', { label: 'El nombre', max: 10 });
+      expect(reader.errorCount()).toBe(1);
+
+      const inner = reader.within('/inner', reader.raw('inner'), ['age']);
+      inner.integer('age', { label: 'La edad', min: 0, max: 120 });
+      expect(inner.errorCount()).toBe(2);
+      expect(reader.errorCount()).toBe(2);
+    });
+
+    it('does not move when what was read was fine', () => {
+      const reader = new InputReader({ name: 'Ana' }, ['name']);
+
+      reader.text('name', { label: 'El nombre', max: 10 });
+
+      expect(reader.errorCount()).toBe(0);
+    });
+  });
+
   describe('text', () => {
     const read = (reader: InputReader) => reader.text('name', { label: 'El nombre', max: 10 });
 
