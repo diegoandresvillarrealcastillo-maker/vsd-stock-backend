@@ -132,6 +132,15 @@ se inventa el UUID antes de hablar con el servidor y lo manda en el cuerpo. Repe
 dispositivo y `Idempotent-Replayed: true` sin gastar otro código (si ya lo dieron de baja, `revokedAt` se lo dice); el mismo
 `id` con otro nombre, o el `id` de un dispositivo de otro negocio, es `409 device-id-reused`.
 
+Los de turnos y efectivo (C3-02, [ADR 0026](adr/0026-turnos-de-caja-y-arqueo.md)): `shift-not-found` (404) y
+`shift-already-open`, `shift-id-reused` y `shift-closed` (409). Abrir y cerrar un turno son operaciones con `operationId`
+**y con la hora del dispositivo**: `deviceTime` (ISO 8601 UTC con `Z`) y, si se midió, `clockOffsetMs` (milisegundos que el
+servidor adelanta al reloj del dispositivo). El servidor corrige la hora, guarda la cruda y las marcas, y **nunca rechaza
+por la hora**: una que no se puede leer se acepta con la de llegada y la marca `unreadable`. `clockOffsetMs` no forma parte de
+la huella de idempotencia. Lo que solo la base puede saber llega como 400 del campo: `/deviceId` `unknown-device` al abrir y
+`/shiftId` `unknown-shift` al mover efectivo. Repetir un cierre responde `200` con `Idempotent-Replayed: true` (el cierre no
+crea nada, así que no hay un `201`).
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

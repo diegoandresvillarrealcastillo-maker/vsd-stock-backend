@@ -80,6 +80,13 @@ valor** cuando es una cadena de conexión (lleva la clave).
   repetirlo da `200` con el mismo dispositivo y `Idempotent-Replayed: true`, sin gastar otro código. `GET /v1/devices` los
   lista (de la gerencia, del más antiguo al más nuevo, por cursor) y `POST /v1/devices/{id}/revoke` da de baja uno: no borra
   nada y su código no se vuelve a dar.
+- `POST /v1/shifts` abre un **turno de caja** ([ADR 0026](docs/adr/0026-turnos-de-caja-y-arqueo.md)): lo hace cualquier persona,
+  un dispositivo también sin conexión, y el identificador del turno lo crea el dispositivo. Hay **un turno abierto por
+  dispositivo y por persona** (`409 shift-already-open`). Abrir y cerrar (`POST /v1/shifts/{id}/close`, la persona del turno o
+  la gerencia) son operaciones idempotentes que llevan la hora del dispositivo (`deviceTime`, `clockOffsetMs`): el servidor la
+  corrige y nunca la rechaza. `GET /v1/shifts/{id}` trae el **arqueo** (lo que debía haber frente a lo contado, con las ventas
+  tardías aparte) y `GET /v1/shifts` los lista (un cajero ve los suyos). `POST /v1/cash-movements` entra o saca efectivo de un
+  turno abierto, con motivo (la gerencia, con conexión).
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

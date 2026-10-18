@@ -195,6 +195,8 @@ migración **no** se revierte sola; por eso se aplica con cuidado y a mano.
 - **Proyecto de Supabase:** creado por Samuel. La aplicación se conecta por el pooler de sesión (puerto 5432) con el rol
   `stock_app`; el rol `postgres` solo se usa para migrar.
 - **Migraciones:** aplicadas el 2026-10-18 por Diego con `npm run db:migrate` (20 tablas, 2 migraciones).
+  **Pendiente (Ciclo 3):** `20261018120000_turnos` (C3-02, ADR 0026) y las que sigan. Se aplican con el mismo script de
+  siempre; hay que hacerlo **antes** de desplegar el código que las usa.
 - **`npm run verify:pre`: 2026-10-18, Diego, 9 pasan, 0 fallan, 0 omitidas** (ADR 0025). Es la primera corrida contra el
   Supabase real.
 - **Lo que dejó comprobado:** el adaptador de Prisma funciona a través del pooler (25 transacciones sin que el negocio de
