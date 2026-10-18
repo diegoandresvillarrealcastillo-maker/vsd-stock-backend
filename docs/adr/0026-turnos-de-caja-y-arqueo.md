@@ -28,7 +28,7 @@ El [ADR 0016](0016-folios-por-dispositivo-y-hora-corregida.md) dio a cada operac
    inventa el UUID del turno (como el del dispositivo, ADR 0016) y lo manda al abrirlo. Un identificador que ya es de otro turno
    —también de otro negocio, la llave primaria es global— es `409 shift-id-reused`.
 3. **Abrir y cerrar son operaciones idempotentes** (`POST /v1/shifts`, `POST /v1/shifts/{id}/close`) con su `operationId`, que
-   un dispositivo puede mandar sin conexión y en el mismo lote que sus ventas, **en orden** (ADR 0029). Repetirlas con el mismo
+   un dispositivo puede mandar sin conexión y en el mismo lote que sus ventas, **en orden** (ADR 0028). Repetirlas con el mismo
    cuerpo responde `200` con el turno **tal como está ahora** (no como estaba al responder la primera vez) y
    `Idempotent-Replayed: true`; con otro cuerpo, `409 operation-id-reused`. Cerrar un turno ya cerrado con otra operación es
    `409 shift-closed`.
