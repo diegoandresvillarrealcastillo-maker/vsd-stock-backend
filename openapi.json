@@ -1509,6 +1509,180 @@
           "inventory"
         ]
       }
+    },
+    "/v1/devices": {
+      "post": {
+        "description": "Lo puede hacer cualquier persona del negocio (`device:enroll`), pero necesita conexión: el servidor reparte el código corto (`AA`, `AB`...) y nunca lo repite. Es idempotente por `id` (ADR 0019): la primera vez responde 201; repetirlo con el mismo nombre responde 200 con el mismo dispositivo y `Idempotent-Replayed: true`, sin gastar otro código (si fue dado de baja, `revokedAt` lo dice); con otro nombre, 409 `device-id-reused`.",
+        "operationId": "DevicesController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "El dispositivo ya se había registrado con este `id`: es el mismo de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registrar un dispositivo",
+        "tags": [
+          "devices"
+        ]
+      },
+      "get": {
+        "description": "Del más antiguo al más nuevo, incluidos los dados de baja. Es de la gerencia (`device:revoke`). Pagina por cursor (ADR 0019).",
+        "operationId": "DevicesController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicePageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los dispositivos del negocio",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/devices/{deviceId}/revoke": {
+      "post": {
+        "description": "Es de la gerencia (`device:revoke`) y necesita conexión. No borra nada: el dispositivo queda marcado y su código no se vuelve a dar. Repetirlo responde lo mismo, con la primera fecha. Lo que el dispositivo ya vendió sin red se acepta igual y queda marcado (ADR 0009).",
+        "operationId": "DevicesController_revoke",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Dar de baja un dispositivo",
+        "tags": [
+          "devices"
+        ]
+      }
     }
   },
   "info": {
@@ -2605,6 +2779,90 @@
           "productId",
           "deltaMilli",
           "reason"
+        ]
+      },
+      "RegisterDeviceRequestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "El identificador que el propio dispositivo se inventó antes de hablar con el servidor. Es la llave de la idempotencia: registrar dos veces el mismo no gasta otro código."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true,
+            "example": "Caja del frente",
+            "description": "Para que el dueño reconozca el dispositivo en la lista."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "DeviceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4,
+            "example": "AA",
+            "description": "El código corto que encabeza los folios de este dispositivo (`AA-000142`). Lo da el servidor y no se reutiliza jamás."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Caja del frente"
+          },
+          "enrolledByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "enrolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Cuándo se dio de baja. `null` mientras siga activo."
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "enrolledByUserId",
+          "enrolledAt",
+          "revokedAt"
+        ]
+      },
+      "DevicePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ]
       },
       "ProblemErrorDto": {

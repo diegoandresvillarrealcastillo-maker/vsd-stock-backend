@@ -21,3 +21,4 @@ export const PURCHASES = Symbol('PURCHASES');
 export const WAREHOUSE = Symbol('WAREHOUSE');
 export const STOCK = Symbol('STOCK');
 export const STOCK_ADJUSTMENTS = Symbol('STOCK_ADJUSTMENTS');
+export const DEVICES = Symbol('DEVICES');
