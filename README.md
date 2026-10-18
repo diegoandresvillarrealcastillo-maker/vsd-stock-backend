@@ -110,6 +110,7 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 | `npm run db:migrate`        | Aplica las migraciones a `DATABASE_MIGRATION_URL`, tras confirmar el host.           |
 | `npm run db:check-schema`   | Falla si `prisma/schema.prisma` y la base migrada no dicen lo mismo.                 |
 | `npm run verify:pre`        | Comprueba PRE, el Supabase real: base, rol, seguridad por fila y claves (ADR 0025).  |
+| `npm run dev:identity`      | Un servicio de identidad de mentira para probar todo junto en tu máquina.            |
 | `npm run prisma:generate`   | Regenera el cliente de Prisma (también lo hace `npm ci`).                            |
 | `npm run test:integration`  | Pruebas contra ese PostgreSQL, en serie. Preparan la base solas.                     |
 | `npm run bench:stock`       | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.                |
@@ -131,6 +132,13 @@ por fila, disparadores, permisos).
 - **Pruebas de integración:** `npm run db:up` y `npm run test:integration`. Antes de correr, borran y recrean el esquema
   `public` de la base local de pruebas y le aplican las migraciones reales con Prisma; se **niegan** a hacerlo contra
   cualquier base que no sea local y cuyo nombre no termine en `_test`.
+- **Quién puede ver y hacer qué, y que un negocio no vea al otro:** una sola prueba de integración
+  ([`isolation-and-roles`](test/integration/isolation-and-roles.integration.spec.ts)) abre dos negocios por la API real, con
+  un dueño, un administrador y un cajero cada uno, y prueba **cada ruta** con cada rol, sin sesión, sin negocio, con una
+  baja y desde el otro negocio. La lista de rutas sale del enrutador: una ruta o un caso de uso nuevo sin su fila hace
+  fallar la prueba.
+- **Probar todo junto en tu máquina:** la base, la API y `npm run dev:identity`, sin Supabase (paso a paso en el
+  [plan de ambientes](docs/ambientes.md#probar-todo-junto-en-tu-máquina-sin-supabase)).
 - **Un ambiente real** (PRE, y PROD cuando se levante la pausa): las migraciones las aplica **una persona** con
   `npm run db:migrate`, que antes muestra a qué host apunta la conexión (sin la contraseña) y pide escribirlo. Los
   pasos están en el [plan de ambientes](docs/ambientes.md). Una migración aplicada no se edita; el cambio va en otra.
