@@ -85,7 +85,7 @@ negocio debe ser rechazado (ADR 0017).
 El equipo en el que corre la aplicación: un teléfono, una tablet o un computador. Guarda la base local de cada
 persona que lo usa y puede ser compartido entre varias. Se registra con conexión la primera vez y el servidor le
 da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`...); ese código encabeza sus folios
-(ADR 0016).
+(ADR 0016). Darlo de baja no borra nada: queda marcado y su código no se vuelve a dar (C3-01).
 
 **Código:** `Device` y `DeviceCode`
 
