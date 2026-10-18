@@ -7,6 +7,10 @@ lee una persona.
 > **La tabla es una copia de `ACTIONS` en `src/domain/model/role.ts`,** que es lo que ejecuta el sistema. Una prueba
 > (`test/docs/permisos.spec.ts`) las compara fila por fila y falla si dicen cosas distintas. Si cambias una, cambia
 > la otra en el mismo PR.
+>
+> **El cliente lee la misma tabla** en [`contract/permissions.json`](../../contract/permissions.json), que se genera del
+> dominio con `npm run permissions` y que el frontend guarda en copia (ADR 0022): decide qué ofrecer con lo mismo que
+> el servidor aplica.
 
 ## Los tres roles
 

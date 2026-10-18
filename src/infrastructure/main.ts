@@ -4,7 +4,13 @@ import { readConfig } from './config/env.js';
 
 async function bootstrap(): Promise<void> {
   const config = readConfig(process.env);
-  const app = await createApp({ corsOrigins: config.corsOrigins });
+  const app = await createApp({
+    corsOrigins: config.corsOrigins,
+    ...(config.database === undefined ? {} : { databaseUrl: config.database.url }),
+    ...(config.auth === undefined ? {} : { auth: config.auth }),
+  });
+  // Con SIGTERM (docker stop, el host) las conexiones a la base se cierran antes de salir.
+  app.enableShutdownHooks();
   await app.listen(config.port);
   const logger = new Logger('Bootstrap');
   logger.log(`vsd-stock-backend escuchando en el puerto ${config.port}`);
@@ -12,6 +18,18 @@ async function bootstrap(): Promise<void> {
     config.corsOrigins.length === 0
       ? 'CORS: ningun origen permitido (CORS_ORIGINS sin definir)'
       : `CORS: permitidos ${config.corsOrigins.join(', ')}`,
+  );
+  // Solo a donde apunta: la cadena de conexion lleva la clave y nunca se imprime.
+  logger.log(
+    config.database === undefined
+      ? 'Base de datos: sin configurar (DATABASE_URL sin definir)'
+      : `Base de datos: ${config.database.target}`,
+  );
+  // El emisor es publico (va en cada token); las claves que verifican se piden al servicio, no se guardan aqui.
+  logger.log(
+    config.auth === undefined
+      ? 'Identidad: sin configurar (AUTH_ISSUER y AUTH_JWKS_URL sin definir)'
+      : `Identidad: tokens de ${config.auth.issuer}`,
   );
 }
 

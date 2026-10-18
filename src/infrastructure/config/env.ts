@@ -3,6 +3,26 @@ export interface AppConfig {
   readonly port: number;
   /** Origenes (esquema://host[:puerto]) a los que se les permite leer las respuestas desde un navegador. */
   readonly corsOrigins: readonly string[];
+  /** La base de datos de la aplicacion; sin ella la API arranca, pero no atiende nada de negocio. */
+  readonly database: DatabaseConfig | undefined;
+  /** El servicio de identidad; sin el la API arranca, pero ninguna peticion de una persona se puede atender. */
+  readonly auth: AuthConfig | undefined;
+}
+
+export interface AuthConfig {
+  /** Quien firma los tokens (`iss`): `https://REF.supabase.co/auth/v1`. Se compara tal cual, sin normalizar. */
+  readonly issuer: string;
+  /** Donde el servicio de identidad publica sus claves PUBLICAS. */
+  readonly jwksUrl: string;
+  /** Para quien son los tokens (`aud`). */
+  readonly audience: string;
+}
+
+export interface DatabaseConfig {
+  /** La cadena de conexion completa: lleva la contrasena, asi que nunca se imprime. */
+  readonly url: string;
+  /** A donde apunta, sin la contrasena: `usuario@host:puerto/base`. Es lo unico que se registra. */
+  readonly target: string;
 }
 
 const DEFAULT_PORT = 3000;
@@ -17,6 +37,8 @@ export function readConfig(env: Readonly<Record<string, string | undefined>>): A
   return {
     port: readPort(env['PORT']),
     corsOrigins: readCorsOrigins(env['CORS_ORIGINS']),
+    database: readDatabase(env['DATABASE_URL']),
+    auth: readAuth(env),
   };
 }
 
@@ -72,4 +94,84 @@ function isOrigin(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * La conexion de la aplicacion (rol `stock_app`, ADR 0005). Opcional: sin ella la API arranca y /health responde,
+ * que es lo que necesita el contenedor para comprobarse. El mensaje de error nunca repite el valor: lleva la clave.
+ */
+function readDatabase(raw: string | undefined): DatabaseConfig | undefined {
+  if (raw === undefined || raw === '') {
+    return undefined;
+  }
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      'DATABASE_URL debe ser una cadena de conexion postgresql://usuario:clave@host:puerto/base',
+    );
+  }
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+    throw new Error(
+      'DATABASE_URL debe empezar por postgresql:// (se oculta el valor recibido: lleva la clave)',
+    );
+  }
+  const port = url.port === '' ? '5432' : url.port;
+  const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  return {
+    url: raw,
+    target: `${decodeURIComponent(url.username)}@${url.hostname}:${port}/${database}`,
+  };
+}
+
+const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+function readUrl(name: string, raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      `${name} debe ser una direccion https://... (recibido: ${JSON.stringify(raw)})`,
+    );
+  }
+  const secure = url.protocol === 'https:' || (url.protocol === 'http:' && LOCAL.has(url.hostname));
+  if (!secure) {
+    // Las claves publicas que llegan por http desde otra maquina las puede cambiar cualquiera en el camino.
+    throw new Error(
+      `${name} debe ser https (o http solo para esta maquina) (recibido: ${JSON.stringify(raw)})`,
+    );
+  }
+  return url;
+}
+
+/**
+ * El servicio de identidad (ADR 0022): se configura entero o no se configura. Una configuracion a medias detiene el
+ * arranque nombrando lo que falta, porque la API arrancaria creyendo que verifica tokens y rechazaria a todos.
+ */
+function readAuth(env: Readonly<Record<string, string | undefined>>): AuthConfig | undefined {
+  const issuer = env['AUTH_ISSUER'] ?? '';
+  const jwksUrl = env['AUTH_JWKS_URL'] ?? '';
+  const audience = env['AUTH_AUDIENCE'];
+  if (issuer === '' && jwksUrl === '' && (audience === undefined || audience === '')) {
+    return undefined;
+  }
+  if (issuer === '')
+    throw new Error('AUTH_ISSUER falta: el servicio de identidad se configura entero');
+  if (jwksUrl === '')
+    throw new Error('AUTH_JWKS_URL falta: el servicio de identidad se configura entero');
+  const issuerUrl = readUrl('AUTH_ISSUER', issuer);
+  if (issuerUrl.search !== '' || issuerUrl.hash !== '') {
+    throw new Error(
+      `AUTH_ISSUER no lleva consulta ni fragmento (recibido: ${JSON.stringify(issuer)})`,
+    );
+  }
+  readUrl('AUTH_JWKS_URL', jwksUrl);
+  if (audience !== undefined && audience.trim() === '') {
+    throw new Error(
+      'AUTH_AUDIENCE no puede estar en blanco: sin ella se aceptaria un token para cualquier destinatario',
+    );
+  }
+  return { issuer, jwksUrl, audience: audience ?? 'authenticated' };
 }

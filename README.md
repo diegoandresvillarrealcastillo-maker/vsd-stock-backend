@@ -32,13 +32,26 @@ Responde `200` con un JSON como `{"status":"ok","timestamp":"2026-10-16T19:51:35
 `.env.example` como `.env` y ajústalo. **El `.env` no se sube nunca al repositorio.** Una variable
 ya definida en el entorno tiene prioridad sobre la del archivo.
 
-| Variable                 | Qué es                                                                                                         | Por defecto |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ----------- |
-| `PORT`                   | Puerto en el que escucha la API (entero entre 1 y 65535).                                                      | `3000`      |
-| `CORS_ORIGINS`           | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                | ninguno     |
-| `DATABASE_MIGRATION_URL` | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee. | ninguno     |
+| Variable                 | Qué es                                                                                                                                                                                 | Por defecto     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `PORT`                   | Puerto en el que escucha la API (entero entre 1 y 65535).                                                                                                                              | `3000`          |
+| `CORS_ORIGINS`           | Orígenes, separados por comas, a los que se les permite leer las respuestas desde un navegador.                                                                                        | ninguno         |
+| `DATABASE_URL`           | Conexión de la **aplicación** a la base de datos, con el rol `stock_app` (nunca el dueño de las tablas). Lleva contraseña. Sin ella la API arranca, pero `GET /v1/ready` responde 503. | ninguno         |
+| `AUTH_ISSUER`            | Quién firma los tokens (`iss`), por ejemplo `https://REF.supabase.co/auth/v1`. Se compara tal cual. Va junto con `AUTH_JWKS_URL`.                                                      | ninguno         |
+| `AUTH_JWKS_URL`          | Dónde el servicio de identidad publica sus claves **públicas** (`.../.well-known/jwks.json`). Por `https`, o `http` solo en esta máquina.                                              | ninguno         |
+| `AUTH_AUDIENCE`          | Para quién son los tokens (`aud`).                                                                                                                                                     | `authenticated` |
+| `DATABASE_MIGRATION_URL` | Conexión del rol **dueño** de las tablas, solo para `npm run db:migrate` y el CLI de Prisma. La API no la lee.                                                                         | ninguno         |
 
-Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra.
+Si una variable es inválida, la aplicación se detiene al arrancar con un mensaje que la nombra, **sin repetir su
+valor** cuando es una cadena de conexión (lleva la clave).
+
+- `GET /health` dice que el proceso está en pie y **no toca la base**: lo usa el contenedor y el cliente para saber si
+  hay conexión.
+- `GET /v1/me` dice quién es la persona que demuestra el token (`Authorization: Bearer ...`) y, si ya tiene negocio, el
+  suyo y su rol, que salen de la base de datos y no del token ([ADR 0022](docs/adr/0022-identidad-y-sesion.md)). Las
+  tres `AUTH_*` se configuran **juntas o ninguna**; la API no guarda ningún secreto de identidad.
+- `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
+  `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 
 `DATABASE_MIGRATION_URL` es la única que lleva una contraseña en un ambiente real: va en tu `.env` y nunca en un
 chat, un Issue, un PR o un archivo del repositorio. Para la base local de Docker no hace falta (`npm run db:prepare`).
@@ -58,26 +71,28 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 
 ## Scripts
 
-| Script                     | Qué hace                                                                   |
-| -------------------------- | -------------------------------------------------------------------------- |
-| `npm run build`            | Compila a `dist/`.                                                         |
-| `npm start`                | Arranca la versión compilada.                                              |
-| `npm test`                 | Ejecuta las pruebas (Vitest).                                              |
-| `npm run test:coverage`    | Pruebas con cobertura; falla si `domain/` o `application/` bajan del 80 %. |
-| `npm run lint`             | ESLint, incluidas las **fronteras de la arquitectura**.                    |
-| `npm run format:check`     | Comprueba el formato con Prettier (`npm run format` lo corrige).           |
-| `npm run typecheck`        | Revisa los tipos del código y de las pruebas.                              |
-| `npm run openapi`          | Regenera `openapi.json`, el contrato con el frontend. Súbelo si cambia.    |
-| `npm run db:up`            | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).      |
-| `npm run db:prepare`       | Deja esa base con los roles y el esquema real (migraciones aplicadas).     |
-| `npm run db:migrate`       | Aplica las migraciones a `DATABASE_MIGRATION_URL`, tras confirmar el host. |
-| `npm run db:check-schema`  | Falla si `prisma/schema.prisma` y la base migrada no dicen lo mismo.       |
-| `npm run prisma:generate`  | Regenera el cliente de Prisma (también lo hace `npm ci`).                  |
-| `npm run test:integration` | Pruebas contra ese PostgreSQL, en serie. Preparan la base solas.           |
-| `npm run bench:stock`      | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.      |
-| `npm run vectors`          | Regenera los vectores de cálculo compartidos con el frontend (ADR 0014).   |
-| `npm run vectors:check`    | Falla si `contract/calculation-vectors.json` no coincide con su generador. |
-| `npm run db:down`          | Apaga la base local.                                                       |
+| Script                      | Qué hace                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run build`             | Compila a `dist/`.                                                                   |
+| `npm start`                 | Arranca la versión compilada.                                                        |
+| `npm test`                  | Ejecuta las pruebas (Vitest).                                                        |
+| `npm run test:coverage`     | Pruebas con cobertura; falla si `domain/` o `application/` bajan del 80 %.           |
+| `npm run lint`              | ESLint, incluidas las **fronteras de la arquitectura**.                              |
+| `npm run format:check`      | Comprueba el formato con Prettier (`npm run format` lo corrige).                     |
+| `npm run typecheck`         | Revisa los tipos del código y de las pruebas.                                        |
+| `npm run openapi`           | Regenera `openapi.json`, el contrato con el frontend. Súbelo si cambia.              |
+| `npm run db:up`             | Arranca un PostgreSQL local con Docker (solo escucha en `127.0.0.1`).                |
+| `npm run db:prepare`        | Deja esa base con los roles y el esquema real (migraciones aplicadas).               |
+| `npm run db:migrate`        | Aplica las migraciones a `DATABASE_MIGRATION_URL`, tras confirmar el host.           |
+| `npm run db:check-schema`   | Falla si `prisma/schema.prisma` y la base migrada no dicen lo mismo.                 |
+| `npm run prisma:generate`   | Regenera el cliente de Prisma (también lo hace `npm ci`).                            |
+| `npm run test:integration`  | Pruebas contra ese PostgreSQL, en serie. Preparan la base solas.                     |
+| `npm run bench:stock`       | Mide el costo de la existencia derivada (ADR 0013). No es una prueba.                |
+| `npm run vectors`           | Regenera los vectores de cálculo compartidos con el frontend (ADR 0014).             |
+| `npm run vectors:check`     | Falla si `contract/calculation-vectors.json` no coincide con su generador.           |
+| `npm run permissions`       | Regenera `contract/permissions.json`, la tabla de permisos que comparte el frontend. |
+| `npm run permissions:check` | Falla si ese archivo no coincide con el dominio (ADR 0017).                          |
+| `npm run db:down`           | Apaga la base local.                                                                 |
 
 ## Base de datos y migraciones
 
