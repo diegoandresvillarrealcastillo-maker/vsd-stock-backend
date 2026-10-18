@@ -17,6 +17,13 @@ useDefault = true
 description = "Contrasenas falsas de las pruebas que vigilan que no se filtre una cadena de conexion"
 regexes = ['''^(S3cretoLargo123|ContrasenaLarga123|SecretoLargo123)$''']
 
+# Clave PUBLICABLE FALSA de las pruebas de la verificacion de PRE. Va junto al nombre `KEY` y la regla de claves genericas
+# la toma por una clave. No es de ningun proyecto: la prueba necesita una cadena reconocible para comprobar que nunca sale en
+# el informe. Se nombra el valor exacto.
+[[allowlists]]
+description = "Clave publicable falsa de las pruebas de la verificacion de PRE"
+regexes = ['''^sb_publishable_FALSA1234567890$''']
+
 # Identificador FALSO de una persona (el `sub` de un token) en las pruebas. Es un UUID cualquiera, sin cuenta detras; la
 # regla de claves genericas lo toma por una clave porque se escribe junto al nombre `authUserId`. Se nombra el valor exacto.
 [[allowlists]]
