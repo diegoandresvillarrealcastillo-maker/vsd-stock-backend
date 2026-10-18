@@ -65,6 +65,46 @@ cualquier base que no sea local y cuyo nombre no termine en `_test`.
 No lleva contraseña ni datos reales: es una base desechable. En Windows, Docker Desktop puede instalarse por
 usuario y no arrancar solo: si `npm run db:up` dice que no encuentra el demonio, ábrelo a mano.
 
+### Probar todo junto en tu máquina (sin Supabase)
+
+Para recorrer la aplicación completa —entrar, abrir un negocio, invitar, ajustar existencias y comprar— sin un
+proyecto de Supabase: la base de trabajo, la API y un **servicio de identidad de mentira** que habla como Supabase Auth
+en lo único que usan el frontend y la API. Es lo que se hace al cerrar cada ciclo, y lo que se repite contra PRE cuando
+exista.
+
+```bash
+# 1. La base, con el esquema real (terminan solos)
+npm run db:up
+npm run db:prepare
+
+# 2. El servicio de identidad de mentira: se queda corriendo e imprime las variables que siguen
+npm run dev:identity          # http://127.0.0.1:54321/auth/v1; con --port elige otro
+
+# 3. La API, en otra terminal, con lo que imprimió el paso 2 (en bash; en PowerShell, `$env:NOMBRE = "valor"`)
+npm run build
+DATABASE_URL=postgresql://stock_app@127.0.0.1:5433/stock_test \
+AUTH_ISSUER=http://127.0.0.1:54321/auth/v1 \
+AUTH_JWKS_URL=http://127.0.0.1:54321/auth/v1/.well-known/jwks.json \
+CORS_ORIGINS=http://localhost:5173 \
+npm start
+```
+
+En `vsd-stock-frontend`, en su `.env.local` (no se sube): `VITE_API_URL=http://localhost:3000`,
+`VITE_AUTH_URL=http://127.0.0.1:54321/auth/v1` y `VITE_AUTH_PUBLISHABLE_KEY=sb_publishable_desarrollo_local`; después,
+`npm run dev`. Lo que se recorre y lo que se espera en cada pantalla está en el frontend, en
+`docs/recorrido-del-ciclo-2.md`.
+
+Lo que conviene saber del servicio de mentira:
+
+- **Es solo para desarrollo.** No valida correos, acepta cualquier clave de 6 o más caracteres, escucha solo en
+  `127.0.0.1` y guarda a las personas en memoria: se pierden al apagarlo. Las claves con que firma los tokens también
+  cambian en cada arranque, así que una sesión guardada en el navegador deja de valer.
+- Con `--confirm-email`, registrarse **no** entrega sesión, como un proyecto de Supabase que pide confirmar el correo.
+- **No prueba nada de Supabase**: ni el correo de confirmación, ni los límites de uso, ni el modo de claves del
+  proyecto. Eso lo cubre `npm run verify:pre` contra PRE ([ADR 0025](adr/0025-verificacion-de-pre-contra-supabase.md)).
+- Lo que sí comparte con el proyecto real es el código que verifica los tokens: la API usa el mismo verificador con las
+  claves públicas de uno y de otro, así que no hay una ruta de pruebas que el código de verdad no recorra.
+
 ## Variables de entorno
 
 Cada ambiente configura estas variables **en su propio panel**, nunca en el repositorio. Quien añada una
