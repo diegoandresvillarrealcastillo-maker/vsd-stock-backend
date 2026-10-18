@@ -14,6 +14,7 @@ import type {
   ProductRecord,
 } from '../../../domain/ports/out/catalog.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
+import { literal } from './like-literal.js';
 import type { PrismaTransaction } from './prisma-unit-of-work.js';
 
 const CATEGORY_SELECT = { id: true, name: true, createdAt: true } as const;
@@ -88,14 +89,6 @@ function asProductError(error: unknown): never {
     if (violation.text.includes('sku')) throw new SkuTakenError();
   }
   throw error;
-}
-
-/**
- * Prisma no escapa los comodines de LIKE: buscar «100%» o «A_R» sin esto compararia con «cualquier cosa». Con la barra
- * invertida, que es el escape por omision de PostgreSQL, se buscan como los caracteres que son.
- */
-function literal(text: string): string {
-  return text.replace(/[\\%_]/g, '\\$&');
 }
 
 function after(position: readonly [string, string] | undefined) {
@@ -198,6 +191,14 @@ export class PrismaCatalogRepository implements CatalogRepository {
   async findProduct(id: string): Promise<ProductRecord | null> {
     const row = await this.tx.product.findFirst({ where: { id }, select: PRODUCT_SELECT });
     return row === null ? null : productOf(row);
+  }
+
+  async findProducts(ids: readonly string[]): Promise<ProductRecord[]> {
+    const rows = await this.tx.product.findMany({
+      where: { id: { in: [...ids] } },
+      select: PRODUCT_SELECT,
+    });
+    return rows.map(productOf);
   }
 
   async hasStockMovements(productId: string): Promise<boolean> {

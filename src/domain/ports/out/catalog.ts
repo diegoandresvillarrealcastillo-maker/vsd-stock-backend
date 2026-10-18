@@ -56,6 +56,8 @@ export interface CatalogRepository {
 
   listProducts(request: ListRequest & { filter: ProductFilter }): Promise<ProductRecord[]>;
   findProduct(id: string): Promise<ProductRecord | null>;
+  /** Los productos de esos identificadores que existen en el negocio, en cualquier orden y sin repetir. */
+  findProducts(ids: readonly string[]): Promise<ProductRecord[]>;
   /** Si el producto ya tiene movimientos de stock: desde entonces su unidad no cambia. */
   hasStockMovements(productId: string): Promise<boolean>;
   /** Lanza `SkuTakenError` o `BarcodeTakenError`. */

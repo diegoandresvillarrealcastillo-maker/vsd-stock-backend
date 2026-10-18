@@ -9,6 +9,12 @@ import {
   UnitLockedError,
 } from '../../../domain/model/catalog-errors.js';
 import {
+  OperationIdReusedError,
+  PurchaseNotFoundError,
+  SupplierInUseError,
+  SupplierNotFoundError,
+} from '../../../domain/model/purchase-errors.js';
+import {
   AlreadyMemberError,
   ForbiddenError,
   InvitationExpiredError,
@@ -80,7 +86,9 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
   if (error instanceof DatabaseNotConfiguredError) {
     return new ApiProblem(503, 'database-not-configured', 'La base de datos no está configurada.');
   }
-  return problemOfPeopleError(error) ?? problemOfCatalogError(error);
+  return (
+    problemOfPeopleError(error) ?? problemOfCatalogError(error) ?? problemOfPurchasingError(error)
+  );
 }
 
 /** Los errores de negocio y personas (ADR 0023). */
@@ -162,6 +170,31 @@ function problemOfCatalogError(error: unknown): ApiProblem | undefined {
       409,
       'unit-locked',
       'La unidad no cambia cuando el producto ya tiene movimientos de existencias.',
+    );
+  }
+  return undefined;
+}
+
+/** Los errores de proveedores y compras (C2-06, ADR 0019). */
+function problemOfPurchasingError(error: unknown): ApiProblem | undefined {
+  if (error instanceof SupplierNotFoundError) {
+    return new ApiProblem(404, 'supplier-not-found', 'No existe ese proveedor en este negocio.');
+  }
+  if (error instanceof PurchaseNotFoundError) {
+    return new ApiProblem(404, 'purchase-not-found', 'No existe esa compra en este negocio.');
+  }
+  if (error instanceof SupplierInUseError) {
+    return new ApiProblem(
+      409,
+      'supplier-in-use',
+      'El proveedor ya tiene compras y no se puede borrar. Cámbiale el nombre si hace falta.',
+    );
+  }
+  if (error instanceof OperationIdReusedError) {
+    return new ApiProblem(
+      409,
+      'operation-id-reused',
+      'Ese identificador de operación ya se usó con otros datos. Genera uno nuevo para una compra distinta.',
     );
   }
   return undefined;

@@ -7,6 +7,7 @@ import type {
 import type { CatalogRepository } from '../../src/domain/ports/out/catalog.js';
 import type { BusinessScope, UnitOfWork } from '../../src/domain/ports/out/unit-of-work.js';
 import { FakeCatalog } from './fake-catalog.js';
+import { FakePurchasing } from './fake-purchasing.js';
 
 /** El orden en que la base lista a las personas: por nombre y luego por id. */
 const byNameThenId = (a: PersonRecord, b: PersonRecord): number =>
@@ -110,8 +111,13 @@ export function fakeUnitOfWork(
   people: PeopleRepository,
   businessName: string | null = 'Tienda La Esquina',
   catalog: CatalogRepository = new FakeCatalog(),
+  purchasing: FakePurchasing = new FakePurchasing(),
 ): UnitOfWork & { openedFor: string[] } {
   const openedFor: string[] = [];
+  // El libro de existencias lista los productos del catalogo de mentira, si lo hay.
+  if (purchasing.stock.catalog === undefined && catalog instanceof FakeCatalog) {
+    purchasing.stock.catalog = catalog;
+  }
   return {
     openedFor,
     inBusiness: (businessId, work) => {
@@ -124,6 +130,10 @@ export function fakeUnitOfWork(
         },
         people,
         catalog,
+        suppliers: purchasing.suppliers,
+        purchases: purchasing.purchases,
+        stock: purchasing.stock,
+        operations: purchasing.operations,
       };
       return work(scope);
     },

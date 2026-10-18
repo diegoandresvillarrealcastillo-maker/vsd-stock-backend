@@ -4,8 +4,10 @@ import {
   MAX_PAGE_SIZE,
   decodeCursor,
   encodeCursor,
+  endsInUuid,
   pageOf,
   readPageRequest,
+  timeThenUuid,
 } from './pagination.js';
 import { InputReader, ValidationFailedError, type FieldError } from './validation.js';
 
@@ -106,6 +108,50 @@ describe('the request for a page', () => {
     ]);
   });
 
+  describe('when the list says which positions it can use', () => {
+    const UUID = '33333333-3333-4333-8333-333333333333';
+    const readChecked = (query: unknown) => {
+      const reader = new InputReader(query, ['limit', 'cursor']);
+      const request = readPageRequest(reader, 2, endsInUuid);
+      reader.finish();
+      return request;
+    };
+
+    it('lets through a position that fits', () => {
+      const cursor = encodeCursor(['Ana', UUID]);
+
+      expect(readChecked({ cursor }).after).toEqual(['Ana', UUID]);
+    });
+
+    it('writes the identifier in any case', () => {
+      expect(endsInUuid(['Ana', UUID.toUpperCase()])).toBe(true);
+    });
+
+    it.each([['no-es-un-uuid'], [''], ['33333333-3333-4333-8333-33333333333']])(
+      'refuses a cursor that ends in %j, as it refuses any cursor that is not ours: the database would fail on it',
+      (id) => {
+        const cursor = encodeCursor(['Ana', id]);
+
+        expect(() => readChecked({ cursor })).toThrowError(ValidationFailedError);
+        try {
+          readChecked({ cursor });
+        } catch (error) {
+          expect((error as ValidationFailedError).errors).toEqual([
+            {
+              pointer: '/cursor',
+              code: 'invalid-cursor',
+              detail: 'El cursor no es válido. Pide la lista desde el principio.',
+            },
+          ]);
+        }
+      },
+    );
+
+    it('does not look at the last part when there is no part', () => {
+      expect(endsInUuid([])).toBe(false);
+    });
+  });
+
   it('reports a bad limit and a bad cursor together', () => {
     expect(errorsOf({ limit: '0', cursor: 'basura' }).map((e) => e.pointer)).toEqual([
       '/limit',
@@ -118,6 +164,32 @@ describe('the request for a page', () => {
       pointer: '/pagina',
       code: 'unknown-field',
     });
+  });
+});
+
+describe('a position made of a moment and an id', () => {
+  const UUID = '33333333-3333-4333-8333-333333333333';
+
+  it('is a moment written by this server, with its milliseconds, and an id', () => {
+    expect(timeThenUuid(['2026-10-17T12:00:00.000Z', UUID])).toBe(true);
+    expect(timeThenUuid(['2026-02-28T23:59:59.999Z', UUID.toUpperCase()])).toBe(true);
+  });
+
+  it.each([
+    ['text that is not a moment', ['ayer', UUID]],
+    ['a moment without milliseconds', ['2026-10-17T12:00:00Z', UUID]],
+    ['a moment with an offset instead of Z', ['2026-10-17T12:00:00.000+05:00', UUID]],
+    ['a day that does not exist', ['2026-02-30T12:00:00.000Z', UUID]],
+    [
+      'a year with more than four digits, which JavaScript writes back unchanged',
+      ['+275760-09-13T00:00:00.000Z', UUID],
+    ],
+    ['an hour that does not exist', ['2026-10-17T25:00:00.000Z', UUID]],
+    ['an id that is not a UUID', ['2026-10-17T12:00:00.000Z', 'no-es-un-uuid']],
+    ['too many parts', ['2026-10-17T12:00:00.000Z', UUID, UUID]],
+    ['a single part', [UUID]],
+  ])('is not %s', (_name, position) => {
+    expect(timeThenUuid(position)).toBe(false);
   });
 });
 
