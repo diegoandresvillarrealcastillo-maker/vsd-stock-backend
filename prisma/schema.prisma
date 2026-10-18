@@ -82,7 +82,8 @@ model AppUser {
   business        Business    @relation(fields: [idNegocio], references: [id])
   enrolledDevices Device[]
   operations      Operation[]
-  cashShifts      CashShift[]
+  cashShifts      CashShift[] @relation("ShiftOwner")
+  closedShifts    CashShift[] @relation("ShiftClosedBy")
   purchases       Purchase[]
 
   @@unique([idNegocio, id])
@@ -312,18 +313,21 @@ model Operation {
 // ---------------------------------------------------------------------------------------------------------
 
 model CashShift {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idNegocio     String    @map("id_negocio") @db.Uuid
-  deviceId      String    @map("device_id") @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  openedAt      DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
-  closedAt      DateTime? @map("closed_at") @db.Timestamptz(6)
-  openingAmount BigInt    @default(0) @map("opening_amount")
-  countedAmount BigInt?   @map("counted_amount")
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio      String    @map("id_negocio") @db.Uuid
+  deviceId       String    @map("device_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  openedAt       DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(6)
+  openingAmount  BigInt    @default(0) @map("opening_amount")
+  countedAmount  BigInt?   @map("counted_amount")
+  /// Quien lo cerro: la persona del turno o, con `shift:close-other`, alguien de la gerencia (ADR 0026).
+  closedByUserId String?   @map("closed_by_user_id") @db.Uuid
 
   business  Business       @relation(fields: [idNegocio], references: [id])
   device    Device         @relation(fields: [idNegocio, deviceId], references: [idNegocio, id])
-  user      AppUser        @relation(fields: [idNegocio, userId], references: [idNegocio, id])
+  user      AppUser        @relation("ShiftOwner", fields: [idNegocio, userId], references: [idNegocio, id])
+  closedBy  AppUser?       @relation("ShiftClosedBy", fields: [idNegocio, closedByUserId], references: [idNegocio, id])
   sales     Sale[]
   movements CashMovement[]
 
