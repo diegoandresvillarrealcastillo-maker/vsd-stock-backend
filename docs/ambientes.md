@@ -138,9 +138,10 @@ Las tres de identidad se configuran **juntas o ninguna** (ADR 0022).
 
 ## Preparar PRE
 
-Es la lista para quien opera los paneles. **Todavía no se hace:** el backend no necesita una base de datos hasta
-el Ciclo 2, y ahí es donde PRE se vuelve necesario. Esta lista no elige hosts: **dónde se despliega es un ADR
-del ciclo que prepare PRE** (ADR 0011). Cada punto dice qué hacer y qué comprobar después.
+Es la lista para quien opera los paneles. **Es lo que falta para cerrar el Ciclo 2:** la API ya usa una base de datos y
+un servicio de identidad, y lo único que no se ha podido probar es contra el Supabase real (pasos 2 a 4). Los pasos 1 y 5
+a 9 son del ciclo que despliegue PRE: esta lista no elige hosts, **dónde se despliega es un ADR** (ADR 0011). Cada punto
+dice qué hacer y qué comprobar después.
 
 1. **Decidir los hosts.** Un host para la API (corre la imagen de Docker del backend, ADR 0011) y uno para la
    web (sirve `dist/`). Se escribe como ADR y se aprueba antes de crear nada.
