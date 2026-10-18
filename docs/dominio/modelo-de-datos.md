@@ -119,8 +119,10 @@ Los esquemas de juguete de los ADR 0013 a 0016 eran más pequeños que el modelo
 
 - `stock_movement` y `stock_balance` llevan `warehouse_id` (hoy hay una bodega por local) y la clave del saldo es
   `(id_negocio, warehouse_id, product_id)`.
-- `sale` lleva `folio`, `folio_reported` y `folio_conflict` (ADR 0016); la hora, las marcas y el origen del
+- `sale` lleva `folio`, `folio_reported` y `folio_conflict` (ADR 0016); la hora, las marcas de la hora y el origen del
   dispositivo y de la persona viven en `operation`, no repetidos en cada tabla.
+- `sale` lleva `flags` (ADR 0027), las marcas que el servidor le puso al aceptarla, con una lista cerrada que la base hace
+  cumplir; `sale_line` y `payment` llevan `position`, el orden en que el dispositivo los vendió y los cobró.
 - `product` lleva `category_id` (opcional) y `min_stock_milli` (opcional, para la alerta de stock mínimo).
 - Toda tabla con `id_negocio` lleva RLS forzado y claves foráneas compuestas, como las de las pruebas.
 - **Relaciones que el diagrama no dibujaba y la migración sí exige** (se corrigió el diagrama, ver ADR 0021):

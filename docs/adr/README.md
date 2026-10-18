@@ -36,6 +36,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0024](0024-base-del-cliente-web.md)                                    | Base del cliente web: rutas, sesión, cliente de la API y estructura                             | Aceptada |
 | [0025](0025-verificacion-de-pre-contra-supabase.md)                     | Verificación de PRE contra Supabase real: qué se comprueba y por qué no imprime secretos        | Aceptada |
 | [0026](0026-turnos-de-caja-y-arqueo.md)                                 | Turnos de caja y arqueo: quién abre, qué pasa con una venta tardía y cómo se cuenta el efectivo | Aceptada |
+| [0027](0027-registro-de-ventas-y-atencion.md)                           | Registro de ventas y atención: se acepta siempre, lo raro se marca y alguien lo revisa          | Aceptada |
 
 ## Reglas
 
