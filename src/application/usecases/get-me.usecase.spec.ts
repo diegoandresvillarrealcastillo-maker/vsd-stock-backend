@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { UserInactiveError, type Session } from '../../domain/ports/in/authenticate.js';
 import type { Membership } from '../../domain/ports/out/identity-directory.js';
-import type { UnitOfWork } from '../../domain/ports/out/unit-of-work.js';
+import { FakePeople, fakeUnitOfWork } from '../../../test/support/fake-people.js';
 import { GetMeUseCase } from './get-me.usecase.js';
 
 const identity = {
@@ -17,22 +17,7 @@ const membership: Membership = {
   fullName: 'Ana Gómez',
 };
 
-/** Una unidad de trabajo de mentira que dice cual es el negocio y anota para quien se abrio. */
-const unitOfWork = (name: string | null): UnitOfWork & { openedFor: string[] } => {
-  const openedFor: string[] = [];
-  return {
-    openedFor,
-    inBusiness: (businessId, work) => {
-      openedFor.push(businessId);
-      return work({
-        businessId,
-        business: {
-          current: () => Promise.resolve(name === null ? null : { id: businessId, name }),
-        },
-      });
-    },
-  };
-};
+const unitOfWork = (name: string | null) => fakeUnitOfWork(new FakePeople(), name);
 
 describe('GetMeUseCase', () => {
   it('tells a member who they are and which business they work for', async () => {

@@ -43,6 +43,18 @@ export async function asIdentity<T>(
   return inTransactionAsApplication(pool, { 'app.auth_user_id': authUserId }, work);
 }
 
+/**
+ * Como `asApplication`, pero con los ajustes de contexto que se indiquen, sin mas: sirve para probar cada contexto
+ * (negocio, identidad, invitacion) y combinaciones que la API real no usa.
+ */
+export async function withSettings<T>(
+  pool: pg.Pool,
+  settings: Record<string, string>,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  return inTransactionAsApplication(pool, settings, work);
+}
+
 async function inTransactionAsApplication<T>(
   pool: pg.Pool,
   settings: Record<string, string>,

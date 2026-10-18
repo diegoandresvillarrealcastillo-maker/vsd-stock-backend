@@ -39,6 +39,7 @@ const KNOWN: Readonly<Record<number, { code: string; title: string }>> = {
   405: { code: 'method-not-allowed', title: 'Método no permitido' },
   408: { code: 'request-timeout', title: 'La petición tardó demasiado' },
   409: { code: 'conflict', title: 'Conflicto' },
+  410: { code: 'gone', title: 'Ya no está disponible' },
   413: { code: 'payload-too-large', title: 'La petición es demasiado grande' },
   415: { code: 'unsupported-media-type', title: 'Formato no admitido' },
   425: { code: 'too-early', title: 'Demasiado pronto' },

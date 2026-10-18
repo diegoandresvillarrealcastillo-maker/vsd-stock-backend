@@ -37,4 +37,23 @@ describe('NotConfiguredDatabase', () => {
 
     await expect(attempt).rejects.toBeInstanceOf(DatabaseNotConfiguredError);
   });
+
+  it('cannot open a business or redeem an invitation either, and says the database is missing', async () => {
+    const database = new NotConfiguredDatabase();
+
+    await expect(
+      database.createBusiness({
+        businessName: 'Tienda',
+        owner: { authUserId: '11111111-1111-4111-8111-111111111111', email: null, fullName: 'Ana' },
+      }),
+    ).rejects.toBeInstanceOf(DatabaseNotConfiguredError);
+    await expect(
+      database.redeem({
+        invitationHash: 'hash',
+        authUserId: '11111111-1111-4111-8111-111111111111',
+        email: null,
+        now: new Date(),
+      }),
+    ).rejects.toBeInstanceOf(DatabaseNotConfiguredError);
+  });
 });

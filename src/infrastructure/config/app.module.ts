@@ -7,33 +7,64 @@ import {
   type OnModuleDestroy,
   type Provider,
 } from '@nestjs/common';
+import {
+  BusinessesController,
+  InvitationsController,
+  UsersController,
+} from '../../adapters/in/http/business-people.controller.js';
 import { HealthController } from '../../adapters/in/http/health.controller.js';
 import { MeController } from '../../adapters/in/http/me.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
-import { AUTHENTICATE, GET_HEALTH, GET_ME, GET_READINESS } from '../../adapters/in/http/tokens.js';
+import {
+  AUTHENTICATE,
+  CREATE_BUSINESS,
+  GET_HEALTH,
+  GET_ME,
+  GET_READINESS,
+  INVITE_USER,
+  LIST_USERS,
+  REDEEM_INVITATION,
+  REGENERATE_INVITATION,
+  UPDATE_USER,
+} from '../../adapters/in/http/tokens.js';
 import { SystemClock } from '../../adapters/out/clock/system-clock.js';
 import { JoseTokenVerifier } from '../../adapters/out/identity/jose-token-verifier.js';
 import { UnconfiguredTokenVerifier } from '../../adapters/out/identity/unconfigured-token-verifier.js';
+import { CryptoInvitationCodes } from '../../adapters/out/invitations/crypto-invitation-codes.js';
 import { createPrismaClient } from '../../adapters/out/persistence/create-prisma-client.js';
 import { NotConfiguredDatabase } from '../../adapters/out/persistence/not-configured-database.js';
+import { PrismaBusinessSetup } from '../../adapters/out/persistence/prisma-business-setup.js';
 import { PrismaDatabaseHealth } from '../../adapters/out/persistence/prisma-database-health.js';
 import { PrismaIdentityDirectory } from '../../adapters/out/persistence/prisma-identity-directory.js';
+import { PrismaInvitationRedeemer } from '../../adapters/out/persistence/prisma-invitation-redeemer.js';
 import { PrismaUnitOfWork } from '../../adapters/out/persistence/prisma-unit-of-work.js';
 import { AuthenticateUseCase } from '../../application/usecases/authenticate.usecase.js';
+import { CreateBusinessUseCase } from '../../application/usecases/create-business.usecase.js';
 import { GetHealthUseCase } from '../../application/usecases/get-health.usecase.js';
 import { GetMeUseCase } from '../../application/usecases/get-me.usecase.js';
 import { GetReadinessUseCase } from '../../application/usecases/get-readiness.usecase.js';
+import { InviteUserUseCase } from '../../application/usecases/invite-user.usecase.js';
+import { ListUsersUseCase } from '../../application/usecases/list-users.usecase.js';
+import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
+import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { UpdateUserUseCase } from '../../application/usecases/update-user.usecase.js';
 import type { Clock } from '../../domain/ports/out/clock.js';
+import type { BusinessSetup } from '../../domain/ports/out/business-setup.js';
 import type { DatabaseHealth } from '../../domain/ports/out/database-health.js';
 import type { IdentityDirectory } from '../../domain/ports/out/identity-directory.js';
+import type { InvitationCodes } from '../../domain/ports/out/invitation-codes.js';
+import type { InvitationRedeemer } from '../../domain/ports/out/invitation-redeemer.js';
 import type { TokenVerifier } from '../../domain/ports/out/token-verifier.js';
 import type { UnitOfWork } from '../../domain/ports/out/unit-of-work.js';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { AuthConfig } from './env.js';
 import {
+  BUSINESS_SETUP,
   CLOCK,
   DATABASE_HEALTH,
   IDENTITY_DIRECTORY,
+  INVITATION_CODES,
+  INVITATION_REDEEMER,
   PRISMA_CLIENT,
   TOKEN_VERIFIER,
   UNIT_OF_WORK,
@@ -70,6 +101,8 @@ export class AppModule {
             { provide: DATABASE_HEALTH, useClass: NotConfiguredDatabase },
             { provide: UNIT_OF_WORK, useClass: NotConfiguredDatabase },
             { provide: IDENTITY_DIRECTORY, useClass: NotConfiguredDatabase },
+            { provide: BUSINESS_SETUP, useClass: NotConfiguredDatabase },
+            { provide: INVITATION_REDEEMER, useClass: NotConfiguredDatabase },
           ]
         : [
             { provide: PRISMA_CLIENT, useValue: createPrismaClient(options.databaseUrl) },
@@ -86,6 +119,16 @@ export class AppModule {
             {
               provide: IDENTITY_DIRECTORY,
               useFactory: (prisma: PrismaClient) => new PrismaIdentityDirectory(prisma),
+              inject: [PRISMA_CLIENT],
+            },
+            {
+              provide: BUSINESS_SETUP,
+              useFactory: (work: PrismaUnitOfWork) => new PrismaBusinessSetup(work),
+              inject: [UNIT_OF_WORK],
+            },
+            {
+              provide: INVITATION_REDEEMER,
+              useFactory: (prisma: PrismaClient) => new PrismaInvitationRedeemer(prisma),
               inject: [PRISMA_CLIENT],
             },
           ];
@@ -108,13 +151,59 @@ export class AppModule {
       },
     ];
 
+    // Negocio y personas (ADR 0023).
+    const peopleProviders: Provider[] = [
+      { provide: INVITATION_CODES, useClass: CryptoInvitationCodes },
+      {
+        provide: CREATE_BUSINESS,
+        useFactory: (setup: BusinessSetup) => new CreateBusinessUseCase(setup),
+        inject: [BUSINESS_SETUP],
+      },
+      {
+        provide: INVITE_USER,
+        useFactory: (work: UnitOfWork, codes: InvitationCodes, clock: Clock) =>
+          new InviteUserUseCase(work, codes, clock),
+        inject: [UNIT_OF_WORK, INVITATION_CODES, CLOCK],
+      },
+      {
+        provide: REGENERATE_INVITATION,
+        useFactory: (work: UnitOfWork, codes: InvitationCodes, clock: Clock) =>
+          new RegenerateInvitationUseCase(work, codes, clock),
+        inject: [UNIT_OF_WORK, INVITATION_CODES, CLOCK],
+      },
+      {
+        provide: REDEEM_INVITATION,
+        useFactory: (redeemer: InvitationRedeemer, codes: InvitationCodes, clock: Clock) =>
+          new RedeemInvitationUseCase(redeemer, codes, clock),
+        inject: [INVITATION_REDEEMER, INVITATION_CODES, CLOCK],
+      },
+      {
+        provide: LIST_USERS,
+        useFactory: (work: UnitOfWork) => new ListUsersUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+      {
+        provide: UPDATE_USER,
+        useFactory: (work: UnitOfWork) => new UpdateUserUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+    ];
+
     return {
       module: AppModule,
-      controllers: [HealthController, ReadinessController, MeController],
+      controllers: [
+        HealthController,
+        ReadinessController,
+        MeController,
+        BusinessesController,
+        InvitationsController,
+        UsersController,
+      ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
         ...databaseProviders,
         ...identityProviders,
+        ...peopleProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,

@@ -104,6 +104,315 @@
           "identity"
         ]
       }
+    },
+    "/v1/businesses": {
+      "post": {
+        "description": "Lo hace quien se registró y aún no pertenece a ningún negocio: queda como su dueño. El negocio nace con una sucursal y una bodega, ambas «Principal». Responde 409 `already-member` si la persona ya trabaja en un negocio.",
+        "operationId": "BusinessesController_open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBusinessRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "El lugar de la persona en el negocio nuevo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeMembershipDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abrir un negocio",
+        "tags": [
+          "business"
+        ]
+      }
+    },
+    "/v1/invitations": {
+      "post": {
+        "description": "Crea la invitación y devuelve su código **una sola vez**. El servidor solo guarda su hash. La invitación vale siete días. Un administrador invita cajeros; invitar administradores es del dueño.",
+        "operationId": "InvitationsController_invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Invitar a alguien al negocio",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/invitations/redeem": {
+      "post": {
+        "description": "Une a quien llama al negocio del código, con el rol con que lo invitaron. Un código sirve una sola vez. Responde 404 `invitation-not-found` si no existe, ya se usó o se dio de baja (el mismo mensaje para todo), 410 `invitation-expired` si venció y 409 `already-member` si la persona ya trabaja en un negocio.",
+        "operationId": "InvitationsController_redeem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemInvitationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "El lugar de la persona en el negocio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeMembershipDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Canjear una invitación",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/users": {
+      "get": {
+        "description": "Ordenadas por nombre. Las ve la gerencia (dueño y administradores). Pagina por cursor (ADR 0019).",
+        "operationId": "UsersController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Las personas del negocio",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/users/{userId}": {
+      "patch": {
+        "description": "Cambia el nombre, el rol o el alta (`active`). Al cajero lo administra la gerencia; a un administrador o a un dueño, solo el dueño. Nunca deja al negocio sin un dueño activo (409 `last-owner`). Una persona dada de baja pierde el acceso en su siguiente petición.",
+        "operationId": "UsersController_update",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambiar a una persona",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/users/{userId}/invitation": {
+      "post": {
+        "description": "Da un código nuevo a una invitación pendiente (se perdió o venció); el anterior deja de servir. Responde 409 `invitation-not-pending` si la persona ya canjeó la suya o está dada de baja.",
+        "operationId": "UsersController_renew",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Renovar una invitación",
+        "tags": [
+          "people"
+        ]
+      }
     }
   },
   "info": {
@@ -256,6 +565,195 @@
           "identity",
           "membership"
         ]
+      },
+      "CreateBusinessRequestDto": {
+        "type": "object",
+        "properties": {
+          "businessName": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Tienda La Esquina"
+          },
+          "ownerName": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Ana Gómez",
+            "description": "Cómo se llama quien lo abre."
+          }
+        },
+        "required": [
+          "businessName",
+          "ownerName"
+        ]
+      },
+      "InviteUserRequestDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Luis Pérez"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "cashier"
+            ],
+            "description": "Administrador o cajero. Un administrador solo puede invitar cajeros; invitar administradores es del dueño. No se invita a un dueño: se nombra cambiando el rol de una persona que ya está."
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "example": "luis@ejemplo.co",
+            "description": "Opcional. Se guarda en minúsculas. No se envía ningún correo."
+          }
+        },
+        "required": [
+          "fullName",
+          "role"
+        ]
+      },
+      "PersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Luis Pérez"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "cashier"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "pending",
+              "inactive"
+            ],
+            "description": "`pending` es una invitación que nadie canjeó; `inactive`, una persona (o invitación) dada de baja."
+          },
+          "invitationExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Hasta cuándo vale su invitación, mientras esté pendiente."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "fullName",
+          "email",
+          "role",
+          "status",
+          "invitationExpiresAt",
+          "createdAt"
+        ]
+      },
+      "InvitationCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "0123-4567-89AB-CDEF",
+            "description": "El código de la invitación, de cuatro en cuatro para dictarlo. **Se muestra una sola vez**: el servidor solo guarda su hash. Si se pierde, se renueva."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "code",
+          "expiresAt"
+        ]
+      },
+      "InvitationDto": {
+        "type": "object",
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "invitation": {
+            "$ref": "#/components/schemas/InvitationCodeDto"
+          }
+        },
+        "required": [
+          "person",
+          "invitation"
+        ]
+      },
+      "RedeemInvitationRequestDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "0123-4567-89AB-CDEF",
+            "description": "El código que dieron a la persona. Se acepta en mayúsculas o minúsculas, con o sin guiones y espacios."
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "PersonPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más. Es opaco: no se interpreta."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "UpdateUserRequestDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "description": "Cambiar el rol de un cajero a administrador, o de cualquiera a dueño, es del dueño."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "`false` da de baja a la persona (o revoca su invitación); `true` la reactiva. No se puede dar de baja al último dueño."
+          }
+        }
       },
       "ProblemErrorDto": {
         "type": "object",

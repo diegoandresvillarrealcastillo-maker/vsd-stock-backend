@@ -12,6 +12,10 @@ lee una persona.
 > dominio con `npm run permissions` y que el frontend guarda en copia (ADR 0022): decide qué ofrecer con lo mismo que
 > el servidor aplica.
 
+> **Dónde se aplican las acciones de personas** (ADR 0023): invitar, renovar una invitación, listar y cambiar a una
+> persona usan `user:manage-cashiers` si la persona es cajero y `user:manage-admins` si es administrador o dueño; para
+> cambiar un rol hace falta poder con el de antes **y** con el de después. El negocio nunca se queda sin un dueño activo.
+
 ## Los tres roles
 
 - **Dueño:** quien creó el negocio. Puede todo, incluidos los datos del negocio y las personas con más
