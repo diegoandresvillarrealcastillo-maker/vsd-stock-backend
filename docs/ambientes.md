@@ -8,12 +8,12 @@ paneles (GitHub, Supabase y los hosts). **PROD está en pausa.**
 
 ## Los ambientes
 
-| Ambiente  | Rama               | Para qué                                                  | Dónde corre                                                              | Datos                      | Estado                        |
-| --------- | ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------- | ----------------------------- |
-| **Local** | tu rama de trabajo | Desarrollar y probar en tu equipo.                        | Tu máquina: la API en `localhost:3000`, el frontend en `localhost:5173`. | Base de trabajo en Docker. | **Disponible**                |
-| **DEV**   | `desarrollo`       | Integrar. Es la rama donde entra todo lo revisado.        | No tiene servidor: la verifica el CI de GitHub en cada PR y cada push.   | Base desechable del CI.    | **Disponible**                |
-| **PRE**   | `preproduccion`    | Probar con el equipo, con datos ficticios, antes de PROD. | Un proyecto de Supabase, un host para la API y un host para la web.      | Ficticios.                 | **Por crear** (ver más abajo) |
-| **PROD**  | `produccion`       | Lo que usan los negocios de verdad.                       | Igual que PRE, aparte.                                                   | Reales.                    | **En pausa**                  |
+| Ambiente  | Rama               | Para qué                                                  | Dónde corre                                                              | Datos                      | Estado                                               |
+| --------- | ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------- | ---------------------------------------------------- |
+| **Local** | tu rama de trabajo | Desarrollar y probar en tu equipo.                        | Tu máquina: la API en `localhost:3000`, el frontend en `localhost:5173`. | Base de trabajo en Docker. | **Disponible**                                       |
+| **DEV**   | `desarrollo`       | Integrar. Es la rama donde entra todo lo revisado.        | No tiene servidor: la verifica el CI de GitHub en cada PR y cada push.   | Base desechable del CI.    | **Disponible**                                       |
+| **PRE**   | `preproduccion`    | Probar con el equipo, con datos ficticios, antes de PROD. | Un proyecto de Supabase, un host para la API y un host para la web.      | Ficticios.                 | **Supabase listo**; faltan los hosts (ver más abajo) |
+| **PROD**  | `produccion`       | Lo que usan los negocios de verdad.                       | Igual que PRE, aparte.                                                   | Reales.                    | **En pausa**                                         |
 
 La cadena es `tu rama → desarrollo → preproduccion → produccion` (ADR 0010). La rama por defecto de los dos
 repositorios es `produccion`, así que cada PR indica su base de forma explícita: `--base desarrollo`.
@@ -138,10 +138,10 @@ Las tres de identidad se configuran **juntas o ninguna** (ADR 0022).
 
 ## Preparar PRE
 
-Es la lista para quien opera los paneles. **Es lo que falta para cerrar el Ciclo 2:** la API ya usa una base de datos y
-un servicio de identidad, y lo único que no se ha podido probar es contra el Supabase real (pasos 2 a 4). Los pasos 1 y 5
-a 9 son del ciclo que despliegue PRE: esta lista no elige hosts, **dónde se despliega es un ADR** (ADR 0011). Cada punto
-dice qué hacer y qué comprobar después.
+Es la lista para quien opera los paneles. **Los pasos 2 a 4 (el proyecto de Supabase, el rol de la aplicación, las
+migraciones y su verificación) ya se hicieron y pasaron**: ver [Estado de PRE](#estado-de-pre). Los pasos 1 y 5 a 9 son
+del ciclo que despliegue PRE: esta lista no elige hosts, **dónde se despliega es un ADR** (ADR 0011). Cada punto dice
+qué hacer y qué comprobar después.
 
 1. **Decidir los hosts.** Un host para la API (corre la imagen de Docker del backend, ADR 0011) y uno para la
    web (sirve `dist/`). Se escribe como ADR y se aprueba antes de crear nada.
@@ -189,6 +189,31 @@ dice qué hacer y qué comprobar después.
 
 **Si algo sale mal en PRE:** vuelve a publicar la imagen o la compilación anterior desde el panel del host. Una
 migración **no** se revierte sola; por eso se aplica con cuidado y a mano.
+
+### Estado de PRE
+
+- **Proyecto de Supabase:** creado por Samuel. La aplicación se conecta por el pooler de sesión (puerto 5432) con el rol
+  `stock_app`; el rol `postgres` solo se usa para migrar.
+- **Migraciones:** aplicadas el 2026-10-18 por Diego con `npm run db:migrate` (20 tablas, 2 migraciones).
+- **`npm run verify:pre`: 2026-10-18, Diego, 9 pasan, 0 fallan, 0 omitidas** (ADR 0025). Es la primera corrida contra el
+  Supabase real.
+- **Lo que dejó comprobado:** el adaptador de Prisma funciona a través del pooler (25 transacciones sin que el negocio de
+  una se filtre a otra); la seguridad por fila está forzada y sin decir de qué negocio se pregunta no se ve nada; `anon`,
+  `authenticated` y `service_role` no tienen privilegios sobre las tablas; la aplicación no puede cambiar ni borrar el
+  historial; y el proyecto firma con una clave asimétrica (ES256).
+- **Lo que sigue sin comprobarse:** una sesión real de una persona (entrar y renovar el token), el correo de
+  confirmación y los límites de uso, y los hosts de la API y de la web (Ciclo 3).
+
+`verify:pre` se vuelve a correr cuando cambie el esquema, el proyecto o la documentación de Supabase en la que se apoya.
+Dos cosas que se aprendieron en esta primera corrida:
+
+- **Un `P1001` («no puedo llegar a la base») con el servidor del pooler respondiendo no es una contraseña mala:** una
+  contraseña mala da `P1000` (se comprobó contra este mismo pooler). En la primera corrida el `P1001` salió justo después
+  de cambiar la contraseña del rol `postgres` y se resolvió esperando unos minutos y repitiendo; la causa exacta no se
+  confirmó (una base que se reinicia es la explicación más probable). Si se repite, se mira que el proyecto diga
+  _Healthy_ y no _Paused_.
+- **El host del pooler no es el mismo en todos los proyectos** (`aws-0-…` o `aws-1-…`, y la región). Se copia del botón
+  _Connect_ del proyecto; con uno equivocado, Supabase responde que no encuentra el tenant o el usuario.
 
 ## Promover entre ambientes
 
