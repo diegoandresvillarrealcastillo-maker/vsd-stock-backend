@@ -5,3 +5,4 @@
  * infrastructure/ quien importa este token para decidir que se inyecta.
  */
 export const GET_HEALTH = Symbol('GET_HEALTH');
+export const GET_READINESS = Symbol('GET_READINESS');
