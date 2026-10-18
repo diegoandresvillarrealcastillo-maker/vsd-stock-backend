@@ -6,6 +6,7 @@ import type {
 } from '../../../domain/ports/out/unit-of-work.js';
 import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
 import { PrismaCatalogRepository } from './prisma-catalog.js';
+import { PrismaDeviceRepository } from './prisma-devices.js';
 import { PrismaOperationRegistry } from './prisma-operations.js';
 import { PrismaPeopleRepository } from './prisma-people.js';
 import { PrismaPurchaseRepository } from './prisma-purchases.js';
@@ -54,6 +55,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
         purchases: new PrismaPurchaseRepository(tx, businessId),
         stock: new PrismaStockLedger(tx, businessId),
         operations: new PrismaOperationRegistry(tx, businessId),
+        devices: new PrismaDeviceRepository(tx, businessId),
       }),
     );
   }
