@@ -22,3 +22,5 @@ export const WAREHOUSE = Symbol('WAREHOUSE');
 export const STOCK = Symbol('STOCK');
 export const STOCK_ADJUSTMENTS = Symbol('STOCK_ADJUSTMENTS');
 export const DEVICES = Symbol('DEVICES');
+export const SHIFTS = Symbol('SHIFTS');
+export const CASH_MOVEMENTS = Symbol('CASH_MOVEMENTS');

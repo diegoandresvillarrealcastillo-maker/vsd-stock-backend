@@ -25,6 +25,12 @@ import {
   NoMembershipError,
   PersonNotFoundError,
 } from '../../../domain/model/people-errors.js';
+import {
+  ShiftAlreadyOpenError,
+  ShiftClosedError,
+  ShiftIdReusedError,
+  ShiftNotFoundError,
+} from '../../../domain/model/shift-errors.js';
 import { ValidationFailedError } from '../../../domain/model/validation.js';
 import { AuthenticationError, UserInactiveError } from '../../../domain/ports/in/authenticate.js';
 import { ApiProblem } from './api-problem.js';
@@ -91,7 +97,8 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
     problemOfPeopleError(error) ??
     problemOfCatalogError(error) ??
     problemOfPurchasingError(error) ??
-    problemOfDeviceError(error)
+    problemOfDeviceError(error) ??
+    problemOfShiftError(error)
   );
 }
 
@@ -214,6 +221,35 @@ function problemOfDeviceError(error: unknown): ApiProblem | undefined {
       409,
       'device-id-reused',
       'Ese identificador de dispositivo ya se registró con otros datos. Genera uno nuevo para un dispositivo distinto.',
+    );
+  }
+  return undefined;
+}
+
+/** Los errores de los turnos de caja (C3-02, ADR 0026). */
+function problemOfShiftError(error: unknown): ApiProblem | undefined {
+  if (error instanceof ShiftNotFoundError) {
+    return new ApiProblem(404, 'shift-not-found', 'No existe ese turno en este negocio.');
+  }
+  if (error instanceof ShiftAlreadyOpenError) {
+    return new ApiProblem(
+      409,
+      'shift-already-open',
+      'Ya tienes un turno abierto en este dispositivo. Ciérralo antes de abrir otro.',
+    );
+  }
+  if (error instanceof ShiftIdReusedError) {
+    return new ApiProblem(
+      409,
+      'shift-id-reused',
+      'Ese identificador de turno ya es de otro turno. Genera uno nuevo para un turno distinto.',
+    );
+  }
+  if (error instanceof ShiftClosedError) {
+    return new ApiProblem(
+      409,
+      'shift-closed',
+      'El turno ya está cerrado: su arqueo ya se hizo y no se cambia.',
     );
   }
   return undefined;

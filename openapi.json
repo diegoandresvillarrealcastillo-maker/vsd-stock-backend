@@ -1683,6 +1683,331 @@
           "devices"
         ]
       }
+    },
+    "/v1/shifts": {
+      "post": {
+        "description": "Lo puede hacer cualquier persona del negocio (`shift:open`) y también un dispositivo sin conexión, que la manda después. Un turno abierto por dispositivo y por persona: abrir otro responde 409 `shift-already-open`. El `shiftId` lo crea el dispositivo. Es idempotente por `operationId` (ADR 0019): la primera vez responde 201; repetirla con los mismos datos responde 200 con el turno tal como está ahora y `Idempotent-Replayed: true`; con otros datos, 409 `operation-id-reused`. Un dispositivo que no existe en el negocio es un 400 del campo `/deviceId`.",
+        "operationId": "ShiftsController_open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenShiftRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "El turno ya se había abierto con esta operación: es el mismo de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abrir un turno de caja",
+        "tags": [
+          "shifts"
+        ]
+      },
+      "get": {
+        "description": "Del más nuevo al más viejo. Un cajero ve solo los suyos; la gerencia ve todos (`sale:view-all`). No trae el arqueo: se pide con el turno. Pagina por cursor (ADR 0019).",
+        "operationId": "ShiftsController_list",
+        "parameters": [
+          {
+            "name": "open",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "`true` deja solo los turnos abiertos y `false` solo los cerrados."
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los turnos",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/v1/shifts/{shiftId}/close": {
+      "post": {
+        "description": "La persona del turno lo cierra (`shift:close`); la gerencia puede cerrar el de otra persona (`shift:close-other`, solo con conexión). Registra el efectivo contado, la hora efectiva y quién lo cerró, y responde con el arqueo. Es idempotente por `operationId`: repetirla responde 200 con `Idempotent-Replayed: true`. Cerrar un turno que ya estaba cerrado con otra operación es 409 `shift-closed`.",
+        "operationId": "ShiftsController_close",
+        "parameters": [
+          {
+            "name": "shiftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseShiftRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cerrar un turno con su arqueo",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/v1/shifts/{shiftId}": {
+      "get": {
+        "description": "El arqueo: lo que debía haber en la caja (lo inicial, más lo cobrado en efectivo, más lo que entró, menos lo que salió) frente a lo contado, con las ventas tardías aparte. El turno de otra persona no existe para un cajero.",
+        "operationId": "ShiftsController_get",
+        "parameters": [
+          {
+            "name": "shiftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un turno con su arqueo",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/v1/cash-movements": {
+      "post": {
+        "description": "Es de la gerencia (`cash-movement:create`) y necesita conexión. Entra o sale efectivo de un turno ABIERTO con su motivo (el del turno cerrado ya se contó: 409 `shift-closed`). Es idempotente por `operationId`: la primera vez responde 201; repetirla con los mismos datos responde 200 con el mismo movimiento y `Idempotent-Replayed: true`; con otros datos, 409 `operation-id-reused`. Un turno que no existe es un 400 del campo `/shiftId`.",
+        "operationId": "CashMovementsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashMovementRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "El movimiento ya se había registrado con esta operación: es el mismo de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashMovementDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashMovementDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mover efectivo fuera de una venta",
+        "tags": [
+          "shifts"
+        ]
+      }
     }
   },
   "info": {
@@ -2863,6 +3188,368 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "OpenShiftRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La clave de idempotencia (ADR 0019): repetir la operación con el mismo `operationId` y los mismos datos no la duplica."
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "El identificador del turno, que crea el dispositivo para poder vender sin haber hablado con el servidor."
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Un dispositivo registrado del negocio."
+          },
+          "openingAmount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "example": 50000,
+            "description": "Pesos enteros con los que arranca la caja."
+          },
+          "deviceTime": {
+            "type": "string",
+            "example": "2026-10-18T14:59:50.000Z",
+            "maxLength": 40,
+            "description": "La hora del reloj del dispositivo al hacer la operación, en ISO 8601 UTC con `Z`. El servidor la corrige con `clockOffsetMs`; una que no se puede leer no se rechaza: se usa la hora de llegada y se marca (ADR 0016)."
+          },
+          "clockOffsetMs": {
+            "type": "integer",
+            "nullable": true,
+            "example": 4000,
+            "description": "Cuántos milisegundos adelanta el servidor al reloj del dispositivo en su última medición contra `GET /health`; `null` o ausente si nunca se midió. No forma parte de la huella de idempotencia: se mide de nuevo en cada intento."
+          }
+        },
+        "required": [
+          "operationId",
+          "shiftId",
+          "deviceId",
+          "openingAmount",
+          "deviceTime"
+        ]
+      },
+      "LateSalesDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "example": 1
+          },
+          "cashAmount": {
+            "type": "integer",
+            "example": 4000
+          }
+        },
+        "required": [
+          "count",
+          "cashAmount"
+        ]
+      },
+      "ShiftCashSummaryDto": {
+        "type": "object",
+        "properties": {
+          "openingAmount": {
+            "type": "integer"
+          },
+          "cashSales": {
+            "type": "integer",
+            "description": "Efectivo cobrado en las ventas del turno que llegaron a tiempo."
+          },
+          "cashIn": {
+            "type": "integer",
+            "description": "Efectivo que entró a la caja fuera de una venta."
+          },
+          "cashOut": {
+            "type": "integer",
+            "description": "Efectivo que salió de la caja fuera de una venta (un pago, una devolución)."
+          },
+          "expectedAmount": {
+            "type": "integer",
+            "description": "Lo que debía haber: lo inicial, más lo cobrado, más lo que entró, menos lo que salió."
+          },
+          "countedAmount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "difference": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Contado menos esperado: negativo es que falta y positivo que sobra. `null` mientras el turno sigue abierto."
+          },
+          "lateSales": {
+            "description": "Las ventas que ocurrieron DESPUÉS de cerrarse el turno y llegaron a él (por ejemplo, de un teléfono sin conexión): no entran en lo esperado y se muestran aparte.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LateSalesDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "openingAmount",
+          "cashSales",
+          "cashIn",
+          "cashOut",
+          "expectedAmount",
+          "countedAmount",
+          "difference",
+          "lateSales"
+        ]
+      },
+      "ShiftDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La persona del turno."
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora efectiva de la apertura (ADR 0016)."
+          },
+          "closedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "`null` mientras el turno sigue abierto."
+          },
+          "closedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Quien lo cerró: la persona del turno o alguien de la gerencia."
+          },
+          "openingAmount": {
+            "type": "integer",
+            "example": 50000
+          },
+          "countedAmount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Lo que la persona contó al cerrar; `null` mientras sigue abierto."
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ShiftCashSummaryDto"
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "userId",
+          "openedAt",
+          "closedAt",
+          "closedByUserId",
+          "openingAmount",
+          "countedAmount",
+          "summary"
+        ]
+      },
+      "CloseShiftRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La clave de idempotencia (ADR 0019): repetir la operación con el mismo `operationId` y los mismos datos no la duplica."
+          },
+          "countedAmount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "example": 187500,
+            "description": "Pesos enteros que la persona contó en la caja."
+          },
+          "deviceTime": {
+            "type": "string",
+            "example": "2026-10-18T14:59:50.000Z",
+            "maxLength": 40,
+            "description": "La hora del reloj del dispositivo al hacer la operación, en ISO 8601 UTC con `Z`. El servidor la corrige con `clockOffsetMs`; una que no se puede leer no se rechaza: se usa la hora de llegada y se marca (ADR 0016)."
+          },
+          "clockOffsetMs": {
+            "type": "integer",
+            "nullable": true,
+            "example": 4000,
+            "description": "Cuántos milisegundos adelanta el servidor al reloj del dispositivo en su última medición contra `GET /health`; `null` o ausente si nunca se midió. No forma parte de la huella de idempotencia: se mide de nuevo en cada intento."
+          }
+        },
+        "required": [
+          "operationId",
+          "countedAmount",
+          "deviceTime"
+        ]
+      },
+      "ShiftSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La persona del turno."
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora efectiva de la apertura (ADR 0016)."
+          },
+          "closedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "`null` mientras el turno sigue abierto."
+          },
+          "closedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Quien lo cerró: la persona del turno o alguien de la gerencia."
+          },
+          "openingAmount": {
+            "type": "integer",
+            "example": 50000
+          },
+          "countedAmount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Lo que la persona contó al cerrar; `null` mientras sigue abierto."
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "userId",
+          "openedAt",
+          "closedAt",
+          "closedByUserId",
+          "openingAmount",
+          "countedAmount"
+        ]
+      },
+      "ShiftPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShiftSummaryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CashMovementRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La clave de idempotencia (ADR 0019): repetir la operación con el mismo `operationId` y los mismos datos no la duplica."
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Un turno ABIERTO del negocio."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ],
+            "description": "`in` entra a la caja, `out` sale."
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000,
+            "example": 20000,
+            "description": "Pesos enteros, de uno en adelante: el sentido lo dice `direction`."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "Pago al proveedor de bebidas",
+            "description": "Obligatorio: un movimiento sin motivo es un hueco en la caja."
+          }
+        },
+        "required": [
+          "operationId",
+          "shiftId",
+          "direction",
+          "amount",
+          "reason"
+        ]
+      },
+      "CashMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "shiftId",
+          "direction",
+          "amount",
+          "reason"
         ]
       },
       "ProblemErrorDto": {
