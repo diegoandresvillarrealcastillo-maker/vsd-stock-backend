@@ -1,4 +1,5 @@
 import type { CatalogRepository } from './catalog.js';
+import type { DeviceRepository } from './devices.js';
 import type { OperationRegistry } from './operations.js';
 import type { PeopleRepository } from './people.js';
 import type { PurchaseRepository } from './purchases.js';
@@ -31,6 +32,7 @@ export interface BusinessScope {
   readonly purchases: PurchaseRepository;
   readonly stock: StockLedger;
   readonly operations: OperationRegistry;
+  readonly devices: DeviceRepository;
 }
 
 /**
