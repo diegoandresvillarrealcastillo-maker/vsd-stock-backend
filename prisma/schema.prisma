@@ -356,15 +356,17 @@ model CashMovement {
 // ---------------------------------------------------------------------------------------------------------
 
 model Sale {
-  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idNegocio       String  @map("id_negocio") @db.Uuid
-  operationId     String  @map("operation_id") @db.Uuid
-  shiftId         String  @map("shift_id") @db.Uuid
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio       String   @map("id_negocio") @db.Uuid
+  operationId     String   @map("operation_id") @db.Uuid
+  shiftId         String   @map("shift_id") @db.Uuid
   folio           String
-  folioReported   String  @map("folio_reported")
-  folioConflict   Boolean @default(false) @map("folio_conflict")
+  folioReported   String   @map("folio_reported")
+  folioConflict   Boolean  @default(false) @map("folio_conflict")
   total           BigInt
-  needsAdjustment Boolean @map("needs_adjustment")
+  needsAdjustment Boolean  @map("needs_adjustment")
+  /// Las marcas que el servidor le puso al aceptarla (ADR 0027); las de la hora viven en la operacion.
+  flags           String[] @default([])
 
   business  Business   @relation(fields: [idNegocio], references: [id])
   operation Operation  @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
@@ -388,6 +390,8 @@ model SaleLine {
   unitPrice     BigInt @map("unit_price")
   taxRateBp     Int    @map("tax_rate_bp")
   discount      BigInt @default(0)
+  /// El orden en que el dispositivo la vendio (desde cero).
+  position      Int    @default(0)
 
   business Business @relation(fields: [idNegocio], references: [id])
   sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
@@ -403,6 +407,8 @@ model Payment {
   method    String
   amount    BigInt
   reference String?
+  /// El orden en que el dispositivo lo cobro (desde cero).
+  position  Int     @default(0)
 
   business Business @relation(fields: [idNegocio], references: [id])
   sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
