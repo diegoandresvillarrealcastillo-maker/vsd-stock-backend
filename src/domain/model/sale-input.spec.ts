@@ -249,6 +249,18 @@ describe('the lines of a sale', () => {
     );
   });
 
+  it('accepts the biggest price the database keeps and not a peso more', () => {
+    const line = (unitPrice: number) => ({ ...valid.lines[0], quantityMilli: 1, unitPrice });
+
+    expect(
+      sale({ ...valid, total: 1_000_000_000, lines: [line(MAX_PESOS)], payments: [] }).lines[0]
+        ?.unitPrice,
+    ).toBe(MAX_PESOS);
+    expect(codes(errorsOf({ ...valid, lines: [line(MAX_PESOS + 1)] }))).toEqual([
+      '/lines/0/unitPrice:out-of-range',
+    ]);
+  });
+
   it('refuses a discount that is negative or larger than the line', () => {
     const line = (discount: unknown) => ({ ...valid.lines[0], discount });
 

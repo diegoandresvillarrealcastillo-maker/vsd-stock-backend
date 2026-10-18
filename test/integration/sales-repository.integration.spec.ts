@@ -546,6 +546,43 @@ describe('sales against PostgreSQL (C3-03)', () => {
     });
   });
 
+  describe('the order of what was sold', () => {
+    it('asks the database for the order, because rows come back in the order they were written', async () => {
+      const operationId = randomUUID();
+      const saleId = randomUUID();
+      await admin.query(
+        `INSERT INTO operation (id_negocio, operation_id, kind, user_id, device_id) VALUES ($1, $2, 'sale', $3, $4)`,
+        [BUSINESS_A, operationId, a.ownerId, a.deviceId],
+      );
+      await admin.query(
+        `INSERT INTO sale (id, id_negocio, operation_id, shift_id, folio, folio_reported, total, needs_adjustment)
+         VALUES ($1, $2, $3, $4, 'ZZ-777000', 'ZZ-777000', 3, false)`,
+        [saleId, BUSINESS_A, operationId, shiftId],
+      );
+      // Escritas al reves: la fila fisica de la posicion 2 va primero.
+      for (const position of [2, 0, 1]) {
+        await admin.query(
+          `INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, position)
+           VALUES ($1, $2, $3, $4, 1, 0, $5)`,
+          [BUSINESS_A, saleId, cola, 1000 * (position + 1), position],
+        );
+      }
+      for (const position of [1, 0]) {
+        await admin.query(
+          `INSERT INTO payment (id_negocio, sale_id, method, amount, position) VALUES ($1, $2, 'cash', $3, $4)`,
+          [BUSINESS_A, saleId, position + 1, position],
+        );
+      }
+
+      const found = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+        s.sales.findByOperation(operationId),
+      );
+
+      expect(found?.lines.map((line) => line.quantityMilli)).toEqual([1000, 2000, 3000]);
+      expect(found?.payments.map((payment) => payment.amount)).toEqual([1, 2]);
+    });
+  });
+
   describe('who sees it', () => {
     it('is not visible to another business, not even by its operation', async () => {
       const { sale } = await sell();
@@ -581,6 +618,18 @@ describe('sales against PostgreSQL (C3-03)', () => {
           [BUSINESS_A, operationId, shiftId, folio, folioReported],
         );
       };
+
+    it('has exactly the flags of the domain in its check, no more and no fewer', async () => {
+      const [row] = await select(
+        admin,
+        "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'sale_flags_known'",
+      );
+      const allowed = [...String(row?.['definition']).matchAll(/'([a-z-]+)'/g)].map(
+        (match) => match[1],
+      );
+
+      expect([...allowed].sort()).toEqual([...SALE_FLAGS].sort());
+    });
 
     it('knows every flag of the domain and no other', async () => {
       await expect(
@@ -633,6 +682,11 @@ describe('sales against PostgreSQL (C3-03)', () => {
       await expect(payment(9)).resolves.toBeUndefined();
       await expect(payment(10)).rejects.toThrow(/payment_position_range/);
       await expect(payment(-1)).rejects.toThrow(/payment_position_range/);
+    });
+
+    it('wants a folio that says something', async () => {
+      await expect(insertSale("'{}'::text[]", '', 'ZZ-3')()).rejects.toThrow(/sale_folio_shape/);
+      await expect(insertSale("'{}'::text[]", 'ZZ-4', '')()).rejects.toThrow(/sale_folio_shape/);
     });
 
     it('wants a folio of reasonable size', async () => {

@@ -125,7 +125,6 @@ export class PrismaStockLedger implements StockLedger {
   }
 
   async quantitiesOf(productIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    if (productIds.length === 0) return new Map();
     const rows = await this.tx.stockBalance.findMany({
       where: { productId: { in: [...productIds] } },
       select: { productId: true, quantity: true },

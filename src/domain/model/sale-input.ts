@@ -173,7 +173,8 @@ export function readSale(reader: InputReader): SaleInput {
 /** La tarifa de IVA de una linea: un entero de los que el catalogo conoce. */
 function readTaxRate(line: InputReader): number {
   const rate = line.integer('taxRateBp', { label: 'La tarifa de IVA', min: 0, max: 10_000 });
-  if (line.raw('taxRateBp') !== undefined && !TAX_RATES_BP.includes(rate)) {
+  // Si no sirvio, el valor de relleno es 0, que es una tarifa valida: no se le suma el problema de «tarifa desconocida».
+  if (!TAX_RATES_BP.includes(rate)) {
     line.fail(
       '/taxRateBp',
       'invalid-value',

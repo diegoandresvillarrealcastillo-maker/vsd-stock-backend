@@ -317,6 +317,8 @@ describe('sales, end to end (C3-03)', () => {
 
       const occurred = new Date(reply.body.occurredAt).getTime();
       expect(Math.abs(occurred - (new Date(body.deviceTime).getTime() + 5_000))).toBeLessThan(1);
+      // Lo que el servidor se entero es ahora; lo que ocurrio, hace un minuto: son dos horas distintas (ADR 0016).
+      expect(new Date(reply.body.receivedAt).getTime() - occurred).toBeGreaterThan(50_000);
       const [row] = await select(
         admin,
         'SELECT device_id, device_time_raw, time_source, kind FROM operation WHERE operation_id = $1',

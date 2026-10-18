@@ -249,6 +249,31 @@ describe('SalesUseCase', () => {
       expect(sale.flags).toEqual(['payment-mismatch']);
     });
 
+    it('splits the tax of what was really charged: the discount of a line is taken into account', async () => {
+      const { useCase } = await setup();
+      const discounted = { ...body().lines[0], discount: 700 };
+
+      const { sale } = await useCase.create(
+        memberSession('cashier'),
+        body({
+          total: 12_300,
+          lines: [discounted, body().lines[1]],
+          payments: [{ method: 'cash', amount: 12_300 }],
+        }),
+      );
+
+      expect(sale.total).toBe(12_300);
+      expect(sale.summary).toEqual({
+        total: 12_300,
+        base: 11_294,
+        tax: 1_006,
+        byRate: [
+          { rateBp: 0, total: 6_000, base: 6_000, tax: 0 },
+          { rateBp: 1900, total: 6_300, base: 5_294, tax: 1_006 },
+        ],
+      });
+    });
+
     it('accepts a product that was archived after the device sold it', async () => {
       const { useCase } = await setup();
       const line = {
