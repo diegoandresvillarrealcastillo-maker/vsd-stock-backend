@@ -25,6 +25,7 @@
     "db:prepare": "node scripts/db-prepare.ts",
     "db:migrate": "node scripts/db-migrate.ts",
     "db:check-schema": "node scripts/db-check-schema.ts",
+    "verify:pre": "npm run build && node --env-file-if-exists=.env.pre scripts/verify-pre.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

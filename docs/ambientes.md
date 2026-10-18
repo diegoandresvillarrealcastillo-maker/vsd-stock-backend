@@ -98,16 +98,17 @@ Las tres de identidad se configuran **juntas o ninguna** (ADR 0022).
 
 ## Preparar PRE
 
-Es la lista para quien opera los paneles. **Todavía no se hace:** el backend no necesita una base de datos hasta
-el Ciclo 2, y ahí es donde PRE se vuelve necesario. Esta lista no elige hosts: **dónde se despliega es un ADR
-del ciclo que prepare PRE** (ADR 0011). Cada punto dice qué hacer y qué comprobar después.
+Es la lista para quien opera los paneles. **Es lo que falta para cerrar el Ciclo 2:** la API ya usa una base de datos y
+un servicio de identidad, y lo único que no se ha podido probar es contra el Supabase real (pasos 2 a 4). Los pasos 1 y 5
+a 9 son del ciclo que despliegue PRE: esta lista no elige hosts, **dónde se despliega es un ADR** (ADR 0011). Cada punto
+dice qué hacer y qué comprobar después.
 
 1. **Decidir los hosts.** Un host para la API (corre la imagen de Docker del backend, ADR 0011) y uno para la
    web (sirve `dist/`). Se escribe como ADR y se aprueba antes de crear nada.
 2. **Crear el proyecto de Supabase de PRE**, aparte del de cualquier otro ambiente. Anota dónde guardas su
    contraseña (un gestor de contraseñas, no un archivo). _Comprobar:_ conecta con el **pooler**; en la versión
    anterior de VSD Stock el host directo solo publicaba IPv6 y no resolvía desde algunas redes, así que
-   confírmalo al crearlo. El ADR 0005 permite el pooler en modo transacción.
+   confírmalo al crearlo. Se usa el pooler **de sesión** (puerto 5432), no el transaccional (ADR 0025).
 3. **Crear el rol de la aplicación** (`stock_app`, sin privilegios: no propietario de las tablas, no
    superusuario, sin `BYPASSRLS`, ADR 0005). En el SQL Editor, con una contraseña de 32 letras y números que solo
    vive en tu gestor de contraseñas (borra después la consulta guardada, porque lleva la contraseña):
@@ -126,6 +127,13 @@ del ciclo que prepare PRE** (ADR 0011). Cada punto dice qué hacer y qué compro
    conexión, sin la contraseña, y pide escribir el host para confirmar**: una migración sobre el ambiente equivocado
    no se deshace. Una migración ya aplicada no se edita (el ajuste va en una nueva) y `prisma migrate reset` está
    prohibido. La migración se niega a correr si falta el rol `stock_app`.
+   **Comprobar PRE antes de seguir:** con las variables puestas en `.env.pre` (no se versiona; mismos nombres que en
+   el `.env`: `DATABASE_URL` con el rol `stock_app` y el pooler de sesión, `DATABASE_MIGRATION_URL`, `AUTH_ISSUER`,
+   `AUTH_JWKS_URL`), corre `npm run verify:pre`. Comprueba la dirección y el rol, el esquema y las migraciones, la
+   seguridad por fila, que la Data API de Supabase no pueda leer nada, que el historial no se pueda cambiar, que las
+   transacciones de la aplicación funcionen a través del pooler y que el proyecto publique claves de firma asimétricas.
+   **Imprime un informe y ningún secreto:** puedes pegar la salida completa en el chat. Sale con 0 solo si todo pasa
+   (ADR 0025).
 5. **Crear el servicio de la API** con la imagen del backend y fijar sus variables (`PORT`, `CORS_ORIGINS`
    con la dirección del frontend de PRE, `DATABASE_URL` y, cuando existan, las de identidad). La comprobación
    de salud del host debe apuntar a `GET /health`. _Comprobar:_ `GET /health` responde `200` y un JSON con

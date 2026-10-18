@@ -34,6 +34,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0022](0022-identidad-y-sesion.md)                                      | Identidad y sesión: quién llama, a qué negocio pertenece y cuánto dura                      | Aceptada |
 | [0023](0023-negocio-personas-e-invitaciones.md)                         | Negocio, personas e invitaciones: cómo se abre un negocio y cómo se suma gente              | Aceptada |
 | [0024](0024-base-del-cliente-web.md)                                    | Base del cliente web: rutas, sesión, cliente de la API y estructura                         | Aceptada |
+| [0025](0025-verificacion-de-pre-contra-supabase.md)                     | Verificación de PRE contra Supabase real: qué se comprueba y por qué no imprime secretos    | Aceptada |
 
 ## Reglas
 
