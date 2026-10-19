@@ -146,7 +146,13 @@ describe('the steps for PRE (docs/ambientes.md)', () => {
     expect(guide).toMatch(/dormida|duerme/);
   });
 
-  it('say that the secrets are never pasted in a chat', () => {
-    expect(guide).toMatch(/nunca[^.]*chat/i);
+  it('say that the secrets are never pasted in a chat, in the very section that asks for them', () => {
+    const section = guide.slice(guide.indexOf('## Crear los hosts de PRE'));
+
+    expect(section).toContain('Los secretos no se pegan en ningún chat');
+  });
+
+  it('give the command that checks the hosts, ready to copy', () => {
+    expect(guide).toMatch(/```bash\nnpm run verify:deploy -- https:\/\/\S+ https:\/\/\S+\n```/);
   });
 });

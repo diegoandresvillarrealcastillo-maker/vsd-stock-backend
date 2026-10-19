@@ -102,12 +102,31 @@ describe('the addresses that were given', () => {
     ['https://vsd.onrender.com/v1', 'sin ruta'],
     ['https://usuario:clave@vsd.onrender.com', 'usuario'],
     ['https://localhost:3000', 'local'],
+    ['https://127.0.0.1:3000', 'local'],
+    ['https://[::1]:3000', 'local'],
+    ['https://:clave@vsd.onrender.com', 'usuario'],
+    ['https://usuario@vsd.onrender.com', 'usuario'],
+    ['https://vsd.onrender.com/?x=1', 'sin ruta'],
+    ['https://vsd.onrender.com/#a', 'sin ruta'],
   ])('refuses %s', async (apiUrl, reason) => {
     const { checks, asked } = await run({ apiUrl });
 
     expect(byId(checks, 'api-url')).toMatchObject({ status: 'fail' });
     expect(byId(checks, 'api-url').detail).toContain(reason);
     expect(asked).toEqual([]);
+  });
+
+  it('asks for the address of the API also when it was written as blank space', async () => {
+    const { checks, asked } = await run({ apiUrl: '   ' });
+
+    expect(byId(checks, 'api-url').detail).toContain('Falta PRE_API_URL');
+    expect(asked).toEqual([]);
+  });
+
+  it('does not take a web address that is only blank space for one: it was not given', async () => {
+    const { checks } = await run({ apiUrl: API, webUrl: '   ' });
+
+    expect(byId(checks, 'web-url').status).toBe('skip');
   });
 
   it('accepts a trailing slash: it is the same address', async () => {
@@ -149,6 +168,9 @@ describe('the API', () => {
 
     expect(byId(checks, 'health')).toMatchObject({ status: 'fail' });
     expect(byId(checks, 'health').detail).toContain('502');
+    expect(byId(checks, 'ready').status).toBe('skip');
+    expect(byId(checks, 'auth').status).toBe('skip');
+    expect(byId(checks, 'cors-allowed').status).toBe('skip');
   });
 
   it('fails, without throwing, when the request does not even get an answer', async () => {
@@ -183,6 +205,37 @@ describe('the API', () => {
       expect(byId(checks, 'wake')).toMatchObject({ status: 'pass' });
       expect(byId(checks, 'wake').detail).toContain('dormida');
       expect(byId(checks, 'wake').detail).toContain('47');
+    });
+
+    it('waits two minutes: a minute is what the free plan takes, and the report does not give up before', () => {
+      expect(WAKE_LIMIT_MS).toBe(120_000);
+    });
+
+    it.each([
+      [119_000, 'pass'],
+      [120_000, 'pass'],
+      [121_000, 'fail'],
+    ])('wakes in %i ms: %s', async (elapsedMs, status) => {
+      const { checks } = await run(
+        { apiUrl: API },
+        { [`GET ${API}/health`]: reply(200, { elapsedMs }) },
+      );
+
+      expect(byId(checks, 'wake').status).toBe(status);
+    });
+
+    it.each([
+      [500, 'despierta'],
+      [4_000, 'despierta'],
+      [5_000, 'despierta'],
+      [5_001, 'dormida'],
+    ])('says what it was after answering in %i ms', async (elapsedMs, word) => {
+      const { checks } = await run(
+        { apiUrl: API },
+        { [`GET ${API}/health`]: reply(200, { elapsedMs }) },
+      );
+
+      expect(byId(checks, 'wake').detail).toContain(word);
     });
 
     it('says it was awake when the first answer was quick', async () => {
@@ -220,6 +273,29 @@ describe('the API', () => {
 
       expect(calls).toBe(2);
       expect(byId(checks, 'warm')).toMatchObject({ status: 'fail' });
+    });
+
+    it.each([
+      [300, 'pass'],
+      [2_000, 'pass'],
+      [3_000, 'pass'],
+      [3_001, 'fail'],
+    ])('judges a second answer of %i ms: %s', async (elapsedMs, status) => {
+      const { probes } = hosts();
+      let calls = 0;
+      const second: DeployProbes = {
+        request: (url, options) => {
+          if (url === `${API}/health`) {
+            calls += 1;
+            return Promise.resolve(reply(200, { elapsedMs: calls === 1 ? 300 : elapsedMs }));
+          }
+          return probes.request(url, options);
+        },
+      };
+
+      const checks = await runDeployChecks({ apiUrl: API, webUrl: undefined, probes: second });
+
+      expect(byId(checks, 'warm').status).toBe(status);
     });
 
     it('passes when the second answer is quick', async () => {
@@ -262,9 +338,10 @@ describe('the API', () => {
     });
 
     it.each([
-      [200, 'sin sesión'],
-      [500, 'AUTH_ISSUER'],
-      [503, 'AUTH_JWKS_URL'],
+      [200, 'la API no está pidiendo la sesión'],
+      [500, 'AUTH_AUDIENCE'],
+      [503, 'las claves del servicio de identidad'],
+      [404, 'Se esperaba 401'],
     ])('fails when a call without a session gets a %i', async (status, hint) => {
       const { checks } = await run({ apiUrl: API }, { [`GET ${API}/v1/me`]: reply(status) });
 
@@ -351,6 +428,26 @@ describe('the web', () => {
     expect(byId(checks, 'web-index')).toMatchObject({ status: 'fail' });
   });
 
+  it('says the status when the first page is a 404, and not just that it is not the application', async () => {
+    const { checks } = await run({ apiUrl: API, webUrl: WEB }, { [`GET ${WEB}/`]: reply(404) });
+
+    expect(byId(checks, 'web-index').detail).toContain('404');
+  });
+
+  it('fails when a route of the application is not a page', async () => {
+    const { checks } = await run(
+      { apiUrl: API, webUrl: WEB },
+      {
+        [`GET ${WEB}/mostrador`]: reply(200, {
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        }),
+      },
+    );
+
+    expect(byId(checks, 'web-routes')).toMatchObject({ status: 'fail' });
+  });
+
   it('serves the application from any route, so that reloading on /mostrador does not give a 404', async () => {
     const { checks } = await run({ apiUrl: API, webUrl: WEB });
 
@@ -420,6 +517,8 @@ describe('the web', () => {
       ['a 404', reply(404)],
       ['something that is not JSON', reply(200, { body: '<html>' })],
       ['a manifest without a name', reply(200, { body: '{"short_name":"x"}' })],
+      ['a manifest with an empty name', reply(200, { body: '{"name":""}' })],
+      ['a manifest whose name is not text', reply(200, { body: '{"name":5}' })],
     ])('fails when the manifest is %s', async (_name, answer) => {
       const { checks } = await run(
         { apiUrl: API, webUrl: WEB },
@@ -434,6 +533,29 @@ describe('the web', () => {
 
       expect(byId(checks, 'web-assets')).toMatchObject({ status: 'pass' });
       expect(byId(checks, 'web-assets').detail).toContain('/assets/index-abc.js');
+    });
+
+    it.each([
+      ['public, max-age=31536000', 'pass'],
+      ['max-age=31536001', 'pass'],
+      ['public, immutable', 'pass'],
+      ['max-age=31535999', 'sin caché larga'],
+      ['public, max-age=1000', 'sin caché larga'],
+      ['max-age=0', 'sin caché larga'],
+    ])('judges the rule %s for the files', async (rule, word) => {
+      const { checks } = await run(
+        { apiUrl: API, webUrl: WEB },
+        {
+          [`GET ${WEB}/assets/index-abc.js`]: reply(200, {
+            headers: { 'content-type': 'text/javascript', 'cache-control': rule },
+          }),
+        },
+      );
+
+      expect(byId(checks, 'web-assets').status).toBe('pass');
+      if (word === 'pass')
+        expect(byId(checks, 'web-assets').detail).not.toContain('sin caché larga');
+      else expect(byId(checks, 'web-assets').detail).toContain(word);
     });
 
     it('fails when a file that the page asks for is not there', async () => {
@@ -488,6 +610,15 @@ describe('the report', () => {
     const { checks } = await run({ apiUrl: API }, { [`GET ${API}/v1/ready`]: reply(503) });
 
     expect(exitCodeOf(checks)).toBe(1);
+  });
+
+  it('never prints a long error in full either', async () => {
+    const { checks } = await run(
+      { apiUrl: API },
+      { [`GET ${API}/health`]: new Error('x'.repeat(2_000)) },
+    );
+
+    expect(byId(checks, 'health').detail.length).toBeLessThan(400);
   });
 
   it('never prints what the hosts answered in full: only a short, one-line description', async () => {
