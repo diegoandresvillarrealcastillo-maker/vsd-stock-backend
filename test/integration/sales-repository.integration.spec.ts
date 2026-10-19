@@ -8,7 +8,8 @@ import { SalesUseCase } from '../../src/application/usecases/sales.usecase.js';
 import type { TimeFlag } from '../../src/domain/model/operation-time.js';
 import type { Role } from '../../src/domain/model/role.js';
 import { requiresAttention } from '../../src/domain/model/sale-attention.js';
-import { SaleNotFoundError } from '../../src/domain/model/sale-errors.js';
+import { SaleNotFoundError, SaleVoidedError } from '../../src/domain/model/sale-errors.js';
+import { ShiftRequiredError } from '../../src/domain/model/shift-errors.js';
 import { SALE_FLAGS, type SaleFlag } from '../../src/domain/model/sale-flags.js';
 import type { Session } from '../../src/domain/ports/in/authenticate.js';
 import type { PaymentRecord, SaleLineRecord } from '../../src/domain/ports/out/sales.js';
@@ -1235,5 +1236,209 @@ describe('sales against PostgreSQL (C3-03)', () => {
       );
       return id;
     }
+  });
+
+  describe('voiding (C3-05)', () => {
+    const owner = () => session(a.ownerId, BUSINESS_A, 'owner');
+    const voidBody = (change: Record<string, unknown> = {}) => ({
+      operationId: randomUUID(),
+      shiftId,
+      reason: 'Se equivocó',
+      ...change,
+    });
+
+    /** Una persona de la gerencia con su propio turno abierto. */
+    async function managerWithShift(): Promise<{ userId: string; shift: string; as: Session }> {
+      const userId = randomUUID();
+      await admin.query(
+        `INSERT INTO app_user (id, id_negocio, auth_user_id, full_name, role) VALUES ($1, $2, $3, 'Gerente', 'admin')`,
+        [userId, BUSINESS_A, randomUUID()],
+      );
+      const shift = randomUUID();
+      await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+        s.shifts.open({
+          id: shift,
+          deviceId: a.deviceId,
+          userId,
+          openedAt: new Date(Date.now() - 600_000),
+          openingAmount: 0,
+        }),
+      );
+      return { userId, shift, as: session(userId, BUSINESS_A, 'admin') };
+    }
+
+    const count = async (table: string, where = 'true', params: unknown[] = []) =>
+      Number(
+        (
+          await select(admin, `SELECT count(*)::int AS n FROM ${table} WHERE ${where}`, params)
+        )[0]?.['n'],
+      );
+
+    it('gives back the stock and the cash, adds a void, and keeps the sale exactly as it was', async () => {
+      const { sale } = await sell();
+      const body = voidBody();
+
+      const { sale: voided, replayed } = await sales.voidSale(owner(), sale.id, body);
+
+      expect(replayed).toBe(false);
+      expect(await quantityOf(cola)).toBe(100_000);
+      expect(await quantityOf(bread)).toBe(100_000);
+      expect(
+        await select(
+          admin,
+          `SELECT product_id, delta::int AS delta, reason FROM stock_movement WHERE operation_id = $1 ORDER BY product_id`,
+          [body.operationId],
+        ),
+      ).toEqual(
+        [
+          { product_id: cola, delta: 2_000, reason: 'void' },
+          { product_id: bread, delta: 1_500, reason: 'void' },
+        ].sort((x, y) => (x.product_id < y.product_id ? -1 : 1)),
+      );
+      expect(
+        await select(
+          admin,
+          `SELECT shift_id, direction, amount::int AS amount, reason FROM cash_movement WHERE operation_id = $1`,
+          [body.operationId],
+        ),
+      ).toEqual([
+        {
+          shift_id: shiftId,
+          direction: 'out',
+          amount: 2_000,
+          reason: `Anulación de ${sale.folio}`,
+        },
+      ]);
+      expect(
+        await select(admin, `SELECT kind, user_id FROM operation WHERE operation_id = $1`, [
+          body.operationId,
+        ]),
+      ).toEqual([{ kind: 'sale_void', user_id: a.ownerId }]);
+      expect(
+        await select(admin, `SELECT reason FROM sale_void WHERE sale_id = $1`, [sale.id]),
+      ).toEqual([{ reason: 'Se equivocó' }]);
+      expect(voided.voided).toMatchObject({
+        operationId: body.operationId,
+        voidedByUserId: a.ownerId,
+        reason: 'Se equivocó',
+      });
+      expect(voided).toMatchObject({
+        total: sale.total,
+        lines: sale.lines,
+        payments: sale.payments,
+        flags: sale.flags,
+      });
+      expect(await count('sale')).toBe(1);
+      expect(await count('sale_line')).toBe(2);
+      expect(await count('payment')).toBe(2);
+    });
+
+    it('takes the cash out of the shift of whoever voids, which can be another person than the seller', async () => {
+      const { sale } = await sell();
+      const other = await managerWithShift();
+
+      await sales.voidSale(other.as, sale.id, voidBody({ shiftId: other.shift }));
+
+      expect(
+        await select(admin, `SELECT shift_id, amount::int AS amount FROM cash_movement`),
+      ).toEqual([{ shift_id: other.shift, amount: 2_000 }]);
+    });
+
+    it('shows the void in the list and one by one', async () => {
+      const { sale } = await sell();
+      const { sale: voided } = await sales.voidSale(owner(), sale.id, voidBody());
+
+      const listed = (await sales.list(owner(), {})).items[0];
+      const one = await sales.get(owner(), sale.id);
+
+      expect(listed?.voided).toEqual(voided.voided);
+      expect(one.voided).toEqual(voided.voided);
+      expect(voided.voided).not.toBeNull();
+    });
+
+    it('is all or nothing: when the cash can not go back nothing stays, not even the claim, and it can be sent again', async () => {
+      const { sale } = await sell();
+      const body = voidBody({ shiftId: randomUUID() });
+
+      await expect(sales.voidSale(owner(), sale.id, body)).rejects.toBeInstanceOf(
+        ShiftRequiredError,
+      );
+
+      expect(await count('operation', 'operation_id = $1', [body.operationId])).toBe(0);
+      expect(await count('sale_void')).toBe(0);
+      expect(await count('stock_movement', "reason = 'void'")).toBe(0);
+      expect(await quantityOf(cola)).toBe(98_000);
+      await expect(sales.voidSale(owner(), sale.id, { ...body, shiftId })).resolves.toMatchObject({
+        replayed: false,
+      });
+    });
+
+    it('needs the shift to be open: one that was closed in the meantime does not receive the cash', async () => {
+      const { sale } = await sell();
+      const other = await managerWithShift();
+      await admin.query(
+        `UPDATE cash_shift SET closed_at = now(), counted_amount = 0, closed_by_user_id = user_id WHERE id = $1`,
+        [other.shift],
+      );
+
+      await expect(
+        sales.voidSale(other.as, sale.id, voidBody({ shiftId: other.shift })),
+      ).rejects.toBeInstanceOf(ShiftRequiredError);
+      expect(await count('cash_movement')).toBe(0);
+    });
+
+    it('voids a sale once however many ask at the same time: the others find it already voided and leave nothing behind', async () => {
+      const { sale } = await sell();
+      const people = await Promise.all([
+        managerWithShift(),
+        managerWithShift(),
+        managerWithShift(),
+      ]);
+
+      const results = await Promise.allSettled(
+        people.map((person) =>
+          sales.voidSale(person.as, sale.id, voidBody({ shiftId: person.shift })),
+        ),
+      );
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          expect(result.reason).toBeInstanceOf(SaleVoidedError);
+        }
+      }
+      // Lo que las perdedoras hicieron antes de enterarse se deshizo con ellas.
+      expect(await quantityOf(cola)).toBe(100_000);
+      expect(await quantityOf(bread)).toBe(100_000);
+      expect(await count('sale_void')).toBe(1);
+      expect(await count('cash_movement')).toBe(1);
+      expect(await count('stock_movement', "reason = 'void'")).toBe(2);
+      expect(await count('operation', "kind = 'sale_void'")).toBe(1);
+    });
+
+    it('answers a repeated request with the same sale however many are sent at once, and writes once', async () => {
+      const { sale } = await sell();
+      const body = voidBody();
+
+      const outcomes = await Promise.all(
+        Array.from({ length: 5 }, () => sales.voidSale(owner(), sale.id, body)),
+      );
+
+      expect(outcomes.filter((outcome) => !outcome.replayed)).toHaveLength(1);
+      expect(new Set(outcomes.map((outcome) => outcome.sale.voided?.operationId))).toEqual(
+        new Set([body.operationId]),
+      );
+      expect(await count('stock_movement', "reason = 'void'")).toBe(2);
+      expect(await count('cash_movement')).toBe(1);
+    });
+
+    it('does not exist for another business: it can not void what it can not see', async () => {
+      const { sale } = await sell();
+
+      await expect(
+        sales.voidSale(session(b.ownerId, BUSINESS_B, 'owner'), sale.id, voidBody()),
+      ).rejects.toBeInstanceOf(SaleNotFoundError);
+      expect(await count('sale_void')).toBe(0);
+    });
   });
 });
