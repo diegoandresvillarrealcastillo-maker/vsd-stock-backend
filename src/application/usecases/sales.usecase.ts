@@ -4,7 +4,7 @@ import { pageOf, readPageRequest, timeThenUuid, type Page } from '../../domain/m
 import { OperationIdReusedError } from '../../domain/model/purchase-errors.js';
 import { can } from '../../domain/model/role.js';
 import { requiresAttention } from '../../domain/model/sale-attention.js';
-import { SaleNotFoundError } from '../../domain/model/sale-errors.js';
+import { SaleNotFoundError, SaleVoidedError } from '../../domain/model/sale-errors.js';
 import { flagsOfSale, soldAtCatalogPrice } from '../../domain/model/sale-flags.js';
 import {
   SALE_FIELDS,
@@ -19,6 +19,12 @@ import {
   readSaleReview,
 } from '../../domain/model/sale-query-input.js';
 import { summarizeSale, type SaleSummary } from '../../domain/model/sale-totals.js';
+import {
+  SALE_VOID_FIELDS,
+  readSaleVoid,
+  saleVoidFingerprint,
+} from '../../domain/model/sale-void-input.js';
+import { ShiftRequiredError } from '../../domain/model/shift-errors.js';
 import { isWholeOnly } from '../../domain/model/unit-of-measure.js';
 import { isUuid } from '../../domain/model/uuid.js';
 import {
@@ -88,7 +94,9 @@ async function productsOf(
 }
 
 /** Lo que se descuenta de cada producto: las lineas de un mismo producto se juntan en un solo movimiento. */
-function quantitiesSold(sale: SaleInput): Map<string, number> {
+function quantitiesSold(sale: {
+  readonly lines: readonly { productId: string; quantityMilli: number }[];
+}): Map<string, number> {
   const sold = new Map<string, number>();
   for (const line of sale.lines) {
     sold.set(line.productId, (sold.get(line.productId) ?? 0) + line.quantityMilli);
@@ -295,6 +303,79 @@ export class SalesUseCase implements Sales {
       if (sale === null) throw new SaleNotFoundError();
       const { review, created } = await scope.sales.review(sale.id, actor.userId, note);
       return { saleId: sale.id, review, replayed: !created };
+    });
+  }
+
+  async voidSale(session: Session, saleId: string, body: unknown): Promise<SaleOutcome> {
+    const actor = requireMember(session);
+    // Anular es de la gerencia y necesita conexion (ADR 0017 y 0027).
+    ensureCan(actor, 'sale:void');
+    const reader = new InputReader(body, SALE_VOID_FIELDS);
+    const input = readSaleVoid(reader);
+    reader.finish();
+    if (!isUuid(saleId)) throw new SaleNotFoundError();
+    const id = saleId.toLowerCase();
+
+    return this.work.inBusiness(actor.businessId, async (scope) => {
+      const sale = await scope.sales.find(id);
+      if (sale === null) throw new SaleNotFoundError();
+
+      // Se reclama la operacion antes de mirar nada mas: repetida, devuelve lo que ya se hizo sin tocar nada.
+      const claim = await scope.operations.claim({
+        operationId: input.operationId,
+        kind: 'sale_void',
+        userId: actor.userId,
+        fingerprint: saleVoidFingerprint(sale.id, input),
+      });
+      if (claim === 'conflict') throw new OperationIdReusedError();
+      if (claim === 'replay') {
+        const existing = await scope.sales.findByVoid(input.operationId);
+        if (existing === null) {
+          throw new Error(`The operation ${input.operationId} is claimed but has no void`);
+        }
+        return { sale: viewOf(existing), replayed: true };
+      }
+      if (sale.voided !== null) throw new SaleVoidedError();
+
+      // El efectivo que se cobro vuelve de un turno ABIERTO de quien anula, no del de la venta: ese puede estar cerrado y su
+      // arqueo contado (ADR 0027, punto 15). Se bloquea para que no se cierre a mitad de la anulacion.
+      const refund = sale.payments
+        .filter((payment) => payment.method === 'cash')
+        .reduce((total, payment) => total + payment.amount, 0);
+      let refundShiftId: string | null = null;
+      if (refund > 0) {
+        const named = input.shiftId === null ? null : await scope.shifts.find(input.shiftId);
+        if (named === null || named.userId !== actor.userId) throw new ShiftRequiredError();
+        const locked = await scope.shifts.lockShared(named.id);
+        if (locked === null || locked.closedAt !== null) throw new ShiftRequiredError();
+        refundShiftId = locked.id;
+      }
+
+      // La existencia vuelve con un movimiento por producto, en el orden fijo, como cuando bajo (ADR 0013).
+      await scope.stock.addMovements(
+        input.operationId,
+        [...quantitiesSold(sale)].map(([productId, quantityMilli]) => ({
+          productId,
+          delta: quantityMilli,
+          reason: 'void' as const,
+          note: null,
+        })),
+      );
+      if (refundShiftId !== null) {
+        await scope.cashMovements.create({
+          operationId: input.operationId,
+          shiftId: refundShiftId,
+          direction: 'out',
+          amount: refund,
+          reason: `Anulación de ${sale.folio}`,
+        });
+      }
+      const voided = await scope.sales.recordVoid({
+        saleId: sale.id,
+        operationId: input.operationId,
+        reason: input.reason,
+      });
+      return { sale: viewOf(voided), replayed: false };
     });
   }
 }
