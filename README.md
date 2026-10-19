@@ -179,6 +179,12 @@ por fila, disparadores, permisos).
   un dueño, un administrador y un cajero cada uno, y prueba **cada ruta** con cada rol, sin sesión, sin negocio, con una
   baja y desde el otro negocio. La lista de rutas sale del enrutador: una ruta o un caso de uso nuevo sin su fila hace
   fallar la prueba.
+- **Varios dispositivos vendiendo sin conexión:** otra prueba de integración
+  ([`sync-simulation`](test/integration/sync-simulation.integration.spec.ts)) hace que seis dispositivos abran su turno, vendan
+  y lo cierren mandando lotes por HTTP a la API y a la base reales, en cualquier orden, con respuestas que se pierden y lotes
+  que se reenvían enteros. Al final no hay folios repetidos ni ventas duplicadas, la existencia cuadra con el libro y el
+  arqueo de cada turno da diferencia cero; reenviarlo todo otra vez contesta «ya estaba» y no cambia ni una fila. Es
+  determinista (tres semillas): si falla, se repite igual.
 - **Probar todo junto en tu máquina:** la base, la API y `npm run dev:identity`, sin Supabase (paso a paso en el
   [plan de ambientes](docs/ambientes.md#probar-todo-junto-en-tu-máquina-sin-supabase)).
 - **Un ambiente real** (PRE, y PROD cuando se levante la pausa): las migraciones las aplica **una persona** con
