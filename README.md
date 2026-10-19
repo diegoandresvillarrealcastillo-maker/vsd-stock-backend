@@ -105,6 +105,16 @@ valor** cuando es una cadena de conexión (lleva la clave).
   un egreso del turno _abierto de quien anula_** (`shiftId`), no del de la venta. Si hubo efectivo y no se nombra un turno suyo
   abierto, `409 shift-required`; una venta ya anulada es `409 sale-voided`. Es idempotente por `operationId`. La venta anulada
   sigue sumada en el arqueo de su turno.
+- `POST /v1/sync` recibe un **lote** de 1 a 50 operaciones hechas sin conexión ([ADR 0028](docs/adr/0028-lote-de-sincronizacion-y-copia-de-lectura.md)):
+  `shift-open`, `shift-close` o `sale`, cada una con el cuerpo **exacto** de su ruta individual (cerrar un turno lleva además su
+  `shiftId`). Se aplican **una tras otra y cada una en su propia transacción**, con las reglas de su ruta, así que una que falla no
+  deshace ni detiene a las demás. Responde `200` siempre que se procesó el lote, con `serverTime` (para que el dispositivo mida su
+  reloj) y un resultado por operación y en el mismo orden: `status` (el estado HTTP que habría contestado la ruta suelta), `replayed`,
+  y `body` (el turno o la venta) o `problem` (el error de siempre).
+- `GET /v1/sync/products` y `GET /v1/sync/stock` son la **copia de lectura** para vender sin red, para los tres roles: el catálogo
+  (con los productos **archivados** marcados, para que el dispositivo los quite) y la existencia de ahora de cada producto que
+  alguna vez se movió. Con `since` bajan solo lo que cambió después (comparado al milisegundo), con cursor, y cada página dice su
+  `asOf`: la cifra que muestra el dispositivo lleva esa hora.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

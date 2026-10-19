@@ -37,6 +37,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0025](0025-verificacion-de-pre-contra-supabase.md)                     | Verificación de PRE contra Supabase real: qué se comprueba y por qué no imprime secretos        | Aceptada |
 | [0026](0026-turnos-de-caja-y-arqueo.md)                                 | Turnos de caja y arqueo: quién abre, qué pasa con una venta tardía y cómo se cuenta el efectivo | Aceptada |
 | [0027](0027-registro-de-ventas-y-atencion.md)                           | Registro de ventas y atención: se acepta siempre, lo raro se marca y alguien lo revisa          | Aceptada |
+| [0028](0028-lote-de-sincronizacion-y-copia-de-lectura.md)               | Lote de sincronización y copia de lectura: un resultado por operación y datos con su hora       | Aceptada |
 
 ## Reglas
 

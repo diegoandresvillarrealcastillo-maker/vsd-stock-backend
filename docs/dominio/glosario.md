@@ -316,6 +316,17 @@ sigue siendo una venta que pidió atención.
 
 **Estado:** Decidido (ADR 0027)
 
+### Lote de sincronización
+
+Las operaciones que el dispositivo hizo sin conexión (abrir un turno, vender, cerrar un turno), enviadas juntas, de 1 a 50, en el
+orden en que se hicieron. El servidor las aplica una tras otra y **cada una en su propia transacción**, con las reglas de su ruta
+individual, y contesta con un resultado por cada una: una que falla no deshace ni detiene a las demás. Repetirlo es seguro: lo
+que ya se aplicó se contesta como repetido (ADR 0028).
+
+**Código:** `POST /v1/sync`, `Sync`
+
+**Estado:** Decidido (ADR 0009, ADR 0019 y ADR 0028)
+
 ### Línea de venta
 
 Un producto, una cantidad (en milésimas), el precio y la tarifa que tenían al vender y el descuento de la línea,
@@ -501,12 +512,14 @@ dispositivo.
 
 ### Copia de lectura
 
-Una copia local de datos que la persona necesita para trabajar sin red: el catálogo, las existencias, los
-precios, los clientes.
+Una copia local de datos que la persona necesita para trabajar sin red: el catálogo y las existencias (los precios y las tarifas
+van en el catálogo). Se baja completa la primera vez y después solo lo que cambió (`since`); cada página dice la hora del servidor al
+leerla (`asOf`), y la existencia que muestra el mostrador lleva esa hora («al…»), más lo vendido aquí y todavía sin enviar, porque no
+es la de hoy en todas las cajas. Los productos archivados vienen marcados para que el dispositivo los quite (ADR 0028).
 
-**Código:** `ReadCopy`
+**Código:** `ReadCopy`, `GET /v1/sync/products`, `GET /v1/sync/stock`, `SyncCopy`
 
-**Estado:** Decidido (ADR 0009)
+**Estado:** Decidido (ADR 0009 y ADR 0028)
 
 ### Olvidar
 
