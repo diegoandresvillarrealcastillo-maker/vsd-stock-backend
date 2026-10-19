@@ -77,6 +77,7 @@ describe('SyncController: what each result says (ADR 0028)', () => {
         type: 'urn:vsd-stock:problem:shift-already-open',
         status: 409,
         code: 'shift-already-open',
+        detail: 'Ya tienes un turno abierto en este dispositivo. Ciérralo antes de abrir otro.',
         instance: '/v1/sync',
         traceId: 'traza-1',
       },

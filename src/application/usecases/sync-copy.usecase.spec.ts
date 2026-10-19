@@ -106,6 +106,23 @@ describe('SyncCopyUseCase: the products', () => {
     ]);
   });
 
+  it('refuses a cursor that is not an instant followed by a product', async () => {
+    const { useCase } = setup();
+    const aProduct = 'f0000000-0000-4000-8000-000000000001';
+
+    for (const cursor of [
+      encodeCursor(['ayer', aProduct]),
+      encodeCursor(['2026-10-18T15:00:00.000Z', 'no-es-un-id']),
+    ]) {
+      const failure = await useCase.products(cashier, { cursor }).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ValidationFailedError);
+      expect(
+        (failure as ValidationFailedError).errors.map((e) => `${e.pointer}:${e.code}`),
+      ).toEqual(['/cursor:invalid-cursor']);
+    }
+  });
+
   it('works for the three roles: a cashier needs the catalog to sell', async () => {
     const { useCase } = setup();
 

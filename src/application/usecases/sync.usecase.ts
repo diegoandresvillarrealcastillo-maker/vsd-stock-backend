@@ -48,7 +48,7 @@ export class SyncUseCase implements Sync {
           return applied(item.operationId, item.kind, replayed, shift);
         }
         case 'shift-close': {
-          // El cuerpo ya trae el turno en `shiftId` (lo exige el lector del lote para cerrar).
+          // El turno viene en `shiftId`, junto al cuerpo (lo exige el lector del lote para cerrar).
           const { shift, replayed } = await this.shifts.close(
             session,
             item.shiftId ?? '',

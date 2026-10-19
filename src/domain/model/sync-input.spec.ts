@@ -166,6 +166,12 @@ describe('the batch that a device sends', () => {
       }
     });
 
+    it('is refused when its body is nothing, a list or a text: the body is an object', () => {
+      for (const body of [null, [], 'no', 5]) {
+        expect(codes(invalid({ kind: 'sale', body }).errors)).toEqual(['/body:invalid-type']);
+      }
+    });
+
     it('does not guess the operation id of what it can not read', () => {
       expect(
         invalid({ kind: 'void', body: { operationId: 'no-es-un-id' } }).operationId,

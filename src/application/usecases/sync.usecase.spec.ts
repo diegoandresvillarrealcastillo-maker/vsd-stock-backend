@@ -217,6 +217,21 @@ describe('SyncUseCase', () => {
       ]);
     });
 
+    it('says which kind of operation each result is for, also for the one that failed', async () => {
+      const { useCase } = await setup();
+
+      const { results } = await useCase.apply(ana, {
+        operations: [open(), sale({ total: 'mucho' }), close()],
+      });
+
+      expect(results.map((result) => result.outcome.type)).toEqual([
+        'applied',
+        'failed',
+        'applied',
+      ]);
+      expect(results.map((result) => result.kind)).toEqual(['shift-open', 'sale', 'shift-close']);
+    });
+
     it('refuses the operation whose shift was refused, because the sale then has no shift', async () => {
       const { useCase } = await setup();
       await useCase.apply(ana, { operations: [open()] });
@@ -246,8 +261,9 @@ describe('SyncUseCase', () => {
 
     it('answers for an operation that is not right, without taking the others down', async () => {
       const { useCase } = await setup();
+      const unknown = nextOperation();
       const { results } = await useCase.apply(ana, {
-        operations: [open(), { kind: 'void', body: { operationId: nextOperation() } }, sale()],
+        operations: [open(), { kind: 'void', body: { operationId: unknown } }, sale()],
       });
 
       expect(results.map((result) => result.outcome.type)).toEqual([
@@ -256,6 +272,7 @@ describe('SyncUseCase', () => {
         'applied',
       ]);
       expect(results[1]?.kind).toBeNull();
+      expect(results[1]?.operationId).toBe(unknown);
       const error = failureOf(results[1]!.outcome);
       expect((error as ValidationFailedError).errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
         '/kind:invalid-value',
