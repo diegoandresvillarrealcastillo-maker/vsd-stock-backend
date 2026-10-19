@@ -1,6 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { RateSummaryView, SaleTotalsView, SaleView } from '../../../domain/ports/in/sales.js';
-import type { PaymentRecord, SaleLineRecord } from '../../../domain/ports/out/sales.js';
+import type {
+  RateSummaryView,
+  SaleSummaryView,
+  SaleTotalsView,
+  SaleView,
+} from '../../../domain/ports/in/sales.js';
+import type {
+  PaymentRecord,
+  SaleLineRecord,
+  SaleReviewRecord,
+} from '../../../domain/ports/out/sales.js';
 
 const MAX_PESOS = 1_000_000_000_000;
 
@@ -207,7 +216,24 @@ const SALE_FLAGS = [
   'folio-device',
 ] as const;
 
-export class SaleDto implements SaleView {
+export class SaleReviewDto implements SaleReviewRecord {
+  @ApiProperty({ type: String, format: 'date-time', description: 'Cuándo se revisó.' })
+  readonly reviewedAt!: Date;
+
+  @ApiProperty({ type: String, format: 'uuid', description: 'Quién la revisó.' })
+  readonly reviewedByUserId!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    maxLength: 200,
+    description: 'Lo que anotó quien la revisó.',
+  })
+  readonly note!: string | null;
+}
+
+/** Lo que una venta de la lista y una venta completa tienen en común. */
+export class SaleHeaderDto {
   @ApiProperty({ type: String, format: 'uuid' })
   readonly id!: string;
 
@@ -281,6 +307,26 @@ export class SaleDto implements SaleView {
   readonly receivedAt!: Date;
 
   @ApiProperty({
+    type: SaleReviewDto,
+    nullable: true,
+    description: '`null` mientras nadie la haya revisado (ADR 0027).',
+  })
+  readonly review!: SaleReviewDto | null;
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado.',
+  })
+  readonly attention!: boolean;
+}
+
+/** Una venta de la lista: sin líneas ni cobros. */
+export class SaleSummaryDto extends SaleHeaderDto implements SaleSummaryView {}
+
+/** Una venta completa. */
+export class SaleDto extends SaleHeaderDto implements SaleView {
+  @ApiProperty({
     type: [SaleLineDto],
     description: 'En el orden en que el dispositivo las vendió.',
   })
@@ -291,4 +337,37 @@ export class SaleDto implements SaleView {
 
   @ApiProperty({ type: SaleTotalsDto })
   readonly summary!: SaleTotalsDto;
+}
+
+/** Una página de ventas (ADR 0019). */
+export class SalePageDto {
+  @ApiProperty({ type: [SaleSummaryDto] })
+  readonly items!: SaleSummaryDto[];
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más.',
+  })
+  readonly nextCursor!: string | null;
+}
+
+/** Lo que se manda al revisar una venta. */
+export class SaleReviewRequestDto {
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    maxLength: 200,
+    example: 'Se ajustó el inventario de gaseosas',
+    description: 'Lo que se hizo con la venta, para que quede dicho. Una línea, sin saltos.',
+  })
+  readonly note?: string | null;
+}
+
+/** La revisión de una venta: de qué venta es, quién la hizo, cuándo y qué anotó. */
+export class SaleReviewResponseDto extends SaleReviewDto {
+  @ApiProperty({ type: String, format: 'uuid', description: 'La venta que se revisó.' })
+  readonly saleId!: string;
 }

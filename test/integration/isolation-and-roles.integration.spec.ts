@@ -116,7 +116,12 @@ const USE_CASES: Record<string, readonly string[]> = {
   purchases: ['POST /v1/purchases', 'GET /v1/purchases', 'GET /v1/purchases/:purchaseId'],
   'redeem-invitation': ['POST /v1/invitations/redeem'],
   'regenerate-invitation': ['POST /v1/users/:userId/invitation'],
-  sales: ['POST /v1/sales'],
+  sales: [
+    'POST /v1/sales',
+    'GET /v1/sales',
+    'GET /v1/sales/:saleId',
+    'POST /v1/sales/:saleId/review',
+  ],
   shifts: [
     'POST /v1/shifts',
     'POST /v1/shifts/:shiftId/close',
@@ -347,6 +352,24 @@ describe('isolation between businesses and the matrix of roles, through the whol
       clockOffsetMs: 0,
     });
     expect(reply.status, `abrir turno (preparacion): ${reply.text}`).toBe(201);
+    team.traces.add(reply.body.id);
+    return reply.body.id;
+  };
+
+  /** Una venta registrada por la persona de ese rol, en un turno suyo. */
+  const makeSaleOf = async (team: Team, role: Role) => {
+    const productId = await makeProduct(team);
+    const reply = await call('POST', '/v1/sales', team.tokens[role], {
+      operationId: randomUUID(),
+      shiftId: await makeShiftOf(team, role),
+      folio: `ZZ-${String(++counter).padStart(6, '0')}`,
+      total: 3200,
+      lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+      payments: [{ method: 'cash', amount: 3200 }],
+      deviceTime: new Date().toISOString(),
+      clockOffsetMs: 0,
+    });
+    expect(reply.status, `registrar venta (preparacion): ${reply.text}`).toBe(201);
     team.traces.add(reply.body.id);
     return reply.body.id;
   };
@@ -759,6 +782,38 @@ describe('isolation between businesses and the matrix of roles, through the whol
       },
       // El turno y el producto son del otro negocio: aqui no existen, y se dice por el campo.
       outsider: { kind: 'unknown-reference', errors: ['/shiftId:unknown-shift'] },
+    },
+    {
+      route: 'GET /v1/sales',
+      allowed: EVERYONE,
+      success: 200,
+      aim: async (team, role = 'owner') => {
+        await makeSaleOf(team, role);
+        return { method: 'GET', path: '/v1/sales' };
+      },
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'GET /v1/sales/:saleId',
+      allowed: EVERYONE,
+      success: 200,
+      // La venta es de un turno de quien la pide: un cajero solo ve las suyas.
+      aim: async (team, role = 'owner') => ({
+        method: 'GET',
+        path: `/v1/sales/${await makeSaleOf(team, role)}`,
+      }),
+      outsider: { kind: 'not-found', code: 'sale-not-found' },
+    },
+    {
+      route: 'POST /v1/sales/:saleId/review',
+      allowed: MANAGEMENT,
+      success: 201,
+      aim: async (team) => ({
+        method: 'POST',
+        path: `/v1/sales/${await makeSaleOf(team, 'owner')}/review`,
+        body: { note: unique(team, 'Revisada') },
+      }),
+      outsider: { kind: 'not-found', code: 'sale-not-found' },
     },
     // ---------------- personas
     {
