@@ -1344,6 +1344,54 @@ describe('sales against PostgreSQL (C3-03)', () => {
       ).toEqual([{ shift_id: other.shift, amount: 2_000 }]);
     });
 
+    it('shows who voided it, which is not who sold it, in the list and one by one', async () => {
+      const { sale } = await sell();
+      const other = await managerWithShift();
+      await sales.voidSale(other.as, sale.id, voidBody({ shiftId: other.shift }));
+
+      const listed = (await sales.list(owner(), {})).items[0];
+      const one = await sales.get(owner(), sale.id);
+
+      expect(sale.userId).toBe(a.ownerId);
+      expect(listed?.voided?.voidedByUserId).toBe(other.userId);
+      expect(one.voided?.voidedByUserId).toBe(other.userId);
+    });
+
+    it('tells apart the sales that were voided from those that were not, in the list and one by one', async () => {
+      const first = await sell();
+      const second = await sell();
+      const third = await sell();
+      const bodyOfFirst = voidBody({ reason: 'Primera' });
+      await sales.voidSale(owner(), first.sale.id, bodyOfFirst);
+      await sales.voidSale(owner(), third.sale.id, voidBody({ reason: 'Tercera' }));
+
+      const listed = (await sales.list(owner(), {})).items;
+
+      expect(listed).toHaveLength(3);
+      const reasonOf = (id: string) =>
+        listed.find((item) => item.id === id)?.voided?.reason ?? null;
+      expect(reasonOf(first.sale.id)).toBe('Primera');
+      expect(reasonOf(second.sale.id)).toBeNull();
+      expect(reasonOf(third.sale.id)).toBe('Tercera');
+      expect((await sales.get(owner(), second.sale.id)).voided).toBeNull();
+      expect((await sales.get(owner(), first.sale.id)).voided?.reason).toBe('Primera');
+      expect((await sales.get(owner(), third.sale.id)).voided?.reason).toBe('Tercera');
+    });
+
+    it('answers a repeated request with the sale of that operation, when other sales were voided as well', async () => {
+      const first = await sell();
+      const second = await sell();
+      const bodyOfFirst = voidBody({ reason: 'Primera' });
+      await sales.voidSale(owner(), first.sale.id, bodyOfFirst);
+      await sales.voidSale(owner(), second.sale.id, voidBody({ reason: 'Segunda' }));
+
+      const again = await sales.voidSale(owner(), first.sale.id, bodyOfFirst);
+
+      expect(again.replayed).toBe(true);
+      expect(again.sale.id).toBe(first.sale.id);
+      expect(again.sale.voided?.reason).toBe('Primera');
+    });
+
     it('shows the void in the list and one by one', async () => {
       const { sale } = await sell();
       const { sale: voided } = await sales.voidSale(owner(), sale.id, voidBody());

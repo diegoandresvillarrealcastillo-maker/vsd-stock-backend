@@ -163,6 +163,19 @@ describe('SalesUseCase: voiding a sale', () => {
       expect(env.fakeSales.records).toHaveLength(1);
     });
 
+    it('claims the operation as a void, not as a sale', async () => {
+      const env = await setup();
+      const made = await sell(env);
+      const body = voidBody();
+
+      await env.useCase.voidSale(luisAdmin, made.id, body);
+
+      expect(env.purchasing.operations.claims.get(body.operationId)).toMatchObject({
+        kind: 'sale_void',
+        userId: LUIS,
+      });
+    });
+
     it('gives the stock back with one movement per product, in the fixed order, however many lines it had', async () => {
       const env = await setup();
       const made = await sell(env);
