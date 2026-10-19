@@ -81,6 +81,8 @@ const run = async (
   const checks = await runDeployChecks({ apiUrl: inputs.apiUrl, webUrl: inputs.webUrl, probes });
   return { checks, asked };
 };
+/** A que host se le hizo una de las peticiones anotadas (`GET https://host/ruta`), comparado como origen y no como texto. */
+const hostOf = (asked: string): string => new URL(asked.split(' ')[1] ?? '').origin;
 const byId = (checks: readonly Check[], id: string): Check => {
   const found = checks.find((item) => item.id === id);
   if (found === undefined) throw new Error(`no hay una comprobacion ${id}`);
@@ -148,7 +150,7 @@ describe('the addresses that were given', () => {
 
     expect(byId(checks, 'web-url')).toMatchObject({ status: 'skip' });
     expect(byId(checks, 'cors-allowed').status).toBe('skip');
-    expect(asked.some((key) => key.includes(WEB))).toBe(false);
+    expect(asked.some((key) => hostOf(key) === WEB)).toBe(false);
   });
 });
 
@@ -192,7 +194,7 @@ describe('the API', () => {
 
     expect(byId(checks, 'ready').status).toBe('skip');
     expect(byId(checks, 'auth').status).toBe('skip');
-    expect(asked.filter((key) => key.includes(API))).toEqual([`GET ${API}/health`]);
+    expect(asked.filter((key) => hostOf(key) === API)).toEqual([`GET ${API}/health`]);
   });
 
   describe('waking up', () => {
