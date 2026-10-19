@@ -148,6 +148,15 @@ vende), `/lines/N/productId` `unknown-product` y `/lines/N/quantityMilli` `not-w
 responde `200` con `Idempotent-Replayed: true` y la venta tal como quedó; con otro cuerpo, `409 operation-id-reused`. El dinero
 va en pesos enteros y las cantidades en milésimas.
 
+Consultar y revisar ventas (C3-04, [ADR 0027](adr/0027-registro-de-ventas-y-atencion.md)): `sale-not-found` (404). Una venta
+de un turno ajeno **no existe para un cajero**: recibe el mismo 404 que por una que nunca existió, igual que un identificador
+que no es un UUID. La lista va de la más reciente a la más vieja por la hora **en que ocurrieron** (no la de llegada) y su
+cursor lleva el instante al milisegundo y el `id`; sus filtros son `shiftId`, `folio` (el que el dispositivo imprimió) y
+`attention` (`true` o `false`, la bandeja «Requiere atención»), y pedir `attention` siendo cajero es `403 forbidden`. Revisar
+una venta (`POST /v1/sales/{id}/review`) es la excepción a llevar un `operationId`: **la venta misma es la clave**, porque se
+revisa una sola vez. La primera responde `201`; revisarla otra vez, quien sea, responde `200` con la revisión que ya tenía y
+`Idempotent-Replayed: true`. La nota es de una línea y de 200 caracteres como mucho; si no, `400` en `/note`.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):
