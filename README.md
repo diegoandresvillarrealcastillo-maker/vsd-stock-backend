@@ -151,6 +151,7 @@ trabajar con el frontend local (`npm run dev` en `vsd-stock-frontend`) pon
 | `npm run db:migrate`        | Aplica las migraciones a `DATABASE_MIGRATION_URL`, tras confirmar el host.           |
 | `npm run db:check-schema`   | Falla si `prisma/schema.prisma` y la base migrada no dicen lo mismo.                 |
 | `npm run verify:pre`        | Comprueba PRE, el Supabase real: base, rol, seguridad por fila y claves (ADR 0025).  |
+| `npm run verify:deploy`     | Comprueba los hosts de PRE desde fuera: la API, su CORS y la web (ADR 0031).         |
 | `npm run dev:identity`      | Un servicio de identidad de mentira para probar todo junto en tu máquina.            |
 | `npm run prisma:generate`   | Regenera el cliente de Prisma (también lo hace `npm ci`).                            |
 | `npm run test:integration`  | Pruebas contra ese PostgreSQL, en serie. Preparan la base solas.                     |

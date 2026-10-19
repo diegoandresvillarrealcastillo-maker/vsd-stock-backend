@@ -8,12 +8,12 @@ paneles (GitHub, Supabase y los hosts). **PROD está en pausa.**
 
 ## Los ambientes
 
-| Ambiente  | Rama               | Para qué                                                  | Dónde corre                                                              | Datos                      | Estado                                               |
-| --------- | ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------- | ---------------------------------------------------- |
-| **Local** | tu rama de trabajo | Desarrollar y probar en tu equipo.                        | Tu máquina: la API en `localhost:3000`, el frontend en `localhost:5173`. | Base de trabajo en Docker. | **Disponible**                                       |
-| **DEV**   | `desarrollo`       | Integrar. Es la rama donde entra todo lo revisado.        | No tiene servidor: la verifica el CI de GitHub en cada PR y cada push.   | Base desechable del CI.    | **Disponible**                                       |
-| **PRE**   | `preproduccion`    | Probar con el equipo, con datos ficticios, antes de PROD. | Un proyecto de Supabase, un host para la API y un host para la web.      | Ficticios.                 | **Supabase listo**; faltan los hosts (ver más abajo) |
-| **PROD**  | `produccion`       | Lo que usan los negocios de verdad.                       | Igual que PRE, aparte.                                                   | Reales.                    | **En pausa**                                         |
+| Ambiente  | Rama               | Para qué                                                  | Dónde corre                                                              | Datos                      | Estado                                                         |
+| --------- | ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------- | -------------------------------------------------------------- |
+| **Local** | tu rama de trabajo | Desarrollar y probar en tu equipo.                        | Tu máquina: la API en `localhost:3000`, el frontend en `localhost:5173`. | Base de trabajo en Docker. | **Disponible**                                                 |
+| **DEV**   | `desarrollo`       | Integrar. Es la rama donde entra todo lo revisado.        | No tiene servidor: la verifica el CI de GitHub en cada PR y cada push.   | Base desechable del CI.    | **Disponible**                                                 |
+| **PRE**   | `preproduccion`    | Probar con el equipo, con datos ficticios, antes de PROD. | Un proyecto de Supabase, un host para la API y un host para la web.      | Ficticios.                 | **Supabase listo**; hosts: [crearlos](#crear-los-hosts-de-pre) |
+| **PROD**  | `produccion`       | Lo que usan los negocios de verdad.                       | Igual que PRE, aparte.                                                   | Reales.                    | **En pausa**                                                   |
 
 La cadena es `tu rama → desarrollo → preproduccion → produccion` (ADR 0010). La rama por defecto de los dos
 repositorios es `produccion`, así que cada PR indica su base de forma explícita: `--base desarrollo`.
@@ -144,7 +144,8 @@ del ciclo que despliegue PRE: esta lista no elige hosts, **dónde se despliega e
 qué hacer y qué comprobar después.
 
 1. **Decidir los hosts.** Un host para la API (corre la imagen de Docker del backend, ADR 0011) y uno para la
-   web (sirve `dist/`). Se escribe como ADR y se aprueba antes de crear nada.
+   web (sirve `dist/`). Decidido en el [ADR 0031](adr/0031-hosts-de-pre-render-y-cloudflare-pages.md); los pasos están en
+   [Crear los hosts de PRE](#crear-los-hosts-de-pre).
 2. **Crear el proyecto de Supabase de PRE**, aparte del de cualquier otro ambiente. Anota dónde guardas su
    contraseña (un gestor de contraseñas, no un archivo). _Comprobar:_ conecta con el **pooler**; en la versión
    anterior de VSD Stock el host directo solo publicaba IPv6 y no resolvía desde algunas redes, así que
@@ -222,6 +223,118 @@ Dos cosas que se aprendieron en esta primera corrida:
   _Healthy_ y no _Paused_.
 - **El host del pooler no es el mismo en todos los proyectos** (`aws-0-…` o `aws-1-…`, y la región). Se copia del botón
   _Connect_ del proyecto; con uno equivocado, Supabase responde que no encuentra el tenant o el usuario.
+
+## Crear los hosts de PRE
+
+La API corre en **Render** y la web en **Cloudflare Pages**, los dos con su plan gratuito y los dos por **HTTPS** (sin HTTPS no hay
+service worker, ni cifrado en el equipo, ni cámara en un teléfono). Por qué esos y lo que cuestan está en el
+[ADR 0031](adr/0031-hosts-de-pre-render-y-cloudflare-pages.md). **Lo hace una persona**, en los paneles: el asistente de código solo
+deja escrito qué hacer (`render.yaml` y esta guía) y cómo comprobarlo (`npm run verify:deploy`).
+
+> **Los secretos no se pegan en ningún chat.** Cada valor que sigue se escribe **en el panel**, donde se guarda. Si algo falla, pega
+> lo que dice el informe de `verify:deploy` (no lleva secretos) o el mensaje de error **sin** la cadena de conexión.
+
+### Antes de empezar
+
+1. **El Supabase de PRE está listo** ([Estado de PRE](#estado-de-pre)): tienes su dirección (`https://TU-REF.supabase.co`) y la
+   cadena de conexión del rol `stock_app` en tu gestor de contraseñas.
+2. **Las migraciones del Ciclo 3 ya se aplicaron** (`20261018120000_turnos`, `20261019120000_ventas`,
+   `20261020120000_revision_de_ventas`): con `npm run db:migrate`, **antes** de desplegar el código que las usa.
+3. **La rama `preproduccion` tiene el código que quieres probar.** Llega ahí con una promoción `desarrollo → preproduccion`, que solo
+   se abre **con el visto bueno del dueño del proyecto** (ver [Promover entre ambientes](#promover-entre-ambientes)). Mientras no
+   exista, no hay nada que desplegar: `render.yaml` y la web miran solo esa rama a propósito.
+
+### La API en Render
+
+1. Entra a [render.com](https://render.com) con tu cuenta de GitHub. No pide tarjeta para el plan gratuito.
+2. **New → Blueprint.** Conecta el repositorio `vsd-stock-backend` y elige la rama `preproduccion`. Render lee `render.yaml` y
+   muestra el servicio `vsd-stock-api-pre` (Docker, plan _Free_, región _Virginia_).
+3. Render te pide **cuatro valores** (los que `render.yaml` marca con `sync: false`; no están en el archivo a propósito):
+
+   | Variable        | Qué poner                                                                                                                    | De dónde sale                             |
+   | --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+   | `DATABASE_URL`  | La conexión del rol **`stock_app`** por el **pooler de sesión** (puerto 5432), con el usuario `stock_app.TU-REF`.            | Tu gestor de contraseñas o tu `.env.pre`. |
+   | `CORS_ORIGINS`  | La dirección **exacta** de la web de PRE, sin barra final: `https://vsd-stock-pre.pages.dev`. Si aún no existe, escribe esa. | La web de PRE (más abajo).                |
+   | `AUTH_ISSUER`   | `https://TU-REF.supabase.co/auth/v1`                                                                                         | El proyecto de Supabase.                  |
+   | `AUTH_JWKS_URL` | `https://TU-REF.supabase.co/auth/v1/.well-known/jwks.json`                                                                   | El proyecto de Supabase.                  |
+
+   `AUTH_AUDIENCE` ya viene escrita (`authenticated`) y el puerto lo da Render. **Nunca** pongas aquí `DATABASE_MIGRATION_URL`: es la
+   conexión del dueño de las tablas y solo se usa a mano desde tu máquina.
+
+4. **Apply.** El primer despliegue construye la imagen y tarda unos 5 a 8 minutos. La API queda en
+   `https://vsd-stock-api-pre.onrender.com` (o con otro sufijo si ese nombre estaba tomado: Render lo muestra arriba del servicio).
+5. _Comprobar:_ abre `https://vsd-stock-api-pre.onrender.com/health` en el navegador: debe mostrar un JSON con `status` en «ok».
+
+### La web en Cloudflare Pages
+
+1. Entra a [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create → Pages → Connect to Git** y elige
+   `vsd-stock-frontend`. La **rama de producción** del proyecto es `preproduccion`. Nómbralo `vsd-stock-pre`.
+2. En la configuración de la compilación:
+
+   | Campo                  | Valor           |
+   | ---------------------- | --------------- |
+   | Framework preset       | _None_          |
+   | Build command          | `npm run build` |
+   | Build output directory | `dist`          |
+
+3. En **Environment variables** (de _Production_), estas cuatro. Todo lo que lleva el prefijo `VITE_` termina en el paquete que
+   descarga cualquier persona: nunca un secreto.
+
+   | Variable                    | Valor                                                               |
+   | --------------------------- | ------------------------------------------------------------------- |
+   | `NODE_VERSION`              | `24`                                                                |
+   | `VITE_API_URL`              | La dirección de la API de PRE, sin barra final.                     |
+   | `VITE_AUTH_URL`             | `https://TU-REF.supabase.co/auth/v1`                                |
+   | `VITE_AUTH_PUBLISHABLE_KEY` | La clave **publicable** (`sb_publishable_…`). **Nunca** la secreta. |
+
+4. **Save and Deploy.** La web queda en `https://vsd-stock-pre.pages.dev`. Si Cloudflare le puso otro nombre, **esa** es la
+   dirección que va en `CORS_ORIGINS`.
+5. Las reglas de caché del service worker y de los archivos viajan en el repositorio del frontend (`public/_headers`): no hay nada
+   que configurar a mano. Cloudflare Pages sirve la aplicación desde cualquier ruta cuando el sitio no trae un `404.html` propio.
+
+### Conectarlas
+
+Si al crear la API pusiste una dirección provisional en `CORS_ORIGINS`, corrígela ahora con la dirección **real** de la web
+(Render → _Environment_). Render vuelve a desplegar solo. Una dirección con una barra final o con otro puerto **no** coincide: el
+navegador dirá «blocked by CORS policy».
+
+### Comprobarlos
+
+Desde tu máquina, con el repositorio del backend:
+
+```bash
+npm run verify:deploy -- https://vsd-stock-api-pre.onrender.com https://vsd-stock-pre.pages.dev
+```
+
+(Con tus direcciones.) Hace unas diez peticiones a esos dos hosts y nada más: no toca ninguna base ni pide ninguna clave. Comprueba que
+las direcciones sean HTTPS; que la API responda en `/health`, **cuánto tardó en despertar** y que siga rápida una vez despierta; que
+llegue a su base (`/v1/ready`); que rechace una llamada sin sesión; que le dé permiso **solo** a la web de PRE y a nadie más; y que la web
+sirva la aplicación, la recargue desde cualquier ruta, publique el manifiesto y el service worker (sin caché larga, para que una versión
+nueva se encuentre) y guarde un año los archivos con huella. **Imprime un informe y ningún secreto: puedes pegarlo completo en el
+chat.** Sale con `0` solo si todo pasó. La primera vez, la API suele estar dormida: la comprobación `wake` dice cuánto tardó.
+
+Después, **abre la web en un teléfono**: el panel «Estado del servicio» debe decir «En línea» y la aplicación debe poder instalarse.
+Eso, con las mediciones, es C3-16.
+
+### Lo que cuesta el plan gratuito
+
+Verificado el 2026-10-19 en la documentación de cada host (el [ADR 0031](adr/0031-hosts-de-pre-render-y-cloudflare-pages.md) lo
+explica y dice por qué se acepta en PRE):
+
+- **La API se duerme a los 15 minutos sin tráfico** y tarda alrededor de **un minuto** en despertar: mientras tanto el navegador ve
+  una página de carga y el panel «Estado del servicio» puede decir «Sin conexión». **No pierde nada:** lo que se hizo sin conexión
+  espera en el equipo y se envía cuando la API contesta. Hay **750 horas de instancia por mes** (una API despierta todo el mes cabe
+  en ellas) y si se acaban, el servicio se suspende hasta el mes siguiente.
+- **Sin disco persistente, sin escalar más allá de una instancia, sin caché de borde, sin correo saliente** (los puertos 25, 465 y
+  587 están bloqueados). La API no guarda nada en disco ni manda correos, así que nada de esto la afecta.
+- **Cloudflare Pages:** 500 compilaciones por mes, 20.000 archivos por sitio y 25 MiB por archivo. Sobra.
+
+### Si algo sale mal
+
+- **Render:** _Events → Rollback_ al despliegue anterior, o _Manual Deploy_ de otra rama. Una migración **no** se revierte sola.
+- **Cloudflare Pages:** _Deployments_ → el despliegue anterior → _Rollback to this deployment_.
+- **`/v1/ready` responde 503:** la API no llega a su base. Revisa `DATABASE_URL` (el rol `stock_app`, el pooler de sesión y el puerto 5432) y que el proyecto de Supabase diga _Healthy_.
+- **El navegador dice «blocked by CORS policy»:** `CORS_ORIGINS` no es la dirección exacta de la web.
 
 ## Promover entre ambientes
 
