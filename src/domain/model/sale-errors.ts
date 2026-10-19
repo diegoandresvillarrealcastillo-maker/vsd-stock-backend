@@ -5,3 +5,11 @@ export class SaleNotFoundError extends Error {
     this.name = 'SaleNotFoundError';
   }
 }
+
+/** La venta ya esta anulada: se anula una sola vez (ADR 0027, punto 13). */
+export class SaleVoidedError extends Error {
+  constructor() {
+    super('The sale is already voided');
+    this.name = 'SaleVoidedError';
+  }
+}

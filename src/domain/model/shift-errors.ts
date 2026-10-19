@@ -29,3 +29,14 @@ export class ShiftClosedError extends Error {
     this.name = 'ShiftClosedError';
   }
 }
+
+/**
+ * Devolver efectivo pide un turno ABIERTO de quien lo devuelve (ADR 0027, punto 15): no se saca efectivo de una caja que nadie
+ * esta contando. Sirve igual si no se nombro turno, si no existe, si es de otra persona o si ya se cerro.
+ */
+export class ShiftRequiredError extends Error {
+  constructor() {
+    super('Giving cash back needs an open shift of the person');
+    this.name = 'ShiftRequiredError';
+  }
+}
