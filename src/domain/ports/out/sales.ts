@@ -36,8 +36,18 @@ export interface NewSale {
   readonly payments: readonly PaymentRecord[];
 }
 
-/** Una venta tal como quedo guardada, con la operacion que la trajo (quien, en que dispositivo y a que hora). */
-export interface SaleRecord {
+/** La revision de una venta: quien la miro, cuando y que anoto (ADR 0027). Una fila de solo agregar. */
+export interface SaleReviewRecord {
+  readonly reviewedAt: Date;
+  readonly reviewedByUserId: string;
+  readonly note: string | null;
+}
+
+/**
+ * Una venta sin sus lineas ni sus cobros: lo que se ve en una lista. Con la operacion que la trajo (quien, en que
+ * dispositivo y a que hora) y su revision, si alguien ya la miro.
+ */
+export interface SaleHeader {
   readonly id: string;
   readonly operationId: string;
   readonly shiftId: string;
@@ -58,9 +68,28 @@ export interface SaleRecord {
   /** Cuando ocurrio y cuando llego al servidor. */
   readonly occurredAt: Date;
   readonly receivedAt: Date;
+  /** `null` mientras nadie la haya revisado. */
+  readonly review: SaleReviewRecord | null;
+}
+
+/** Una venta tal como quedo guardada. */
+export interface SaleRecord extends SaleHeader {
   /** En el orden en que el dispositivo las vendio. */
   readonly lines: readonly SaleLineRecord[];
   readonly payments: readonly PaymentRecord[];
+}
+
+/** El listado va de la venta mas reciente a la mas vieja; la posicion es (hora efectiva en milisegundos, id). */
+export interface SaleListRequest {
+  readonly limit: number;
+  readonly after?: readonly [string, string];
+  /** Solo las ventas de turnos de esta persona (un cajero ve las suyas). */
+  readonly shiftOwnerId?: string;
+  readonly shiftId?: string;
+  /** `true`: las que piden atencion y nadie ha revisado. `false`: las demas. */
+  readonly attention?: boolean;
+  /** El folio exacto, el guardado o el que trajo el dispositivo. */
+  readonly folio?: string;
 }
 
 /** Puerto de salida: las ventas del negocio de la unidad de trabajo (C3-03, ADR 0027). */
@@ -72,4 +101,15 @@ export interface SaleRepository {
   create(sale: NewSale): Promise<SaleRecord>;
   /** La venta que una operacion registro, o `null` si no registro ninguna. */
   findByOperation(operationId: string): Promise<SaleRecord | null>;
+  find(id: string): Promise<SaleRecord | null>;
+  list(request: SaleListRequest): Promise<SaleHeader[]>;
+  /**
+   * Agrega la revision de una venta que ya existe. Una venta se revisa una vez: si ya tenia revision, no agrega otra y
+   * devuelve la que habia (`created: false`).
+   */
+  review(
+    saleId: string,
+    userId: string,
+    note: string | null,
+  ): Promise<{ review: SaleReviewRecord; created: boolean }>;
 }
