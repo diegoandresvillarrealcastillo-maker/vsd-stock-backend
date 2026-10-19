@@ -862,6 +862,79 @@ describe('sales against PostgreSQL (C3-03)', () => {
         ]);
       });
 
+      it('gives of each sale all that the sale says itself, and not what only the whole sale carries', async () => {
+        const reviewer = await seedUser('admin');
+        await sell({ folio: 'ZZ-000500' });
+        const clash = await sell({
+          folio: 'ZZ-000500',
+          total: 1,
+          deviceTime: '2026-10-18T10:00:00.000Z',
+          clockOffsetMs: 0,
+        });
+        await sales.review(session(reviewer, BUSINESS_A, 'admin'), clash.sale.id, {
+          note: 'Revisada a mano',
+        });
+        const whole = await sales.get(manager(), clash.sale.id);
+        const header = Object.fromEntries(
+          Object.entries(whole).filter(([key]) => !['lines', 'payments', 'summary'].includes(key)),
+        );
+
+        const listed = (await sales.list(manager(), {})).items.find(
+          (item) => item.id === clash.sale.id,
+        );
+
+        expect(listed).toEqual(header);
+        // Lo que la prueba necesita para ser fuerte: cada campo dice algo distinto de los demas.
+        expect(whole.folio).not.toBe(whole.folioReported);
+        expect(whole.receivedAt.getTime()).not.toBe(whole.occurredAt.getTime());
+        expect(whole.review).toMatchObject({
+          reviewedByUserId: reviewer,
+          note: 'Revisada a mano',
+        });
+        expect(whole.deviceId).not.toBeNull();
+      });
+
+      it('never gives more rows than it was asked for', async () => {
+        for (let index = 0; index < 3; index += 1) await plant();
+
+        const rows = await unitOfWork.inBusiness(BUSINESS_A, (s) => s.sales.list({ limit: 2 }));
+
+        expect(rows).toHaveLength(2);
+      });
+
+      it('shows a cashier the sales of his shifts, whoever registered them', async () => {
+        const cashier = await seedUser('cashier');
+        const mine = randomUUID();
+        await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.shifts.open({
+            id: mine,
+            deviceId: a.deviceId,
+            userId: cashier,
+            openedAt: new Date(Date.now() - 1_800_000),
+            openingAmount: 0,
+          }),
+        );
+        const ofHisShift = await plant({ shift: mine, userId: a.ownerId });
+        await plant({ userId: cashier });
+
+        expect(await everything({}, session(cashier, BUSINESS_A, 'cashier'))).toEqual([ofHisShift]);
+      });
+
+      it('also finds a sale by the folio under which it was stored', async () => {
+        const stored = await plant({
+          folio: 'AA-000142~1a2b3c4d',
+          folioReported: 'AA-000142',
+          folioConflict: true,
+        });
+        await plant({ folio: 'AA-000142' });
+
+        const rows = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.sales.list({ limit: 10, folio: 'AA-000142~1a2b3c4d' }),
+        );
+
+        expect(rows.map((row) => row.id)).toEqual([stored]);
+      });
+
       it('finds a sale by the folio that the device printed, also when it was saved with another one', async () => {
         const first = await plant({ folio: 'AA-000142', at: '2026-10-18T10:00:00.000Z' });
         const repeated = await plant({
@@ -1015,6 +1088,27 @@ describe('sales against PostgreSQL (C3-03)', () => {
         ]);
       });
 
+      it('gives back the review of the sale that was asked for when several were reviewed', async () => {
+        // Identificadores fijos: la base devuelve las filas ordenadas por venta, y la primera revision es la de menor identificador.
+        const first = await plant({
+          id: '00000000-0000-4000-8000-0000000000a1',
+          needsAdjustment: true,
+        });
+        const second = await plant({
+          id: '00000000-0000-4000-8000-0000000000a2',
+          needsAdjustment: true,
+        });
+        const other = await seedUser('admin');
+        await sales.review(manager(), first, { note: 'de la primera' });
+
+        const outcome = await sales.review(session(other, BUSINESS_A, 'admin'), second, {
+          note: 'de la segunda',
+        });
+
+        expect(outcome.review).toMatchObject({ note: 'de la segunda', reviewedByUserId: other });
+        expect((await sales.get(manager(), first)).review?.note).toBe('de la primera');
+      });
+
       it('can be made without a note', async () => {
         const id = await plant({ needsAdjustment: true });
 
@@ -1105,6 +1199,19 @@ describe('sales against PostgreSQL (C3-03)', () => {
             [BUSINESS_B, id, b.ownerId],
           ),
         ).rejects.toThrow(/sale_review_id_negocio_sale_id_fkey/);
+      });
+
+      it('does not let a business write a review as if it were another one', async () => {
+        const id = await plant({ needsAdjustment: true });
+
+        await expect(
+          asApplication(admin, BUSINESS_B, (client) =>
+            client.query(
+              `INSERT INTO sale_review (id_negocio, sale_id, user_id) VALUES ($1, $2, $3)`,
+              [BUSINESS_A, id, a.ownerId],
+            ),
+          ),
+        ).rejects.toThrow(/row-level security policy/);
       });
 
       it('lets a sale be reviewed once, however the second try gets in', async () => {

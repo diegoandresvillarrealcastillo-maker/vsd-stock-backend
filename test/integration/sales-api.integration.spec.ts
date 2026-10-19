@@ -896,6 +896,22 @@ describe('sales, end to end (C3-03)', () => {
         ).toEqual([{ flags: ['total-differs'] }]);
       });
 
+      it('answers with the identifier of the sale in lowercase, however it was written in the path', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.cashier.token);
+        const registered = await odd(t, t.cashier.token, shiftId);
+
+        const reply = await call(
+          'POST',
+          `/v1/sales/${registered.id.toUpperCase()}/review`,
+          t.owner,
+          {},
+        );
+
+        expect(reply.status).toBe(201);
+        expect(reply.body.saleId).toBe(registered.id);
+      });
+
       it('is idempotent: the second time gives back the first review with 200 and Idempotent-Replayed', async () => {
         const t = await stockedTeam();
         const shiftId = await openShift(t, t.cashier.token);

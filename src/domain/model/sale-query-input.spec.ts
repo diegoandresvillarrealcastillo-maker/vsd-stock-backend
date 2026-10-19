@@ -66,6 +66,18 @@ describe('the filters of the list of sales', () => {
     expect(codes(errorsOf(filter, { folio: 'A'.repeat(41) }))).toEqual(['/folio:too-long']);
   });
 
+  it.each(['maybe', 'TRUE', 'False', '1', 'yes', 'si'])(
+    'accepts only true or false for the tray, not %j',
+    (value) => {
+      expect(codes(errorsOf(filter, { attention: value }))).toEqual(['/attention:invalid-value']);
+    },
+  );
+
+  it('says what a folio of the longest size is when it is not one, and only too long when it is longer', () => {
+    expect(codes(errorsOf(filter, { folio: 'A'.repeat(40) }))).toEqual(['/folio:invalid-folio']);
+    expect(codes(errorsOf(filter, { folio: 'A'.repeat(41) }))).toEqual(['/folio:too-long']);
+  });
+
   it('knows its fields', () => {
     expect([...SALE_FILTER_FIELDS]).toEqual(['shiftId', 'attention', 'folio']);
   });

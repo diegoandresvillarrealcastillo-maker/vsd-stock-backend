@@ -324,6 +324,14 @@ describe('SalesUseCase: looking at sales', () => {
       expect(await failureOf(env.useCase.get(luis, made.id))).toBeInstanceOf(SaleNotFoundError);
     });
 
+    it('is seen by the management whichever shift it is from, also by an administrator who did not sell it', async () => {
+      const env = await setup();
+      const made = await sell(env, ana, SHIFT, '2026-10-18T14:00:00.000Z');
+      const admin = asPerson('admin', LUIS);
+
+      await expect(env.useCase.get(admin, made.id)).resolves.toMatchObject({ id: made.id });
+    });
+
     it('does not exist when nothing has that identifier, or when it is not even one', async () => {
       const env = await setup();
 
@@ -372,6 +380,26 @@ describe('SalesUseCase: looking at sales', () => {
       });
     });
 
+    it('keeps who reviewed it, not who sold it', async () => {
+      const env = await setup();
+      const made = await sell(env, ana, SHIFT, '2026-10-18T11:00:00.000Z');
+
+      const outcome = await env.useCase.review(asPerson('admin', LUIS), made.id, {});
+
+      expect(made.userId).toBe(ACTOR_ID);
+      expect(outcome.review.reviewedByUserId).toBe(LUIS);
+    });
+
+    it('finds the sale by the identifier in lowercase and answers with it, however it was written', async () => {
+      const env = await setup();
+      const made = await sell(env, ana, SHIFT, '2026-10-18T11:00:00.000Z');
+
+      const outcome = await env.useCase.review(owner, made.id.toUpperCase(), {});
+
+      expect(outcome.saleId).toBe(made.id);
+      expect(env.fakeSales.reviews.has(made.id)).toBe(true);
+    });
+
     it('can go without a note', async () => {
       const env = await setup();
       const made = await sell(env, ana, SHIFT, '2026-10-18T11:00:00.000Z');
@@ -408,9 +436,12 @@ describe('SalesUseCase: looking at sales', () => {
       expect(await failureOf(env.useCase.review(owner, UNKNOWN, {}))).toBeInstanceOf(
         SaleNotFoundError,
       );
+      const opened = env.work.openedFor.length;
       expect(await failureOf(env.useCase.review(owner, 'no-es-un-id', {}))).toBeInstanceOf(
         SaleNotFoundError,
       );
+      // Lo que no es un identificador no es de nadie: no se le pregunta nada a la base.
+      expect(env.work.openedFor).toHaveLength(opened);
     });
 
     it('refuses a body that is not a review, before it opens the database', async () => {
