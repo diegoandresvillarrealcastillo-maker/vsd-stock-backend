@@ -43,6 +43,22 @@ export interface SaleReviewRecord {
   readonly note: string | null;
 }
 
+/** La anulacion de una venta: quien la hizo, cuando y por que (ADR 0027). Una fila de solo agregar. */
+export interface SaleVoidRecord {
+  readonly voidedAt: Date;
+  readonly voidedByUserId: string;
+  /** La operacion de anular: bajo ella quedaron los movimientos que compensan. */
+  readonly operationId: string;
+  readonly reason: string;
+}
+
+/** Lo que se escribe al anular una venta que ya existe. La operacion ya debe estar reclamada. */
+export interface NewSaleVoid {
+  readonly saleId: string;
+  readonly operationId: string;
+  readonly reason: string;
+}
+
 /**
  * Una venta sin sus lineas ni sus cobros: lo que se ve en una lista. Con la operacion que la trajo (quien, en que
  * dispositivo y a que hora) y su revision, si alguien ya la miro.
@@ -70,6 +86,8 @@ export interface SaleHeader {
   readonly receivedAt: Date;
   /** `null` mientras nadie la haya revisado. */
   readonly review: SaleReviewRecord | null;
+  /** `null` mientras no este anulada. */
+  readonly voided: SaleVoidRecord | null;
 }
 
 /** Una venta tal como quedo guardada. */
@@ -102,6 +120,8 @@ export interface SaleRepository {
   /** La venta que una operacion registro, o `null` si no registro ninguna. */
   findByOperation(operationId: string): Promise<SaleRecord | null>;
   find(id: string): Promise<SaleRecord | null>;
+  /** La venta que una operacion de anular anulo, o `null` si esa operacion no anulo ninguna. */
+  findByVoid(operationId: string): Promise<SaleRecord | null>;
   list(request: SaleListRequest): Promise<SaleHeader[]>;
   /**
    * Agrega la revision de una venta que ya existe. Una venta se revisa una vez: si ya tenia revision, no agrega otra y
@@ -112,4 +132,9 @@ export interface SaleRepository {
     userId: string,
     note: string | null,
   ): Promise<{ review: SaleReviewRecord; created: boolean }>;
+  /**
+   * Agrega la anulacion de la venta y la devuelve tal como queda. Una venta se anula una vez: si ya lo estaba (por ejemplo, otra
+   * peticion la anulo a la vez), lanza `SaleVoidedError` y la transaccion entera se deshace.
+   */
+  recordVoid(request: NewSaleVoid): Promise<SaleRecord>;
 }

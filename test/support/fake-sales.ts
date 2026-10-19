@@ -1,4 +1,5 @@
 import { requiresAttention } from '../../src/domain/model/sale-attention.js';
+import { SaleVoidedError } from '../../src/domain/model/sale-errors.js';
 import type {
   NewSale,
   SaleHeader,
@@ -6,12 +7,14 @@ import type {
   SaleRecord,
   SaleRepository,
   SaleReviewRecord,
+  SaleVoidRecord,
+  NewSaleVoid,
 } from '../../src/domain/ports/out/sales.js';
 import type { FakeShifts } from './fake-cash.js';
 import type { FakeOperations } from './fake-purchasing.js';
 
-/** Una venta guardada, sin su revision: la revision se anota aparte, como en la base (otra fila). */
-type StoredSale = Omit<SaleRecord, 'review'>;
+/** Una venta guardada, sin su revision ni su anulacion: se anotan aparte, como en la base (otras filas). */
+type StoredSale = Omit<SaleRecord, 'review' | 'voided'>;
 
 const newestFirst = (a: StoredSale, b: StoredSale): number =>
   b.occurredAt.getTime() - a.occurredAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
@@ -26,6 +29,10 @@ export class FakeSales implements SaleRepository {
   readonly reviews = new Map<string, SaleReviewRecord>();
   /** La hora con que se anota una revision. */
   reviewedAt = new Date('2026-10-19T09:00:00.000Z');
+  /** La anulacion de cada venta, por su identificador. */
+  readonly voids = new Map<string, SaleVoidRecord>();
+  /** La hora con que se anota una anulacion. */
+  voidedAt = new Date('2026-10-19T10:00:00.000Z');
   private counter = 0;
 
   constructor(
@@ -76,6 +83,11 @@ export class FakeSales implements SaleRepository {
     return Promise.resolve(found === undefined ? null : this.withReview(found));
   }
 
+  findByVoid(operationId: string): Promise<SaleRecord | null> {
+    const voided = [...this.voids].find(([, record]) => record.operationId === operationId);
+    return this.find(voided?.[0] ?? '');
+  }
+
   list(request: SaleListRequest): Promise<SaleHeader[]> {
     const after = request.after;
     const rows = [...this.records]
@@ -124,8 +136,30 @@ export class FakeSales implements SaleRepository {
     return Promise.resolve({ review, created: true });
   }
 
+  recordVoid(request: NewSaleVoid): Promise<SaleRecord> {
+    if (this.voids.has(request.saleId)) return Promise.reject(new SaleVoidedError());
+    const claimed = this.operations.claims.get(request.operationId);
+    if (claimed === undefined) {
+      return Promise.reject(new Error(`The operation ${request.operationId} was not claimed`));
+    }
+    this.voids.set(request.saleId, {
+      voidedAt: this.voidedAt,
+      voidedByUserId: claimed.userId,
+      operationId: request.operationId,
+      reason: request.reason,
+    });
+    return this.find(request.saleId).then((sale) => {
+      if (sale === null) throw new Error(`The sale ${request.saleId} vanished`);
+      return sale;
+    });
+  }
+
   private withReview(sale: StoredSale): SaleRecord {
-    return { ...sale, review: this.reviews.get(sale.id) ?? null };
+    return {
+      ...sale,
+      review: this.reviews.get(sale.id) ?? null,
+      voided: this.voids.get(sale.id) ?? null,
+    };
   }
 
   private headerOf(sale: StoredSale): SaleHeader {
