@@ -19,7 +19,7 @@ import {
 
 /**
  * El esquema REAL que crean las migraciones de prisma/migrations (ADR 0021): las veinte tablas del modelo
- * congelado (ADR 0020), la seguridad por fila (ADR 0005) y las reglas que la base hace cumplir. Las
+ * congelado (ADR 0020) y la revision de ventas (ADR 0027), la seguridad por fila (ADR 0005) y las reglas que la base hace cumplir. Las
  * especificaciones del Ciclo 1 (existencias, catalogo, folios, aislamiento) corren sobre estas mismas tablas.
  */
 
@@ -59,6 +59,7 @@ const PRIVILEGES: Record<string, string> = {
   sale_line: 'SI',
   payment: 'SI',
   sale_void: 'SI',
+  sale_review: 'SI',
 };
 
 const PRIVILEGE_NAMES = { S: 'SELECT', I: 'INSERT', U: 'UPDATE', D: 'DELETE' } as const;
@@ -128,7 +129,7 @@ describe('real schema (ADR 0021)', () => {
       );
 
       expect(result.rows.map((row) => row.table_name)).toEqual(tablesInModelDocument());
-      expect(result.rows).toHaveLength(20);
+      expect(result.rows).toHaveLength(21);
     });
 
     it('have forced row level security when they carry id_negocio', async () => {
@@ -772,6 +773,7 @@ describe('real schema (ADR 0021)', () => {
         'purchase_line',
         'sale',
         'sale_line',
+        'sale_review',
         'sale_void',
         'stock_movement',
       ];
