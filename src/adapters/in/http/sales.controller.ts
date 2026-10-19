@@ -22,6 +22,7 @@ import {
   SaleRequestDto,
   SaleReviewRequestDto,
   SaleReviewResponseDto,
+  SaleVoidRequestDto,
 } from './sales.dto.js';
 import { SALES } from './tokens.js';
 
@@ -171,5 +172,35 @@ export class SalesController {
       response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
     }
     return { saleId: reviewed, ...review };
+  }
+
+  @Post(':saleId/void')
+  @ApiProblemResponse()
+  @ApiOperation({
+    summary: 'Anular una venta',
+    description:
+      'La gerencia (`sale:void`, con conexión). **No borra ni edita la venta** (ADR 0009): agrega los movimientos que compensan. La existencia vuelve con un movimiento de motivo `void` por producto, y el efectivo que se cobró sale como un egreso del turno ABIERTO de quien anula (`shiftId`), no del de la venta, que puede estar cerrado y contado. Si la venta tuvo efectivo y no se nombra un turno abierto suyo, `409 shift-required`; una venta ya anulada es `409 sale-voided`. Es idempotente por `operationId` (ADR 0019): la primera vez responde 201 con la venta; repetirla con los mismos datos responde 200 con la venta tal como quedó y `Idempotent-Replayed: true`; con otros datos, 409 `operation-id-reused`.',
+  })
+  @ApiParam({ name: 'saleId', type: String, format: 'uuid' })
+  @ApiBody({ type: SaleVoidRequestDto })
+  @ApiCreatedResponse({ type: SaleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'La venta ya se había anulado con esta operación: es la misma de antes.',
+    type: SaleDto,
+    headers: REPLAYED_RESPONSE,
+  })
+  async voidSale(
+    @CurrentSession() session: Session,
+    @Param('saleId') saleId: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) response: ResponseWithStatus,
+  ): Promise<SaleView> {
+    const { sale, replayed } = await this.sales.voidSale(session, saleId, body);
+    if (replayed) {
+      response.status(200);
+      response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
+    }
+    return sale;
   }
 }

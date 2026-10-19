@@ -2294,6 +2294,85 @@
           "sales"
         ]
       }
+    },
+    "/v1/sales/{saleId}/void": {
+      "post": {
+        "description": "La gerencia (`sale:void`, con conexión). **No borra ni edita la venta** (ADR 0009): agrega los movimientos que compensan. La existencia vuelve con un movimiento de motivo `void` por producto, y el efectivo que se cobró sale como un egreso del turno ABIERTO de quien anula (`shiftId`), no del de la venta, que puede estar cerrado y contado. Si la venta tuvo efectivo y no se nombra un turno abierto suyo, `409 shift-required`; una venta ya anulada es `409 sale-voided`. Es idempotente por `operationId` (ADR 0019): la primera vez responde 201 con la venta; repetirla con los mismos datos responde 200 con la venta tal como quedó y `Idempotent-Replayed: true`; con otros datos, 409 `operation-id-reused`.",
+        "operationId": "SalesController_voidSale",
+        "parameters": [
+          {
+            "name": "saleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaleVoidRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La venta ya se había anulado con esta operación: es la misma de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Anular una venta",
+        "tags": [
+          "sales"
+        ]
+      }
     }
   },
   "info": {
@@ -4007,6 +4086,37 @@
           "note"
         ]
       },
+      "SaleVoidDto": {
+        "type": "object",
+        "properties": {
+          "voidedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Cuándo se anuló."
+          },
+          "voidedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Quién la anuló."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La operación de anular: bajo ella quedaron los movimientos que compensan."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Por qué se anuló."
+          }
+        },
+        "required": [
+          "voidedAt",
+          "voidedByUserId",
+          "operationId",
+          "reason"
+        ]
+      },
       "SaleLineDto": {
         "type": "object",
         "properties": {
@@ -4220,6 +4330,16 @@
               }
             ]
           },
+          "voided": {
+            "nullable": true,
+            "description": "`null` mientras no esté anulada (ADR 0027). Una venta anulada no se borra ni se edita.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SaleVoidDto"
+              }
+            ]
+          },
           "attention": {
             "type": "boolean",
             "description": "Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado."
@@ -4258,6 +4378,7 @@
           "occurredAt",
           "receivedAt",
           "review",
+          "voided",
           "attention",
           "lines",
           "payments",
@@ -4361,6 +4482,16 @@
               }
             ]
           },
+          "voided": {
+            "nullable": true,
+            "description": "`null` mientras no esté anulada (ADR 0027). Una venta anulada no se borra ni se edita.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SaleVoidDto"
+              }
+            ]
+          },
           "attention": {
             "type": "boolean",
             "description": "Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado."
@@ -4382,6 +4513,7 @@
           "occurredAt",
           "receivedAt",
           "review",
+          "voided",
           "attention"
         ]
       },
@@ -4447,6 +4579,32 @@
           "reviewedByUserId",
           "note",
           "saleId"
+        ]
+      },
+      "SaleVoidRequestDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La clave de idempotencia, creada una sola vez (ADR 0019)."
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Un turno ABIERTO de quien anula, de donde sale el efectivo que se devuelve. Hace falta si la venta tuvo efectivo (409 `shift-required` si no); sin efectivo se puede omitir."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "Se equivocó de producto",
+            "description": "Por qué se anula, para que quede dicho. Una línea."
+          }
+        },
+        "required": [
+          "operationId",
+          "reason"
         ]
       },
       "ProblemErrorDto": {

@@ -25,12 +25,13 @@ import {
   NoMembershipError,
   PersonNotFoundError,
 } from '../../../domain/model/people-errors.js';
-import { SaleNotFoundError } from '../../../domain/model/sale-errors.js';
+import { SaleNotFoundError, SaleVoidedError } from '../../../domain/model/sale-errors.js';
 import {
   ShiftAlreadyOpenError,
   ShiftClosedError,
   ShiftIdReusedError,
   ShiftNotFoundError,
+  ShiftRequiredError,
 } from '../../../domain/model/shift-errors.js';
 import { ValidationFailedError } from '../../../domain/model/validation.js';
 import { AuthenticationError, UserInactiveError } from '../../../domain/ports/in/authenticate.js';
@@ -233,6 +234,9 @@ function problemOfSaleError(error: unknown): ApiProblem | undefined {
   if (error instanceof SaleNotFoundError) {
     return new ApiProblem(404, 'sale-not-found', 'No existe esa venta en este negocio.');
   }
+  if (error instanceof SaleVoidedError) {
+    return new ApiProblem(409, 'sale-voided', 'Esa venta ya está anulada.');
+  }
   return undefined;
 }
 
@@ -253,6 +257,13 @@ function problemOfShiftError(error: unknown): ApiProblem | undefined {
       409,
       'shift-id-reused',
       'Ese identificador de turno ya es de otro turno. Genera uno nuevo para un turno distinto.',
+    );
+  }
+  if (error instanceof ShiftRequiredError) {
+    return new ApiProblem(
+      409,
+      'shift-required',
+      'Para devolver el efectivo hace falta un turno tuyo que esté abierto.',
     );
   }
   if (error instanceof ShiftClosedError) {

@@ -121,6 +121,7 @@ const USE_CASES: Record<string, readonly string[]> = {
     'GET /v1/sales',
     'GET /v1/sales/:saleId',
     'POST /v1/sales/:saleId/review',
+    'POST /v1/sales/:saleId/void',
   ],
   shifts: [
     'POST /v1/shifts',
@@ -813,6 +814,25 @@ describe('isolation between businesses and the matrix of roles, through the whol
         path: `/v1/sales/${await makeSaleOf(team, 'owner')}/review`,
         body: { note: unique(team, 'Revisada') },
       }),
+      outsider: { kind: 'not-found', code: 'sale-not-found' },
+    },
+    {
+      route: 'POST /v1/sales/:saleId/void',
+      allowed: MANAGEMENT,
+      success: 201,
+      // La venta es del dueño; el efectivo sale de un turno abierto de quien anula.
+      aim: async (team, role = 'owner') => {
+        const saleId = await makeSaleOf(team, 'owner');
+        return {
+          method: 'POST',
+          path: `/v1/sales/${saleId}/void`,
+          body: {
+            operationId: randomUUID(),
+            shiftId: await makeShiftOf(team, role),
+            reason: unique(team, 'Anulada'),
+          },
+        };
+      },
       outsider: { kind: 'not-found', code: 'sale-not-found' },
     },
     // ---------------- personas

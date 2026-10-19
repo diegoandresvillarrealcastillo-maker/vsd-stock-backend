@@ -4,6 +4,7 @@ import {
   ShiftClosedError,
   ShiftIdReusedError,
   ShiftNotFoundError,
+  ShiftRequiredError,
 } from '../../../domain/model/shift-errors.js';
 import { problemOfDomainError } from './domain-errors.js';
 
@@ -19,6 +20,7 @@ describe('shift errors as API problems (C3-02)', () => {
       'Ese identificador de turno ya es de otro turno',
     ],
     [new ShiftClosedError(), 409, 'shift-closed', 'El turno ya está cerrado'],
+    [new ShiftRequiredError(), 409, 'shift-required', 'hace falta un turno tuyo que esté abierto'],
   ])('answers %s with %i %s and says it in words', (error, status, code, words) => {
     const problem = problemOfDomainError(error);
 
