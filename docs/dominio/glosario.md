@@ -346,11 +346,14 @@ convierte a pesos con la misma regla de redondeo. El descuento sobre toda la ven
 ### Anulación
 
 Dejar sin efecto una venta ya registrada. No borra ni edita nada: agrega los movimientos que compensan, de
-stock y de caja.
+stock y de caja. Es de la gerencia, necesita conexión y se hace una sola vez por venta. La existencia vuelve con un
+movimiento por producto, y el **efectivo que se cobró sale del turno abierto de quien anula**, no del turno de la venta (que
+puede estar cerrado y contado): la venta anulada sigue sumada en el arqueo de su turno y la devolución se ve en el de quien
+anula. Si hubo efectivo y quien anula no tiene un turno abierto, no se anula (ADR 0027).
 
-**Código:** `SaleVoid`
+**Código:** `SaleVoid`, tabla `sale_void`, `POST /v1/sales/{id}/void`
 
-**Estado:** Decidido (ADR 0009)
+**Estado:** Decidido (ADR 0009 y ADR 0027)
 
 ### Devolución
 
