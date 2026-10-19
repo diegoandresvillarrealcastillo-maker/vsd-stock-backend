@@ -2,10 +2,12 @@ import { WarehouseMissingError } from '../../../domain/model/purchase-errors.js'
 import { isUnitOfMeasure } from '../../../domain/model/unit-of-measure.js';
 import type { ListRequest } from '../../../domain/ports/out/catalog.js';
 import type {
+  ChangedStockRequest,
   MovementListRequest,
   StockChange,
   StockFilter,
   StockLedger,
+  StockLevel,
   StockMovementKind,
   StockMovementRecord,
   StockRecord,
@@ -172,6 +174,34 @@ export class PrismaStockLedger implements StockLedger {
        ORDER BY p.name, p.id
        LIMIT ${request.limit}`);
     return rows.map(stockOf);
+  }
+
+  async listStockChanged(request: ChangedStockRequest): Promise<StockLevel[]> {
+    const conditions: Prisma.Sql[] = [];
+    if (request.after !== undefined)
+      conditions.push(Prisma.sql`b.product_id > ${request.after}::uuid`);
+    if (request.since !== undefined) {
+      // Se movio despues de `since`: el libro lo dice (no hace falta una hora en el saldo). Al milisegundo, como el resto.
+      conditions.push(
+        Prisma.sql`EXISTS (
+          SELECT 1 FROM stock_movement m
+           WHERE m.id_negocio = b.id_negocio AND m.product_id = b.product_id
+             AND date_trunc('milliseconds', m.created_at) > ${request.since.toISOString()}::timestamptz
+        )`,
+      );
+    }
+    const where =
+      conditions.length === 0
+        ? Prisma.empty
+        : Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+    const rows = await this.tx.$queryRaw<{ product_id: string; quantity: bigint }[]>(Prisma.sql`
+      SELECT b.product_id, sum(b.quantity)::bigint AS quantity
+        FROM stock_balance b
+        ${where}
+       GROUP BY b.product_id
+       ORDER BY b.product_id
+       LIMIT ${request.limit}`);
+    return rows.map((row) => ({ productId: row.product_id, quantityMilli: Number(row.quantity) }));
   }
 
   async movements(productId: string, request: MovementListRequest): Promise<StockMovementRecord[]> {

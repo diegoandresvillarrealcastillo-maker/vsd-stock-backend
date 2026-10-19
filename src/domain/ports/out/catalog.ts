@@ -40,6 +40,15 @@ export interface ListRequest {
   readonly after?: readonly [string, string];
 }
 
+/** La descarga incremental del catalogo para la copia de lectura del dispositivo (ADR 0028). */
+export interface ChangedProductsRequest {
+  readonly limit: number;
+  /** La posicion (hora del cambio al milisegundo, id) tras la que sigue la pagina. */
+  readonly after?: readonly [string, string];
+  /** Solo lo que cambio DESPUES de este instante; sin el, todo. */
+  readonly since?: Date;
+}
+
 /**
  * Puerto de salida: el catalogo del negocio de la unidad de trabajo (ADR 0015). Ninguna operacion recibe el negocio.
  * Los errores de unicidad y de uso los lanza el adaptador como errores del dominio.
@@ -55,6 +64,11 @@ export interface CatalogRepository {
   deleteCategory(id: string): Promise<void>;
 
   listProducts(request: ListRequest & { filter: ProductFilter }): Promise<ProductRecord[]>;
+  /**
+   * Los productos que cambiaron, del cambio mas viejo al mas nuevo (y por id si son de la misma hora). Incluye los archivados:
+   * el dispositivo los quita de su copia. La hora se compara al milisegundo, como la lleva el cursor.
+   */
+  listProductsChanged(request: ChangedProductsRequest): Promise<ProductRecord[]>;
   findProduct(id: string): Promise<ProductRecord | null>;
   /** Los productos de esos identificadores que existen en el negocio, en cualquier orden y sin repetir. */
   findProducts(ids: readonly string[]): Promise<ProductRecord[]>;

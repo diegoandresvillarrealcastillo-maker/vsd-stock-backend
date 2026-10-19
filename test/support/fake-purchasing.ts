@@ -19,10 +19,12 @@ import type {
   PurchaseSummary,
 } from '../../src/domain/ports/out/purchases.js';
 import type {
+  ChangedStockRequest,
   MovementListRequest,
   StockChange,
   StockFilter,
   StockLedger,
+  StockLevel,
   StockMovementRecord,
   StockRecord,
   WarehouseRecord,
@@ -190,6 +192,24 @@ export class FakeStock implements StockLedger {
       );
     }
     return Promise.resolve();
+  }
+
+  listStockChanged(request: ChangedStockRequest): Promise<StockLevel[]> {
+    const moved =
+      request.since === undefined
+        ? undefined
+        : new Set(
+            this.book
+              .filter((movement) => movement.createdAt > request.since!)
+              .map((movement) => movement.productId),
+          );
+    const rows = [...this.balances]
+      .filter(([productId]) => moved === undefined || moved.has(productId))
+      .filter(([productId]) => request.after === undefined || productId > request.after)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .slice(0, request.limit)
+      .map(([productId, quantityMilli]) => ({ productId, quantityMilli }));
+    return Promise.resolve(rows);
   }
 
   quantitiesOf(productIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
