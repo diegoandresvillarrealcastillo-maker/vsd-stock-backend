@@ -2373,6 +2373,194 @@
           "sales"
         ]
       }
+    },
+    "/v1/sync": {
+      "post": {
+        "description": "De 1 a 50 operaciones (`shift-open`, `shift-close` o `sale`) con el cuerpo EXACTO de su ruta individual. Se aplican una tras otra y cada una en su propia transacción, con las reglas de su ruta, así que una que falla no deshace ni detiene a las demás (ADR 0028). Responde 200 siempre que se procesó el lote, con un resultado por operación y en el mismo orden: `status` es el estado HTTP que habría contestado la ruta suelta, `replayed` dice si ya estaba aplicada, y viene `body` (lo que la ruta devuelve) o `problem` (el error de siempre). Lo que echa abajo la petición entera (sin sesión, sin negocio, un lote que no es una lista de 1 a 50) es el error de siempre.",
+        "operationId": "SyncController_apply",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar un lote de operaciones hechas sin conexión",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/v1/sync/products": {
+      "get": {
+        "description": "Del cambio más viejo al más nuevo (por `updatedAt` y luego `id`), con cursor, e **incluye los productos archivados** (`active: false`) para que el dispositivo los quite de su copia. Con `since`, solo lo que cambió después. Cada página dice su `asOf`. Lo leen los tres roles (un cajero necesita el catálogo para vender).",
+        "operationId": "SyncController_products",
+        "parameters": [
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-10-18T15:00:00.000Z"
+            },
+            "description": "Solo lo que cambió DESPUÉS de este instante (ISO 8601 UTC con `Z`). Sin él, todo. El dispositivo usa el `asOf` de su última descarga menos un minuto."
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCopyPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Copia de lectura: el catálogo",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/v1/sync/stock": {
+      "get": {
+        "description": "La existencia de ahora de cada producto que alguna vez se movió, ordenada por producto, con cursor. Con `since`, solo los productos con un movimiento posterior. Un producto que nunca se movió no aparece: vale cero. Cada página dice su `asOf`: la cifra que muestra el dispositivo lleva esa hora.",
+        "operationId": "SyncController_stock",
+        "parameters": [
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-10-18T15:00:00.000Z"
+            },
+            "description": "Solo lo que cambió DESPUÉS de este instante (ISO 8601 UTC con `Z`). Sin él, todo. El dispositivo usa el `asOf` de su última descarga menos un minuto."
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCopyPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Copia de lectura: la existencia",
+        "tags": [
+          "sync"
+        ]
+      }
     }
   },
   "info": {
@@ -4607,6 +4795,51 @@
           "reason"
         ]
       },
+      "SyncOperationDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "shift-open",
+              "shift-close",
+              "sale"
+            ],
+            "description": "Lo que se hizo sin conexión: `shift-open` (`POST /v1/shifts`), `shift-close` (`POST /v1/shifts/{id}/close`) o `sale` (`POST /v1/sales`)."
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Solo al cerrar un turno (`shift-close`): el turno que se cierra, que en la ruta individual va en el camino."
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "El cuerpo exacto de la ruta individual de esa clase, con su `operationId`. Se valida con las mismas reglas."
+          }
+        },
+        "required": [
+          "kind",
+          "body"
+        ]
+      },
+      "SyncRequestDto": {
+        "type": "object",
+        "properties": {
+          "operations": {
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "Las operaciones, en el orden en que se hicieron. Se aplican una tras otra, cada una en su propia transacción: una que falla no deshace ni detiene a las demás.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncOperationDto"
+            }
+          }
+        },
+        "required": [
+          "operations"
+        ]
+      },
       "ProblemErrorDto": {
         "type": "object",
         "properties": {
@@ -4684,6 +4917,139 @@
           "instance",
           "code",
           "traceId"
+        ]
+      },
+      "SyncResultDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "El `operationId` de la operación, o `null` si su cuerpo ni siquiera lo traía."
+          },
+          "status": {
+            "type": "integer",
+            "example": 201,
+            "description": "El estado HTTP que habría contestado la ruta individual: 201 si se aplicó, 200 si ya estaba aplicada (o al cerrar un turno), y el 4xx o 5xx que corresponda si no. El dispositivo decide con él como con una respuesta suelta (ADR 0009)."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "`true` si el servidor ya la había aplicado antes: se perdió la respuesta, no la operación. Sustituye a la cabecera `Idempotent-Replayed`."
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true,
+            "description": "Lo que la ruta individual devuelve (el turno o la venta) cuando se aplicó; `null` si no."
+          },
+          "problem": {
+            "nullable": true,
+            "description": "El error de siempre (`application/problem+json`) cuando no se aplicó; `null` si sí.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProblemDetailsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "status",
+          "replayed",
+          "body",
+          "problem"
+        ]
+      },
+      "SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora del servidor al contestar: con ella y las horas de salida y llegada, el dispositivo mide su reloj (ADR 0016)."
+          },
+          "results": {
+            "description": "Un resultado por operación, en el mismo orden en que llegaron.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncResultDto"
+            }
+          }
+        },
+        "required": [
+          "serverTime",
+          "results"
+        ]
+      },
+      "ProductCopyPageDto": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora del servidor al leer esta página. El dispositivo guarda la de la PRIMERA página de una descarga, le resta un minuto y la usa como `since` la próxima vez."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "asOf",
+          "items",
+          "nextCursor"
+        ]
+      },
+      "StockLevelDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantityMilli": {
+            "type": "integer",
+            "description": "La existencia de ahora, en milésimas de la unidad del producto. Puede ser negativa."
+          }
+        },
+        "required": [
+          "productId",
+          "quantityMilli"
+        ]
+      },
+      "StockCopyPageDto": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora del servidor al leer esta página. El dispositivo guarda la de la PRIMERA página de una descarga, le resta un minuto y la usa como `since` la próxima vez."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockLevelDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "asOf",
+          "items",
+          "nextCursor"
         ]
       }
     }
