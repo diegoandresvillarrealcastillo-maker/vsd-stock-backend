@@ -126,6 +126,12 @@ existe en el negocio (un producto archivado sí se ajusta), `/deltaMilli` `zero-
 responde 404 `product-not-found`: no es una lista vacía. El cursor del historial lleva el instante al milisegundo y el `id`
 del último movimiento.
 
+Los de dispositivos (C3-01, [ADR 0016](adr/0016-folios-por-dispositivo-y-hora-corregida.md)): `device-not-found` (404) y
+`device-id-reused` (409). Registrar un dispositivo es idempotente por **su `id`** y no por un `operationId`: el dispositivo
+se inventa el UUID antes de hablar con el servidor y lo manda en el cuerpo. Repetir el registro responde `200` con el mismo
+dispositivo y `Idempotent-Replayed: true` sin gastar otro código (si ya lo dieron de baja, `revokedAt` se lo dice); el mismo
+`id` con otro nombre, o el `id` de un dispositivo de otro negocio, es `409 device-id-reused`.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

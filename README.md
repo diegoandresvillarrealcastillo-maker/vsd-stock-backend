@@ -74,6 +74,12 @@ valor** cuando es una cadena de conexión (lleva la clave).
   viejo. `POST /v1/stock-adjustments` ajusta la existencia de un producto (la gerencia): es **un movimiento nuevo con su
   motivo obligatorio**, nunca una edición del saldo, es idempotente por `operationId` y la existencia puede quedar en
   negativo ([ADR 0013](docs/adr/0013-existencia-derivada-y-venta-como-una-sola-operacion.md)).
+- `POST /v1/devices` registra un **dispositivo** (los tres roles, con conexión): el servidor le da el siguiente código corto
+  del negocio (`AA`, `AB`... que encabeza sus folios, [ADR 0016](docs/adr/0016-folios-por-dispositivo-y-hora-corregida.md)) y
+  no lo repite jamás, ni siquiera con registros simultáneos. Es idempotente por el `id` que el dispositivo se inventa:
+  repetirlo da `200` con el mismo dispositivo y `Idempotent-Replayed: true`, sin gastar otro código. `GET /v1/devices` los
+  lista (de la gerencia, del más antiguo al más nuevo, por cursor) y `POST /v1/devices/{id}/revoke` da de baja uno: no borra
+  nada y su código no se vuelve a dar.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

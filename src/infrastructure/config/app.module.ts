@@ -16,6 +16,7 @@ import {
   CategoriesController,
   ProductsController,
 } from '../../adapters/in/http/catalog.controller.js';
+import { DevicesController } from '../../adapters/in/http/devices.controller.js';
 import { HealthController } from '../../adapters/in/http/health.controller.js';
 import {
   StockAdjustmentsController,
@@ -33,6 +34,7 @@ import {
   AUTHENTICATE,
   CATEGORIES,
   CREATE_BUSINESS,
+  DEVICES,
   GET_HEALTH,
   GET_ME,
   GET_READINESS,
@@ -62,6 +64,7 @@ import { PrismaUnitOfWork } from '../../adapters/out/persistence/prisma-unit-of-
 import { AuthenticateUseCase } from '../../application/usecases/authenticate.usecase.js';
 import { CategoriesUseCase } from '../../application/usecases/categories.usecase.js';
 import { CreateBusinessUseCase } from '../../application/usecases/create-business.usecase.js';
+import { DevicesUseCase } from '../../application/usecases/devices.usecase.js';
 import { GetHealthUseCase } from '../../application/usecases/get-health.usecase.js';
 import { GetMeUseCase } from '../../application/usecases/get-me.usecase.js';
 import { GetReadinessUseCase } from '../../application/usecases/get-readiness.usecase.js';
@@ -264,6 +267,15 @@ export class AppModule {
       },
     ];
 
+    // Dispositivos (C3-01, ADR 0016).
+    const deviceProviders: Provider[] = [
+      {
+        provide: DEVICES,
+        useFactory: (work: UnitOfWork, clock: Clock) => new DevicesUseCase(work, clock),
+        inject: [UNIT_OF_WORK, CLOCK],
+      },
+    ];
+
     return {
       module: AppModule,
       controllers: [
@@ -281,6 +293,7 @@ export class AppModule {
         StockController,
         StockMovementsController,
         StockAdjustmentsController,
+        DevicesController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
@@ -290,6 +303,7 @@ export class AppModule {
         ...catalogProviders,
         ...purchasingProviders,
         ...inventoryProviders,
+        ...deviceProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,

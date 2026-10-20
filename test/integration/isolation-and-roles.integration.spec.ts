@@ -92,6 +92,7 @@ const USE_CASES: Record<string, readonly string[]> = {
     'DELETE /v1/categories/:categoryId',
   ],
   'create-business': ['POST /v1/businesses'],
+  devices: ['POST /v1/devices', 'GET /v1/devices', 'POST /v1/devices/:deviceId/revoke'],
   'get-health': ['GET /health'],
   'get-me': ['GET /v1/me'],
   'get-readiness': ['GET /v1/ready'],
@@ -302,6 +303,9 @@ describe('isolation between businesses and the matrix of roles, through the whol
         lines: [{ productId: await makeProduct(team), quantityMilli: 1000, unitCost: 1500 }],
       })
     ).id;
+
+  const makeDevice = async (team: Team) =>
+    (await setup(team, 'POST', '/v1/devices', { id: randomUUID(), name: unique(team, 'Caja') })).id;
 
   /** Una persona invitada que todavia no canjea su codigo, y otra que ya trabaja: las dos cajeras del negocio. */
   const makePending = async (team: Team, role: 'admin' | 'cashier' = 'cashier') => {
@@ -580,6 +584,39 @@ describe('isolation between businesses and the matrix of roles, through the whol
       success: 200,
       aim: async (team) => ({ method: 'GET', path: `/v1/purchases/${await makePurchase(team)}` }),
       outsider: { kind: 'not-found', code: 'purchase-not-found' },
+    },
+    // ---------------- dispositivos
+    {
+      route: 'POST /v1/devices',
+      allowed: EVERYONE,
+      success: 201,
+      aim: (team) =>
+        Promise.resolve({
+          method: 'POST',
+          path: '/v1/devices',
+          body: { id: randomUUID(), name: unique(team, 'Caja') },
+        }),
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'GET /v1/devices',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => {
+        await makeDevice(team);
+        return { method: 'GET', path: '/v1/devices' };
+      },
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'POST /v1/devices/:deviceId/revoke',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => ({
+        method: 'POST',
+        path: `/v1/devices/${await makeDevice(team)}/revoke`,
+      }),
+      outsider: { kind: 'not-found', code: 'device-not-found' },
     },
     // ---------------- personas
     {

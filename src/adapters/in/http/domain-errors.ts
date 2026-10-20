@@ -8,6 +8,7 @@ import {
   SkuTakenError,
   UnitLockedError,
 } from '../../../domain/model/catalog-errors.js';
+import { DeviceIdReusedError, DeviceNotFoundError } from '../../../domain/model/device-errors.js';
 import {
   OperationIdReusedError,
   PurchaseNotFoundError,
@@ -87,7 +88,10 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
     return new ApiProblem(503, 'database-not-configured', 'La base de datos no está configurada.');
   }
   return (
-    problemOfPeopleError(error) ?? problemOfCatalogError(error) ?? problemOfPurchasingError(error)
+    problemOfPeopleError(error) ??
+    problemOfCatalogError(error) ??
+    problemOfPurchasingError(error) ??
+    problemOfDeviceError(error)
   );
 }
 
@@ -195,6 +199,21 @@ function problemOfPurchasingError(error: unknown): ApiProblem | undefined {
       409,
       'operation-id-reused',
       'Ese identificador de operación ya se usó con otros datos. Genera uno nuevo para una compra distinta.',
+    );
+  }
+  return undefined;
+}
+
+/** Los errores de los dispositivos (C3-01, ADR 0016). */
+function problemOfDeviceError(error: unknown): ApiProblem | undefined {
+  if (error instanceof DeviceNotFoundError) {
+    return new ApiProblem(404, 'device-not-found', 'No existe ese dispositivo en este negocio.');
+  }
+  if (error instanceof DeviceIdReusedError) {
+    return new ApiProblem(
+      409,
+      'device-id-reused',
+      'Ese identificador de dispositivo ya se registró con otros datos. Genera uno nuevo para un dispositivo distinto.',
     );
   }
   return undefined;
