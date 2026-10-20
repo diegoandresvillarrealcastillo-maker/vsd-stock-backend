@@ -9,6 +9,7 @@ import type {
   PaymentRecord,
   SaleLineRecord,
   SaleReviewRecord,
+  SaleVoidRecord,
 } from '../../../domain/ports/out/sales.js';
 
 const MAX_PESOS = 1_000_000_000_000;
@@ -232,6 +233,24 @@ export class SaleReviewDto implements SaleReviewRecord {
   readonly note!: string | null;
 }
 
+export class SaleVoidDto implements SaleVoidRecord {
+  @ApiProperty({ type: String, format: 'date-time', description: 'Cuándo se anuló.' })
+  readonly voidedAt!: Date;
+
+  @ApiProperty({ type: String, format: 'uuid', description: 'Quién la anuló.' })
+  readonly voidedByUserId!: string;
+
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    description: 'La operación de anular: bajo ella quedaron los movimientos que compensan.',
+  })
+  readonly operationId!: string;
+
+  @ApiProperty({ type: String, maxLength: 200, description: 'Por qué se anuló.' })
+  readonly reason!: string;
+}
+
 /** Lo que una venta de la lista y una venta completa tienen en común. */
 export class SaleHeaderDto {
   @ApiProperty({ type: String, format: 'uuid' })
@@ -314,6 +333,14 @@ export class SaleHeaderDto {
   readonly review!: SaleReviewDto | null;
 
   @ApiProperty({
+    type: SaleVoidDto,
+    nullable: true,
+    description:
+      '`null` mientras no esté anulada (ADR 0027). Una venta anulada no se borra ni se edita.',
+  })
+  readonly voided!: SaleVoidDto | null;
+
+  @ApiProperty({
     type: Boolean,
     description:
       'Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado.',
@@ -370,4 +397,32 @@ export class SaleReviewRequestDto {
 export class SaleReviewResponseDto extends SaleReviewDto {
   @ApiProperty({ type: String, format: 'uuid', description: 'La venta que se revisó.' })
   readonly saleId!: string;
+}
+
+/** Lo que se manda al anular una venta. */
+export class SaleVoidRequestDto {
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    description: 'La clave de idempotencia, creada una sola vez (ADR 0019).',
+  })
+  readonly operationId!: string;
+
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    required: false,
+    nullable: true,
+    description:
+      'Un turno ABIERTO de quien anula, de donde sale el efectivo que se devuelve. Hace falta si la venta tuvo efectivo (409 `shift-required` si no); sin efectivo se puede omitir.',
+  })
+  readonly shiftId?: string | null;
+
+  @ApiProperty({
+    type: String,
+    maxLength: 200,
+    example: 'Se equivocó de producto',
+    description: 'Por qué se anula, para que quede dicho. Una línea.',
+  })
+  readonly reason!: string;
 }

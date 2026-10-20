@@ -1,8 +1,10 @@
 import type { TimeFlag } from '../../../domain/model/operation-time.js';
+import { SaleVoidedError } from '../../../domain/model/sale-errors.js';
 import type { SaleFlag } from '../../../domain/model/sale-flags.js';
 import type { PaymentMethod } from '../../../domain/model/sale-input.js';
 import type {
   NewSale,
+  NewSaleVoid,
   SaleHeader,
   SaleListRequest,
   SaleRecord,
@@ -34,6 +36,10 @@ interface ListRow {
   readonly reviewed_at: Date | null;
   readonly reviewed_by: string | null;
   readonly review_note: string | null;
+  readonly voided_at: Date | null;
+  readonly voided_by: string | null;
+  readonly void_operation_id: string | null;
+  readonly void_reason: string | null;
 }
 
 /**
@@ -99,6 +105,11 @@ export class PrismaSaleRepository implements SaleRepository {
     return row === null ? null : this.hydrate(row);
   }
 
+  async findByVoid(operationId: string): Promise<SaleRecord | null> {
+    const voided = await this.tx.saleVoid.findFirst({ where: { operationId } });
+    return voided === null ? null : this.find(voided.saleId);
+  }
+
   async list(request: SaleListRequest): Promise<SaleHeader[]> {
     const conditions: Prisma.Sql[] = [];
     // Del mas reciente al mas viejo, por la hora efectiva al milisegundo: es la posicion que lleva el cursor.
@@ -129,11 +140,15 @@ export class PrismaSaleRepository implements SaleRepository {
     const rows = await this.tx.$queryRaw<ListRow[]>(Prisma.sql`
       SELECT s.id, s.operation_id, s.shift_id, s.folio, s.folio_reported, s.folio_conflict, s.total,
              s.needs_adjustment, s.flags, o.user_id, o.device_id, o.occurred_at, o.received_at, o.time_flags,
-             r.created_at AS reviewed_at, r.user_id AS reviewed_by, r.note AS review_note
+             r.created_at AS reviewed_at, r.user_id AS reviewed_by, r.note AS review_note,
+             v.created_at AS voided_at, vo.user_id AS voided_by, v.operation_id AS void_operation_id,
+             v.reason AS void_reason
         FROM sale s
         JOIN operation o ON o.id_negocio = s.id_negocio AND o.operation_id = s.operation_id
         JOIN cash_shift sh ON sh.id_negocio = s.id_negocio AND sh.id = s.shift_id
         LEFT JOIN sale_review r ON r.id_negocio = s.id_negocio AND r.sale_id = s.id
+        LEFT JOIN sale_void v ON v.id_negocio = s.id_negocio AND v.sale_id = s.id
+        LEFT JOIN operation vo ON vo.id_negocio = v.id_negocio AND vo.operation_id = v.operation_id
         ${where}
        ORDER BY date_trunc('milliseconds', o.occurred_at) DESC, s.id DESC
        LIMIT ${request.limit}`);
@@ -158,6 +173,27 @@ export class PrismaSaleRepository implements SaleRepository {
     };
   }
 
+  async recordVoid(request: NewSaleVoid): Promise<SaleRecord> {
+    // `ON CONFLICT DO NOTHING`: si otra peticion la esta anulando a la vez, espera a que termine y decide con lo que deje.
+    const { count } = await this.tx.saleVoid.createMany({
+      data: [
+        {
+          idNegocio: this.businessId,
+          saleId: request.saleId,
+          operationId: request.operationId,
+          reason: request.reason,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    // Ya estaba anulada: lo que esta transaccion hizo antes (existencias, efectivo) se deshace con ella.
+    if (count !== 1) throw new SaleVoidedError();
+    const sale = await this.find(request.saleId);
+    if (sale === null)
+      throw new Error(`The sale ${request.saleId} vanished inside its transaction`);
+    return sale;
+  }
+
   /**
    * La venta con su operacion, sus lineas, sus cobros y su revision: una consulta tras otra, nunca varias a la vez por la misma
    * conexion de la transaccion.
@@ -179,6 +215,17 @@ export class PrismaSaleRepository implements SaleRepository {
       orderBy: [...IN_ORDER],
     });
     const review = await this.tx.saleReview.findFirst({ where: { saleId: row.id } });
+    const voided = await this.tx.saleVoid.findFirst({ where: { saleId: row.id } });
+    const voidOperation =
+      voided === null
+        ? null
+        : await this.tx.operation.findFirst({
+            where: { operationId: voided.operationId },
+            select: { userId: true },
+          });
+    if (voided !== null && voidOperation === null) {
+      throw new Error(`The void ${voided.id} has no operation ${voided.operationId}`);
+    }
     return {
       id: row.id,
       operationId: row.operationId,
@@ -199,6 +246,15 @@ export class PrismaSaleRepository implements SaleRepository {
         review === null
           ? null
           : { reviewedAt: review.createdAt, reviewedByUserId: review.userId, note: review.note },
+      voided:
+        voided === null || voidOperation === null
+          ? null
+          : {
+              voidedAt: voided.createdAt,
+              voidedByUserId: voidOperation.userId,
+              operationId: voided.operationId,
+              reason: voided.reason,
+            },
       lines: lines.map((line) => ({
         productId: line.productId,
         quantityMilli: Number(line.quantityMilli),
@@ -276,5 +332,17 @@ function headerOf(row: ListRow): SaleHeader {
       row.reviewed_at === null || row.reviewed_by === null
         ? null
         : { reviewedAt: row.reviewed_at, reviewedByUserId: row.reviewed_by, note: row.review_note },
+    voided:
+      row.voided_at === null ||
+      row.voided_by === null ||
+      row.void_operation_id === null ||
+      row.void_reason === null
+        ? null
+        : {
+            voidedAt: row.voided_at,
+            voidedByUserId: row.voided_by,
+            operationId: row.void_operation_id,
+            reason: row.void_reason,
+          },
   };
 }

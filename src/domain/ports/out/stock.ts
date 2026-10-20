@@ -11,7 +11,7 @@ export interface StockChange {
   readonly productId: string;
   /** Milesimas de la unidad del producto. */
   readonly delta: number;
-  readonly reason: 'purchase' | 'adjustment' | 'sale';
+  readonly reason: 'purchase' | 'adjustment' | 'sale' | 'void';
   readonly note: string | null;
 }
 

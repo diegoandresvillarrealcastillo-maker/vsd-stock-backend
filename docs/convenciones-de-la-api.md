@@ -157,6 +157,13 @@ una venta (`POST /v1/sales/{id}/review`) es la excepción a llevar un `operation
 revisa una sola vez. La primera responde `201`; revisarla otra vez, quien sea, responde `200` con la revisión que ya tenía y
 `Idempotent-Replayed: true`. La nota es de una línea y de 200 caracteres como mucho; si no, `400` en `/note`.
 
+Anular una venta (C3-05, [ADR 0027](adr/0027-registro-de-ventas-y-atencion.md)): `sale-voided` y `shift-required` (409). Anular
+es una operación con `operationId`, así que la primera vez responde `201` con la venta (ahora con su `voided`), repetirla `200`
+con `Idempotent-Replayed: true` y el mismo `operationId` con otro cuerpo `409 operation-id-reused`. `shift-required` dice que
+la venta tuvo efectivo y el turno que se nombró no existe, no es de quien anula o ya está cerrado: se nombra uno **abierto y
+propio**. Si nadie pagó en efectivo, `shiftId` se puede omitir. Una venta que no existe, o que no es de este negocio, es `404
+sale-not-found` como siempre.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

@@ -16,6 +16,13 @@ interface ReviewBody {
   note: string | null;
 }
 
+interface VoidBody {
+  voidedAt: string;
+  voidedByUserId: string;
+  operationId: string;
+  reason: string;
+}
+
 interface SaleBody {
   id: string;
   operationId: string;
@@ -47,6 +54,7 @@ interface SaleBody {
   };
   attention: boolean;
   review: ReviewBody | null;
+  voided: VoidBody | null;
 }
 
 interface Body extends SaleBody {
@@ -62,6 +70,8 @@ interface Body extends SaleBody {
   invitation: { code: string };
   summary: SaleBody['summary'] & {
     cashSales: number;
+    cashIn: number;
+    cashOut: number;
     expectedAmount: number;
     lateSales: { count: number; cashAmount: number };
   };
@@ -1010,6 +1020,246 @@ describe('sales, end to end (C3-03)', () => {
         expect(limit.status).toBe(201);
         expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_review')).toEqual([
           { n: 1 },
+        ]);
+      });
+    });
+
+    describe('voiding a sale (C3-05)', () => {
+      const voidBody = (shiftId: string | null, change: Record<string, unknown> = {}) => ({
+        operationId: randomUUID(),
+        ...(shiftId === null ? {} : { shiftId }),
+        reason: 'Se equivocó de producto',
+        ...change,
+      });
+      const stockOf = async (productId: string) =>
+        Number(
+          (
+            await select(admin, 'SELECT quantity FROM stock_balance WHERE product_id = $1', [
+              productId,
+            ])
+          )[0]?.['quantity'],
+        );
+
+      it('gives the stock and the cash back, keeps the sale and says who voided it and why', async () => {
+        const t = await stockedTeam();
+        const cashierShift = await openShift(t, t.cashier.token);
+        const adminShift = await openShift(t, t.admin.token);
+        const made = await plain(t, t.cashier.token, cashierShift);
+        const body = voidBody(adminShift);
+
+        const reply = await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, body);
+
+        expect(reply.status, JSON.stringify(reply.body)).toBe(201);
+        expect(reply.headers.get('Idempotent-Replayed')).toBeNull();
+        expect(reply.body).toMatchObject({
+          id: made.id,
+          total: 13_000,
+          lines: made.lines,
+          payments: made.payments,
+          voided: {
+            voidedByUserId: t.admin.userId,
+            operationId: body.operationId,
+            reason: 'Se equivocó de producto',
+          },
+        });
+        expect(Date.parse(reply.body.voided!.voidedAt)).not.toBeNaN();
+        expect(await stockOf(t.cola)).toBe(100_000);
+        expect(await stockOf(t.bread)).toBe(100_000);
+        // Lo que se vendio sigue en pie: solo se agrego.
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale')).toEqual([{ n: 1 }]);
+      });
+
+      it('leaves the sale counted in the shift where it was made, and shows the cash that went back in the shift of whoever voided', async () => {
+        const t = await stockedTeam();
+        const cashierShift = await openShift(t, t.cashier.token);
+        const adminShift = await openShift(t, t.admin.token);
+        const made = await plain(t, t.cashier.token, cashierShift);
+
+        await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, voidBody(adminShift));
+
+        const ofSale = await call('GET', `/v1/shifts/${cashierShift}`, t.owner);
+        const ofVoider = await call('GET', `/v1/shifts/${adminShift}`, t.owner);
+        expect(ofSale.body.summary).toMatchObject({ cashSales: 10_000, cashOut: 0 });
+        expect(ofVoider.body.summary).toMatchObject({
+          cashSales: 0,
+          cashOut: 10_000,
+          expectedAmount: 50_000 - 10_000,
+        });
+      });
+
+      it('is idempotent: repeating it answers 200 with the same sale and Idempotent-Replayed, and writes nothing again', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const made = await plain(t, t.cashier.token, await openShift(t, t.cashier.token));
+        const body = voidBody(shiftId);
+        const first = await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, body);
+
+        const again = await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, body);
+
+        expect(first.status).toBe(201);
+        expect(again.status).toBe(200);
+        expect(again.headers.get('Idempotent-Replayed')).toBe('true');
+        expect(again.body).toEqual(first.body);
+        expect(await stockOf(t.cola)).toBe(100_000);
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM cash_movement')).toEqual([
+          { n: 1 },
+        ]);
+      });
+
+      it('refuses to void a sale twice with another operation, and the same operation for something else', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const cashierShift = await openShift(t, t.cashier.token);
+        const made = await plain(t, t.cashier.token, cashierShift);
+        const other = await plain(t, t.cashier.token, cashierShift);
+        const body = voidBody(shiftId);
+        await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, body);
+
+        const twice = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+        const reused = await call('POST', `/v1/sales/${other.id}/void`, t.admin.token, body);
+
+        expect(twice.status).toBe(409);
+        expect(twice.body.code).toBe('sale-voided');
+        expect(reused.status).toBe(409);
+        expect(reused.body.code).toBe('operation-id-reused');
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_void')).toEqual([{ n: 1 }]);
+      });
+
+      it('needs an open shift of whoever voids when there was cash: otherwise 409 shift-required and nothing changes', async () => {
+        const t = await stockedTeam();
+        const cashierShift = await openShift(t, t.cashier.token);
+        const made = await plain(t, t.cashier.token, cashierShift);
+        const closedShift = await openShift(t, t.admin.token);
+        await call('POST', `/v1/shifts/${closedShift}/close`, t.admin.token, {
+          operationId: randomUUID(),
+          countedAmount: 50_000,
+          deviceTime: new Date().toISOString(),
+        });
+
+        const none = await call('POST', `/v1/sales/${made.id}/void`, t.admin.token, voidBody(null));
+        const ofSomeoneElse = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.admin.token,
+          voidBody(cashierShift),
+        );
+        const closed = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.admin.token,
+          voidBody(closedShift),
+        );
+        const unknown = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.admin.token,
+          voidBody(randomUUID()),
+        );
+
+        for (const reply of [none, ofSomeoneElse, closed, unknown]) {
+          expect(reply.status, JSON.stringify(reply.body)).toBe(409);
+          expect(reply.body.code).toBe('shift-required');
+        }
+        expect(await stockOf(t.cola)).toBe(98_000);
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_void')).toEqual([{ n: 0 }]);
+      });
+
+      it('needs no shift when nobody paid in cash', async () => {
+        const t = await stockedTeam();
+        const cashierShift = await openShift(t, t.cashier.token);
+        const made = await plain(t, t.cashier.token, cashierShift, {
+          payments: [{ method: 'card', amount: 13_000, reference: 'aprobacion 9' }],
+        });
+
+        const reply = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.admin.token,
+          voidBody(null),
+        );
+
+        expect(reply.status, JSON.stringify(reply.body)).toBe(201);
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM cash_movement')).toEqual([
+          { n: 0 },
+        ]);
+      });
+
+      it('is for the management only, and the sale shows its void afterwards', async () => {
+        const t = await stockedTeam();
+        const cashierShift = await openShift(t, t.cashier.token);
+        const ownerShift = await openShift(t, t.owner);
+        const made = await plain(t, t.cashier.token, cashierShift);
+
+        const byCashier = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          t.cashier.token,
+          voidBody(cashierShift),
+        );
+        const anonymous = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          undefined,
+          voidBody(null),
+        );
+        await call('POST', `/v1/sales/${made.id}/void`, t.owner, voidBody(ownerShift));
+        const afterwards = await call('GET', `/v1/sales/${made.id}`, t.cashier.token);
+        const listed = await call('GET', '/v1/sales', t.owner);
+
+        expect(byCashier.status).toBe(403);
+        expect(byCashier.body.code).toBe('forbidden');
+        expect(anonymous.status).toBe(401);
+        expect(afterwards.body.voided).not.toBeNull();
+        expect(listed.body.items[0]?.voided).toEqual(afterwards.body.voided);
+      });
+
+      it('does not exist for a sale that is not there, nor for another business', async () => {
+        const t = await stockedTeam();
+        const other = await stockedTeam();
+        const made = await plain(t, t.cashier.token, await openShift(t, t.cashier.token));
+
+        const missing = await call(
+          'POST',
+          `/v1/sales/${randomUUID()}/void`,
+          t.owner,
+          voidBody(null),
+        );
+        const notAnId = await call('POST', '/v1/sales/no-es-un-uuid/void', t.owner, voidBody(null));
+        const foreign = await call(
+          'POST',
+          `/v1/sales/${made.id}/void`,
+          other.owner,
+          voidBody(null),
+        );
+
+        for (const reply of [missing, notAnId, foreign]) {
+          expect(reply.status).toBe(404);
+          expect(reply.body.code).toBe('sale-not-found');
+        }
+      });
+
+      it('refuses a body that is not a void, saying every problem at once', async () => {
+        const t = await stockedTeam();
+        const made = await plain(t, t.cashier.token, await openShift(t, t.cashier.token));
+
+        const reply = await call('POST', `/v1/sales/${made.id}/void`, t.owner, {
+          operationId: 'no',
+          shiftId: 'tampoco',
+          reason: '',
+          extra: true,
+        });
+
+        expect(reply.status).toBe(400);
+        expect(fields(reply)).toEqual([
+          '/extra:unknown-field',
+          '/operationId:invalid-id',
+          '/shiftId:invalid-id',
+          '/reason:blank',
         ]);
       });
     });

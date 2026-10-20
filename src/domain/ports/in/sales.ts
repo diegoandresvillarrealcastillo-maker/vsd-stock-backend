@@ -65,4 +65,11 @@ export interface Sales {
    * la revision que ya tenia.
    */
   review(session: Session, saleId: string, body: unknown): Promise<SaleReviewOutcome>;
+  /**
+   * La gerencia anula una venta (ADR 0027, puntos 13 a 15): no la borra ni la edita, agrega los movimientos que compensan. La
+   * existencia vuelve, y el efectivo que se cobro sale como un egreso del turno ABIERTO de quien anula (`shiftId`). Necesita
+   * conexion y es idempotente por `operationId`. Lanza `SaleNotFoundError`, `SaleVoidedError` si ya estaba anulada y
+   * `ShiftRequiredError` si hay efectivo que devolver y no se nombra un turno abierto suyo.
+   */
+  voidSale(session: Session, saleId: string, body: unknown): Promise<SaleOutcome>;
 }

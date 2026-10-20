@@ -100,6 +100,11 @@ valor** cuando es una cadena de conexión (lleva la clave).
   de un turno ajeno **no existe** para un cajero (`404 sale-not-found`). `POST /v1/sales/{id}/review` (la gerencia, con
   conexión) la saca de la bandeja **sin cambiarla**: agrega quién la revisó, cuándo y una nota de una línea. Se revisa una
   sola vez: repetirlo da `200` con la revisión de antes y `Idempotent-Replayed: true`.
+- `POST /v1/sales/{id}/void` **anula** una venta (la gerencia, con conexión; [ADR 0027](docs/adr/0027-registro-de-ventas-y-atencion.md)).
+  No borra ni edita nada: la existencia vuelve con un movimiento de motivo `void` por producto, y el **efectivo cobrado sale como
+  un egreso del turno _abierto de quien anula_** (`shiftId`), no del de la venta. Si hubo efectivo y no se nombra un turno suyo
+  abierto, `409 shift-required`; una venta ya anulada es `409 sale-voided`. Es idempotente por `operationId`. La venta anulada
+  sigue sumada en el arqueo de su turno.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 
