@@ -10,6 +10,7 @@ import { PrismaDeviceRepository } from './prisma-devices.js';
 import { PrismaOperationRegistry } from './prisma-operations.js';
 import { PrismaPeopleRepository } from './prisma-people.js';
 import { PrismaPurchaseRepository } from './prisma-purchases.js';
+import { PrismaCashMovementRepository, PrismaShiftRepository } from './prisma-shifts.js';
 import { PrismaStockLedger } from './prisma-stock.js';
 import { PrismaSupplierRepository } from './prisma-suppliers.js';
 import { retryOnConflict } from './retry-on-conflict.js';
@@ -56,6 +57,8 @@ export class PrismaUnitOfWork implements UnitOfWork {
         stock: new PrismaStockLedger(tx, businessId),
         operations: new PrismaOperationRegistry(tx, businessId),
         devices: new PrismaDeviceRepository(tx, businessId),
+        shifts: new PrismaShiftRepository(tx, businessId),
+        cashMovements: new PrismaCashMovementRepository(tx, businessId),
       }),
     );
   }

@@ -77,6 +77,11 @@ interface Row {
   readonly outsider: Outsider;
   /** Lo que recibe, de otro negocio, quien tiene un rol que no puede hacer esto. Por omision, 403. */
   readonly deniedOutsider?: number;
+  /**
+   * Lo que recibe, en su propio negocio, quien tiene un rol que no puede hacer esto. Por omision, 403 `forbidden`. Un recurso
+   * que el rol no puede ver no existe para el: 404, igual que uno que nunca existio.
+   */
+  readonly deniedInside?: { readonly status: number; readonly code: string };
 }
 
 /**
@@ -91,6 +96,7 @@ const USE_CASES: Record<string, readonly string[]> = {
     'PATCH /v1/categories/:categoryId',
     'DELETE /v1/categories/:categoryId',
   ],
+  'cash-movements': ['POST /v1/cash-movements'],
   'create-business': ['POST /v1/businesses'],
   devices: ['POST /v1/devices', 'GET /v1/devices', 'POST /v1/devices/:deviceId/revoke'],
   'get-health': ['GET /health'],
@@ -107,6 +113,12 @@ const USE_CASES: Record<string, readonly string[]> = {
   purchases: ['POST /v1/purchases', 'GET /v1/purchases', 'GET /v1/purchases/:purchaseId'],
   'redeem-invitation': ['POST /v1/invitations/redeem'],
   'regenerate-invitation': ['POST /v1/users/:userId/invitation'],
+  shifts: [
+    'POST /v1/shifts',
+    'POST /v1/shifts/:shiftId/close',
+    'GET /v1/shifts',
+    'GET /v1/shifts/:shiftId',
+  ],
   'stock-adjustments': ['POST /v1/stock-adjustments'],
   stock: ['GET /v1/stock', 'GET /v1/stock-movements'],
   suppliers: [
@@ -306,6 +318,19 @@ describe('isolation between businesses and the matrix of roles, through the whol
 
   const makeDevice = async (team: Team) =>
     (await setup(team, 'POST', '/v1/devices', { id: randomUUID(), name: unique(team, 'Caja') })).id;
+
+  /** Un turno abierto por el dueno en un dispositivo nuevo del negocio. */
+  const makeShift = async (team: Team) =>
+    (
+      await setup(team, 'POST', '/v1/shifts', {
+        operationId: randomUUID(),
+        shiftId: randomUUID(),
+        deviceId: await makeDevice(team),
+        openingAmount: 20000,
+        deviceTime: new Date().toISOString(),
+        clockOffsetMs: 0,
+      })
+    ).id;
 
   /** Una persona invitada que todavia no canjea su codigo, y otra que ya trabaja: las dos cajeras del negocio. */
   const makePending = async (team: Team, role: 'admin' | 'cashier' = 'cashier') => {
@@ -618,6 +643,79 @@ describe('isolation between businesses and the matrix of roles, through the whol
       }),
       outsider: { kind: 'not-found', code: 'device-not-found' },
     },
+    // ---------------- turnos y efectivo
+    {
+      route: 'POST /v1/shifts',
+      allowed: EVERYONE,
+      success: 201,
+      aim: async (team) => ({
+        method: 'POST',
+        path: '/v1/shifts',
+        body: {
+          operationId: randomUUID(),
+          shiftId: randomUUID(),
+          deviceId: await makeDevice(team),
+          openingAmount: 10000,
+          deviceTime: new Date().toISOString(),
+          clockOffsetMs: 0,
+        },
+      }),
+      outsider: { kind: 'unknown-reference', errors: ['/deviceId:unknown-device'] },
+    },
+    {
+      route: 'POST /v1/shifts/:shiftId/close',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => ({
+        method: 'POST',
+        path: `/v1/shifts/${await makeShift(team)}/close`,
+        body: {
+          operationId: randomUUID(),
+          countedAmount: 20000,
+          deviceTime: new Date().toISOString(),
+        },
+      }),
+      outsider: { kind: 'not-found', code: 'shift-not-found' },
+      // Primero se busca el turno (y en otro negocio no existe) y despues se mira de quien es.
+      deniedOutsider: 404,
+    },
+    {
+      route: 'GET /v1/shifts',
+      allowed: EVERYONE,
+      success: 200,
+      aim: async (team) => {
+        await makeShift(team);
+        return { method: 'GET', path: '/v1/shifts' };
+      },
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'GET /v1/shifts/:shiftId',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => ({ method: 'GET', path: `/v1/shifts/${await makeShift(team)}` }),
+      outsider: { kind: 'not-found', code: 'shift-not-found' },
+      // El turno es del dueno: para un cajero es de otra persona, y el turno de otra persona no existe para el.
+      deniedInside: { status: 404, code: 'shift-not-found' },
+      deniedOutsider: 404,
+    },
+    {
+      route: 'POST /v1/cash-movements',
+      allowed: MANAGEMENT,
+      success: 201,
+      aim: async (team) => ({
+        method: 'POST',
+        path: '/v1/cash-movements',
+        body: {
+          operationId: randomUUID(),
+          shiftId: await makeShift(team),
+          direction: 'in',
+          amount: 1000,
+          reason: unique(team, 'Cambio'),
+        },
+      }),
+      outsider: { kind: 'unknown-reference', errors: ['/shiftId:unknown-shift'] },
+    },
     // ---------------- personas
     {
       route: 'GET /v1/users',
@@ -766,8 +864,8 @@ describe('isolation between businesses and the matrix of roles, through the whol
       if (row.allowed.includes(role)) {
         expect(reply.status, reply.text).toBe(row.success);
       } else {
-        expect(reply.status, reply.text).toBe(403);
-        expect(reply.body.code).toBe('forbidden');
+        expect(reply.status, reply.text).toBe(row.deniedInside?.status ?? 403);
+        expect(reply.body.code).toBe(row.deniedInside?.code ?? 'forbidden');
         // Negado de verdad: no quedo nada hecho a medias.
         expect(await snapshot(a)).toEqual(before);
       }

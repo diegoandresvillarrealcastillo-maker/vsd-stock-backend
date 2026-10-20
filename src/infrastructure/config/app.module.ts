@@ -31,7 +31,12 @@ import {
 } from '../../adapters/in/http/purchasing.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
 import {
+  CashMovementsController,
+  ShiftsController,
+} from '../../adapters/in/http/shifts.controller.js';
+import {
   AUTHENTICATE,
+  CASH_MOVEMENTS,
   CATEGORIES,
   CREATE_BUSINESS,
   DEVICES,
@@ -44,6 +49,7 @@ import {
   PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
+  SHIFTS,
   STOCK,
   STOCK_ADJUSTMENTS,
   SUPPLIERS,
@@ -62,6 +68,7 @@ import { PrismaIdentityDirectory } from '../../adapters/out/persistence/prisma-i
 import { PrismaInvitationRedeemer } from '../../adapters/out/persistence/prisma-invitation-redeemer.js';
 import { PrismaUnitOfWork } from '../../adapters/out/persistence/prisma-unit-of-work.js';
 import { AuthenticateUseCase } from '../../application/usecases/authenticate.usecase.js';
+import { CashMovementsUseCase } from '../../application/usecases/cash-movements.usecase.js';
 import { CategoriesUseCase } from '../../application/usecases/categories.usecase.js';
 import { CreateBusinessUseCase } from '../../application/usecases/create-business.usecase.js';
 import { DevicesUseCase } from '../../application/usecases/devices.usecase.js';
@@ -74,6 +81,7 @@ import { ProductsUseCase } from '../../application/usecases/products.usecase.js'
 import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { ShiftsUseCase } from '../../application/usecases/shifts.usecase.js';
 import { StockAdjustmentsUseCase } from '../../application/usecases/stock-adjustments.usecase.js';
 import { StockUseCase } from '../../application/usecases/stock.usecase.js';
 import { SuppliersUseCase } from '../../application/usecases/suppliers.usecase.js';
@@ -276,6 +284,20 @@ export class AppModule {
       },
     ];
 
+    // Turnos de caja y efectivo (C3-02, ADR 0026).
+    const cashProviders: Provider[] = [
+      {
+        provide: SHIFTS,
+        useFactory: (work: UnitOfWork, clock: Clock) => new ShiftsUseCase(work, clock),
+        inject: [UNIT_OF_WORK, CLOCK],
+      },
+      {
+        provide: CASH_MOVEMENTS,
+        useFactory: (work: UnitOfWork) => new CashMovementsUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
+    ];
+
     return {
       module: AppModule,
       controllers: [
@@ -294,6 +316,8 @@ export class AppModule {
         StockMovementsController,
         StockAdjustmentsController,
         DevicesController,
+        ShiftsController,
+        CashMovementsController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },
@@ -304,6 +328,7 @@ export class AppModule {
         ...purchasingProviders,
         ...inventoryProviders,
         ...deviceProviders,
+        ...cashProviders,
         DatabaseShutdown,
         {
           provide: GET_HEALTH,

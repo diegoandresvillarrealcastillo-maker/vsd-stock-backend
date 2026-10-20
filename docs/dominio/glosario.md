@@ -347,20 +347,33 @@ Vender ahora y cobrar después, y las cuentas por cobrar que eso genera. Fuera d
 ### Turno de caja
 
 El periodo entre que una persona abre la caja y la cierra. Todo cobro en efectivo ocurre dentro de un turno, y
-cerrarlo espera a las ventas en curso para que el arqueo no se pierda ninguna (ADR 0013).
+cerrarlo espera a las ventas en curso para que el arqueo no se pierda ninguna (ADR 0013). Hay **un turno abierto por
+dispositivo y por persona**, y el identificador lo crea el dispositivo para poder abrir la caja sin red (ADR 0026).
 
 **Código:** `CashShift`
 
-**Estado:** Decidido (ADR 0013 y ADR 0020)
+**Estado:** Decidido (ADR 0013, ADR 0020 y ADR 0026)
 
 ### Arqueo
 
-Al cerrar el turno, comparar el efectivo que **debería haber** (apertura, más cobros, menos egresos) con el
-que **se cuenta**. La diferencia queda registrada en el turno.
+Al cerrar el turno, comparar el efectivo que **debería haber** (apertura, más cobros en efectivo, más entradas, menos
+salidas) con el que **se cuenta**. La diferencia (contado menos esperado) se calcula al consultar, porque una venta
+hecha antes del cierre puede llegar después; las ventas tardías se muestran aparte y no se suman a lo esperado (ADR 0026).
 
-**Código:** `CashCount`
+**Código:** `ShiftCashSummary`
 
-**Estado:** Decidido (ADR 0020)
+**Estado:** Decidido (ADR 0020 y ADR 0026)
+
+### Venta tardía
+
+Una venta que ocurrió **después** de que su turno se cerró y llegó a él (un teléfono sin conexión que siguió vendiendo
+mientras la gerencia cerraba el turno). Se acepta —una venta ya hecha nunca se rechaza, ADR 0009—, queda en ese turno y el
+arqueo la muestra aparte, sin sumarla a lo esperado. Una venta hecha antes del cierre que solo llegó después **no** es
+tardía (ADR 0026).
+
+**Código:** `ShiftCashTotals.late`
+
+**Estado:** Decidido (ADR 0026)
 
 ### Movimiento de caja
 

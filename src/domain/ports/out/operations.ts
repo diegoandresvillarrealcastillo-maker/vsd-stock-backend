@@ -1,11 +1,21 @@
+import type { ResolvedOperationTimes } from '../../model/operation-time-input.js';
+
+/** Las clases de operacion que la base admite (`operation_kind_known`, ADR 0021). */
+export type OperationKind =
+  'purchase' | 'adjustment' | 'shift_open' | 'shift_close' | 'cash_movement' | 'sale' | 'sale_void';
+
 /** Lo que se sabe de una operacion al reclamarla (ADR 0019). */
 export interface OperationClaimRequest {
   readonly operationId: string;
-  readonly kind: 'purchase' | 'adjustment';
+  readonly kind: OperationKind;
   /** Quien la hace. */
   readonly userId: string;
   /** La huella del cuerpo: el mismo texto para la misma peticion. */
   readonly fingerprint: string;
+  /** El dispositivo que la hizo, si fue uno. */
+  readonly deviceId?: string;
+  /** Cuando ocurrio y cuando llego (ADR 0016). Sin esto se guarda la hora en que el servidor la recibe. */
+  readonly times?: ResolvedOperationTimes;
 }
 
 /**

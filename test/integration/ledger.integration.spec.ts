@@ -491,7 +491,10 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
       const sale = registerSale(admin, saleOf(shift), {
         afterShiftLock: async () => {
           closing = admin
-            .query(`UPDATE cash_shift SET closed_at = now() WHERE id = $1`, [shift])
+            .query(
+              `UPDATE cash_shift SET closed_at = now(), counted_amount = 0, closed_by_user_id = user_id WHERE id = $1`,
+              [shift],
+            )
             .then(() => {
               closed = true;
             });
@@ -545,7 +548,10 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     it('undoes everything when the shift is closed: no sale, no movements, no trace of the operation', async () => {
       await stock(PRODUCT_1, 5);
       const shift = await openShift(admin, BUSINESS_A);
-      await admin.query(`UPDATE cash_shift SET closed_at = now() WHERE id = $1`, [shift]);
+      await admin.query(
+        `UPDATE cash_shift SET closed_at = now(), counted_amount = 0, closed_by_user_id = user_id WHERE id = $1`,
+        [shift],
+      );
       const input = saleOf(shift);
 
       await expect(registerSale(admin, input)).rejects.toThrow(/shift/i);

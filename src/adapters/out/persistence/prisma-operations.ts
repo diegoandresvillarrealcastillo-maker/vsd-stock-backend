@@ -30,6 +30,16 @@ export class PrismaOperationRegistry implements OperationRegistry {
           kind: request.kind,
           userId: request.userId,
           bodyHash,
+          ...(request.deviceId === undefined ? {} : { deviceId: request.deviceId }),
+          ...(request.times === undefined
+            ? {}
+            : {
+                occurredAt: request.times.occurredAt,
+                receivedAt: request.times.receivedAt,
+                deviceTimeRaw: request.times.deviceTimeRaw,
+                timeSource: request.times.source,
+                timeFlags: [...request.times.flags],
+              }),
         },
       ],
       skipDuplicates: true,
