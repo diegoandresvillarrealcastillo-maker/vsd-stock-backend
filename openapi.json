@@ -2076,6 +2076,223 @@
         "tags": [
           "sales"
         ]
+      },
+      "get": {
+        "description": "De la más reciente a la más vieja, por la hora en que ocurrieron (no por la de llegada), con cursor. Un cajero ve las ventas de SUS turnos (`sale:view-own-shift`); la gerencia ve todas (`sale:view-all`). La bandeja «Requiere atención» (`attention=true`) es solo de la gerencia: un cajero que la pide recibe 403. Cada venta trae `attention`, que dice si está en la bandeja; la lista no trae líneas ni cobros, para eso está el detalle.",
+        "operationId": "SalesController_list",
+        "parameters": [
+          {
+            "name": "folio",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "example": "AA-000142"
+            },
+            "description": "El folio exacto, tal como lo trajo el dispositivo: encuentra también una venta cuyo folio estaba repetido y se guardó con otro."
+          },
+          {
+            "name": "attention",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "`true` es la bandeja «Requiere atención»: las ventas que piden atención y nadie ha revisado. `false`, todas las demás. Es de la gerencia (`sale:view-all`)."
+          },
+          {
+            "name": "shiftId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo las ventas de este turno."
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "El `nextCursor` de la página anterior, tal cual."
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalePageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Las ventas",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/v1/sales/{saleId}": {
+      "get": {
+        "description": "Con sus líneas, sus cobros, el IVA desglosado, sus marcas y su revisión. La venta de un turno ajeno no existe para un cajero: recibe 404 `sale-not-found`, igual que una que nunca existió.",
+        "operationId": "SalesController_get",
+        "parameters": [
+          {
+            "name": "saleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Una venta",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/v1/sales/{saleId}/review": {
+      "post": {
+        "description": "La gerencia (`sale:view-all`, con conexión) revisa una venta que pedía atención: la saca de la bandeja SIN cambiarla (sus marcas se conservan) y deja dicho quién y cuándo, con una nota opcional. Una venta se revisa una vez: la primera vez responde 201; revisarla otra vez responde 200 con la revisión que ya tenía y `Idempotent-Replayed: true`.",
+        "operationId": "SalesController_review",
+        "parameters": [
+          {
+            "name": "saleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaleReviewRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La venta ya estaba revisada: es la revisión de antes.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Siempre `true` en esta respuesta.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleReviewResponseDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleReviewResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revisar una venta",
+        "tags": [
+          "sales"
+        ]
       }
     }
   },
@@ -3764,6 +3981,32 @@
           "deviceTime"
         ]
       },
+      "SaleReviewDto": {
+        "type": "object",
+        "properties": {
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Cuándo se revisó."
+          },
+          "reviewedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Quién la revisó."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "description": "Lo que anotó quien la revisó."
+          }
+        },
+        "required": [
+          "reviewedAt",
+          "reviewedByUserId",
+          "note"
+        ]
+      },
       "SaleLineDto": {
         "type": "object",
         "properties": {
@@ -3967,6 +4210,20 @@
             "format": "date-time",
             "description": "Cuándo se enteró el servidor."
           },
+          "review": {
+            "nullable": true,
+            "description": "`null` mientras nadie la haya revisado (ADR 0027).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SaleReviewDto"
+              }
+            ]
+          },
+          "attention": {
+            "type": "boolean",
+            "description": "Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado."
+          },
           "lines": {
             "description": "En el orden en que el dispositivo las vendió.",
             "type": "array",
@@ -4000,9 +4257,196 @@
           "timeFlags",
           "occurredAt",
           "receivedAt",
+          "review",
+          "attention",
           "lines",
           "payments",
           "summary"
+        ]
+      },
+      "SaleSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shiftId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "El dispositivo del turno."
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Quien la registró."
+          },
+          "folio": {
+            "type": "string",
+            "example": "AA-000142",
+            "description": "El folio con que se guardó: el que trajo el dispositivo, o ese mismo con `~` y ocho caracteres de la operación si estaba repetido."
+          },
+          "folioReported": {
+            "type": "string",
+            "example": "AA-000142",
+            "description": "El folio que trajo el dispositivo, tal cual."
+          },
+          "folioConflict": {
+            "type": "boolean",
+            "description": "El folio ya era de otra venta (ADR 0016)."
+          },
+          "total": {
+            "type": "integer",
+            "description": "El total que calculó el servidor."
+          },
+          "needsAdjustment": {
+            "type": "boolean",
+            "description": "Algún producto quedó con existencia menor que cero con esta venta: hay que ajustar el inventario (ADR 0013)."
+          },
+          "flags": {
+            "type": "array",
+            "description": "Lo que el servidor encontró raro al compararla con lo que sabe (ADR 0027).",
+            "items": {
+              "type": "string",
+              "enum": [
+                "price-differs",
+                "total-differs",
+                "payment-mismatch",
+                "late-shift",
+                "revoked-device",
+                "folio-device"
+              ]
+            }
+          },
+          "timeFlags": {
+            "type": "array",
+            "description": "Lo raro de la hora de la operación (ADR 0016).",
+            "items": {
+              "type": "string",
+              "enum": [
+                "clock-skew",
+                "clock-unverified",
+                "future",
+                "stale",
+                "unreadable"
+              ]
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La hora efectiva de la venta (ADR 0016)."
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Cuándo se enteró el servidor."
+          },
+          "review": {
+            "nullable": true,
+            "description": "`null` mientras nadie la haya revisado (ADR 0027).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SaleReviewDto"
+              }
+            ]
+          },
+          "attention": {
+            "type": "boolean",
+            "description": "Está en la bandeja «Requiere atención»: pide atención (existencia en negativo, folio repetido, una marca del servidor o una hora que no es de fiar) y nadie la ha revisado."
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "shiftId",
+          "deviceId",
+          "userId",
+          "folio",
+          "folioReported",
+          "folioConflict",
+          "total",
+          "needsAdjustment",
+          "flags",
+          "timeFlags",
+          "occurredAt",
+          "receivedAt",
+          "review",
+          "attention"
+        ]
+      },
+      "SalePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SaleSummaryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Se pasa tal cual como `cursor` para pedir la página siguiente. `null` si no hay más."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "SaleReviewRequestDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "example": "Se ajustó el inventario de gaseosas",
+            "description": "Lo que se hizo con la venta, para que quede dicho. Una línea, sin saltos."
+          }
+        }
+      },
+      "SaleReviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Cuándo se revisó."
+          },
+          "reviewedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Quién la revisó."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "description": "Lo que anotó quien la revisó."
+          },
+          "saleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "La venta que se revisó."
+          }
+        },
+        "required": [
+          "reviewedAt",
+          "reviewedByUserId",
+          "note",
+          "saleId"
         ]
       },
       "ProblemErrorDto": {

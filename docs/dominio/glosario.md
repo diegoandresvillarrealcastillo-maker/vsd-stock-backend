@@ -294,6 +294,28 @@ muestra hasta que la gerencia la revisa (ADR 0027).
 
 **Estado:** Decidido (ADR 0027)
 
+### Bandeja «Requiere atención»
+
+La lista de ventas que el servidor aceptó marcadas y que nadie de la gerencia ha revisado: existencia en negativo, folio
+repetido, cualquier _Marca de venta_ o una hora en la que no se puede confiar (reloj desviado, hora del futuro o ilegible;
+un dispositivo que todavía no midió su reloj o una operación que esperó horas **no** cuentan, es lo normal sin conexión). Es
+solo de la gerencia (ADR 0027).
+
+**Código:** `requiresAttention`, `GET /v1/sales?attention=true`
+
+**Estado:** Decidido (ADR 0027)
+
+### Revisión de venta
+
+Lo que la gerencia deja dicho al mirar una venta de la bandeja: quién, cuándo y una nota corta. **No cambia la venta**: es
+una fila aparte que solo se agrega (la venta es historia inmutable, ADR 0009 y 0013), así que las marcas se conservan. Una
+venta se revisa una sola vez; revisarla otra vez devuelve la primera revisión. La venta revisada sale de la bandeja pero
+sigue siendo una venta que pidió atención.
+
+**Código:** `SaleReview`, tabla `sale_review`
+
+**Estado:** Decidido (ADR 0027)
+
 ### Línea de venta
 
 Un producto, una cantidad (en milésimas), el precio y la tarifa que tenían al vender y el descuento de la línea,

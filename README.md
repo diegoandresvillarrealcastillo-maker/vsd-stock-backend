@@ -93,6 +93,13 @@ valor** cuando es una cadena de conexión (lleva la clave).
   cerrado, dispositivo dado de baja (`flags`) y las marcas de la hora. Solo rechaza lo que no es una venta: un turno que no es
   de quien vende y un producto que el negocio no tiene. El servidor calcula el total otra vez y respeta el precio con que se
   vendió; la venta, sus cobros y la baja de existencias son una sola transacción, idempotente por `operationId`.
+- `GET /v1/sales` lista las ventas, de la más reciente a la más vieja por la hora en que ocurrieron, con cursor: un cajero
+  ve las de **sus** turnos y la gerencia todas. Filtra por `shiftId` y por `folio` (también encuentra una venta cuyo folio
+  estaba repetido), y `attention=true` es la **bandeja «Requiere atención»** (solo la gerencia): las ventas que el servidor
+  aceptó marcadas y nadie ha revisado. `GET /v1/sales/{id}` trae la venta con sus líneas, cobros, IVA desglosado y marcas; la
+  de un turno ajeno **no existe** para un cajero (`404 sale-not-found`). `POST /v1/sales/{id}/review` (la gerencia, con
+  conexión) la saca de la bandeja **sin cambiarla**: agrega quién la revisó, cuándo y una nota de una línea. Se revisa una
+  sola vez: repetirlo da `200` con la revisión de antes y `Idempotent-Replayed: true`.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

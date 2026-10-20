@@ -1,6 +1,10 @@
 import { resolveReceivedOperation } from '../../domain/model/operation-time-input.js';
 import { Money } from '../../domain/model/money.js';
+import { pageOf, readPageRequest, timeThenUuid, type Page } from '../../domain/model/pagination.js';
 import { OperationIdReusedError } from '../../domain/model/purchase-errors.js';
+import { can } from '../../domain/model/role.js';
+import { requiresAttention } from '../../domain/model/sale-attention.js';
+import { SaleNotFoundError } from '../../domain/model/sale-errors.js';
 import { flagsOfSale, soldAtCatalogPrice } from '../../domain/model/sale-flags.js';
 import {
   SALE_FIELDS,
@@ -8,18 +12,32 @@ import {
   saleFingerprint,
   type SaleInput,
 } from '../../domain/model/sale-input.js';
+import {
+  SALE_FILTER_FIELDS,
+  SALE_REVIEW_FIELDS,
+  readSaleFilter,
+  readSaleReview,
+} from '../../domain/model/sale-query-input.js';
 import { summarizeSale, type SaleSummary } from '../../domain/model/sale-totals.js';
 import { isWholeOnly } from '../../domain/model/unit-of-measure.js';
+import { isUuid } from '../../domain/model/uuid.js';
 import {
   type FieldError,
   InputReader,
   ValidationFailedError,
 } from '../../domain/model/validation.js';
 import type { Session } from '../../domain/ports/in/authenticate.js';
-import type { SaleOutcome, SaleTotalsView, SaleView, Sales } from '../../domain/ports/in/sales.js';
+import type {
+  SaleOutcome,
+  SaleReviewOutcome,
+  SaleSummaryView,
+  SaleTotalsView,
+  SaleView,
+  Sales,
+} from '../../domain/ports/in/sales.js';
 import type { ProductRecord } from '../../domain/ports/out/catalog.js';
 import type { Clock } from '../../domain/ports/out/clock.js';
-import type { SaleRecord } from '../../domain/ports/out/sales.js';
+import type { SaleHeader, SaleRecord } from '../../domain/ports/out/sales.js';
 import type { BusinessScope, UnitOfWork } from '../../domain/ports/out/unit-of-work.js';
 import { ensureCan, requireMember } from '../session-guards.js';
 
@@ -92,6 +110,12 @@ function totalsView(summary: SaleSummary): SaleTotalsView {
   };
 }
 
+/** Si la venta esta en la bandeja «Requiere atencion»: pide atencion y nadie la ha revisado (ADR 0027). */
+const inTray = (sale: SaleHeader): boolean => requiresAttention(sale) && sale.review === null;
+
+/** Una venta de la lista, con lo que hace falta para decidir si abrirla. */
+const summaryViewOf = (sale: SaleHeader): SaleSummaryView => ({ ...sale, attention: inTray(sale) });
+
 /** La venta con su total desglosado, calculado de las lineas que quedaron guardadas. */
 function viewOf(sale: SaleRecord): SaleView {
   const summary = summarizeSale(
@@ -102,7 +126,7 @@ function viewOf(sale: SaleRecord): SaleView {
       rateBp: line.taxRateBp,
     })),
   );
-  return { ...sale, summary: totalsView(summary) };
+  return { ...sale, summary: totalsView(summary), attention: inTray(sale) };
 }
 
 /**
@@ -208,6 +232,69 @@ export class SalesUseCase implements Sales {
         payments: sale.payments,
       });
       return { sale: viewOf(saved), replayed: false };
+    });
+  }
+
+  async list(session: Session, query: unknown): Promise<Page<SaleSummaryView>> {
+    const actor = requireMember(session);
+    ensureCan(actor, 'sale:view-own-shift');
+
+    const reader = new InputReader(query, ['limit', 'cursor', ...SALE_FILTER_FIELDS]);
+    const request = readPageRequest(reader, 2, timeThenUuid);
+    const filter = readSaleFilter(reader);
+    reader.finish();
+    // Las ventas de todos, y la bandeja de lo que pide atencion, son de la gerencia (ADR 0017 y 0027).
+    const everything = can(actor.role, 'sale:view-all');
+    if (filter.attention !== undefined) ensureCan(actor, 'sale:view-all');
+
+    const [afterAt, afterId] = request.after ?? [];
+    const rows = await this.work.inBusiness(actor.businessId, (scope) =>
+      scope.sales.list({
+        // Una de mas: si llega, hay otra pagina.
+        limit: request.limit + 1,
+        ...(afterAt !== undefined && afterId !== undefined
+          ? { after: [afterAt, afterId] as const }
+          : {}),
+        ...(everything ? {} : { shiftOwnerId: actor.userId }),
+        ...filter,
+      }),
+    );
+    const page = pageOf(rows, request.limit, (sale) => [sale.occurredAt.toISOString(), sale.id]);
+    return { ...page, items: page.items.map(summaryViewOf) };
+  }
+
+  async get(session: Session, saleId: string): Promise<SaleView> {
+    const actor = requireMember(session);
+    ensureCan(actor, 'sale:view-own-shift');
+    // Un identificador que no es un UUID no es de nadie: no se le pregunta nada a la base.
+    if (!isUuid(saleId)) throw new SaleNotFoundError();
+
+    return this.work.inBusiness(actor.businessId, async (scope) => {
+      const sale = await scope.sales.find(saleId.toLowerCase());
+      if (sale === null) throw new SaleNotFoundError();
+      if (!can(actor.role, 'sale:view-all')) {
+        // La venta de un turno ajeno no existe para un cajero: no se le dice que existe.
+        const shift = await scope.shifts.find(sale.shiftId);
+        if (shift?.userId !== actor.userId) throw new SaleNotFoundError();
+      }
+      return viewOf(sale);
+    });
+  }
+
+  async review(session: Session, saleId: string, body: unknown): Promise<SaleReviewOutcome> {
+    const actor = requireMember(session);
+    // Revisar es de quien ve todas las ventas, y necesita conexion (ADR 0017 y 0027).
+    ensureCan(actor, 'sale:view-all');
+    const reader = new InputReader(body, SALE_REVIEW_FIELDS);
+    const { note } = readSaleReview(reader);
+    reader.finish();
+    if (!isUuid(saleId)) throw new SaleNotFoundError();
+
+    return this.work.inBusiness(actor.businessId, async (scope) => {
+      const sale = await scope.sales.find(saleId.toLowerCase());
+      if (sale === null) throw new SaleNotFoundError();
+      const { review, created } = await scope.sales.review(sale.id, actor.userId, note);
+      return { saleId: sale.id, review, replayed: !created };
     });
   }
 }

@@ -60,6 +60,8 @@ erDiagram
   PRODUCT ||--o{ SALE_LINE : se_vende
   SALE ||--|{ PAYMENT : se_paga_con
   SALE ||--o| SALE_VOID : se_anula
+  SALE ||--o| SALE_REVIEW : se_revisa
+  APP_USER ||--o{ SALE_REVIEW : revisa
   CASH_SHIFT ||--o{ CASH_MOVEMENT : registra
   OPERATION ||--o| SALE : origina
   OPERATION ||--o| SALE_VOID : origina
@@ -91,6 +93,7 @@ regla ya está demostrada por una prueba contra PostgreSQL real o por el dominio
 | `sale`           | Ventas             | Una venta: su folio (`AA-000142`), su turno, su total y la marca «requiere ajuste». Inmutable (ADR 0009, 0013 y 0016).                                                                                           |
 | `sale_line`      | Ventas             | Un producto, una cantidad, el precio y la tarifa que tenían al vender y el descuento de la línea (ADR 0014).                                                                                                     |
 | `payment`        | Ventas             | Con qué se pagó: efectivo, o el registro manual de tarjeta o transferencia. Sin pasarela de pagos.                                                                                                               |
+| `sale_review`    | Ventas             | La revisión de una venta que pedía atención: quién la miró, cuándo y qué anotó. Una por venta y solo se agrega: revisar no cambia la venta (ADR 0027).                                                           |
 | `sale_void`      | Ventas             | La anulación de una venta: no borra nada, agrega los movimientos que compensan (ADR 0009).                                                                                                                       |
 | `cash_shift`     | Caja               | Del momento en que una persona abre la caja hasta que la cierra y hace el arqueo. Cerrarlo espera a las ventas en curso (ADR 0013); un turno abierto por dispositivo y por persona, y quién lo cerró (ADR 0026). |
 | `cash_movement`  | Caja               | Un ingreso o un egreso de efectivo: el cobro de una venta o un movimiento fuera de venta. Positivo.                                                                                                              |
@@ -127,7 +130,11 @@ Los esquemas de juguete de los ADR 0013 a 0016 eran más pequeños que el modelo
 - Toda tabla con `id_negocio` lleva RLS forzado y claves foráneas compuestas, como las de las pruebas.
 - **Relaciones que el diagrama no dibujaba y la migración sí exige** (se corrigió el diagrama, ver ADR 0021):
   `operation` con la persona que la hizo y, si vino de uno, el dispositivo; `device` con la persona que lo
-  registró; `purchase` con la persona que la creó y con su `operation`; y `sale_void` con su `operation`.
+  registró; `purchase` con la persona que la creó y con su `operation`; `sale_void` con su `operation`; y `sale_review`
+  con su venta y con la persona que la revisó.
+- **`sale_review` es la única tabla que se suma al modelo congelado**, y la decide el
+  [ADR 0027](../adr/0027-registro-de-ventas-y-atencion.md): revisar una venta de la bandeja «Requiere atención» no puede
+  editar la venta (es historia inmutable, ADR 0009 y 0013), así que es otra fila.
 - **Las columnas que aún no existen** (por ejemplo los desgloses de IVA de la venta) se agregan con la migración del
   ciclo que construye esa funcionalidad: una migración nueva, nunca la edición de una ya aplicada.
 - `app_user` también sirve de invitación pendiente: mientras no se canjea, `auth_user_id` está vacío y guarda el hash

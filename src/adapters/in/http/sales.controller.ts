@@ -1,19 +1,72 @@
-import { Body, Controller, Inject, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
+  ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { MAX_PAGE_SIZE, type Page } from '../../../domain/model/pagination.js';
 import type { Session } from '../../../domain/ports/in/authenticate.js';
-import type { SaleView, Sales } from '../../../domain/ports/in/sales.js';
+import type { SaleSummaryView, SaleView, Sales } from '../../../domain/ports/in/sales.js';
 import { ApiProblemResponse } from './api-problem-response.decorator.js';
 import { BearerAuthGuard, CurrentSession } from './bearer-auth.guard.js';
 import { IDEMPOTENT_REPLAYED_HEADER } from './purchasing.controller.js';
-import { SaleDto, SaleRequestDto } from './sales.dto.js';
+import {
+  SaleDto,
+  SalePageDto,
+  SaleRequestDto,
+  SaleReviewRequestDto,
+  SaleReviewResponseDto,
+} from './sales.dto.js';
 import { SALES } from './tokens.js';
+
+const LIMIT = {
+  name: 'limit',
+  required: false,
+  schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_SIZE, default: 50 },
+} as const;
+
+const CURSOR = {
+  name: 'cursor',
+  required: false,
+  schema: { type: 'string' },
+  description: 'El `nextCursor` de la página anterior, tal cual.',
+} as const;
+
+const SHIFT = {
+  name: 'shiftId',
+  required: false,
+  schema: { type: 'string', format: 'uuid' },
+  description: 'Solo las ventas de este turno.',
+} as const;
+
+const ATTENTION = {
+  name: 'attention',
+  required: false,
+  schema: { type: 'string', enum: ['true', 'false'] },
+  description:
+    '`true` es la bandeja «Requiere atención»: las ventas que piden atención y nadie ha revisado. `false`, todas las demás. Es de la gerencia (`sale:view-all`).',
+} as const;
+
+const FOLIO = {
+  name: 'folio',
+  required: false,
+  schema: { type: 'string', example: 'AA-000142' },
+  description:
+    'El folio exacto, tal como lo trajo el dispositivo: encuentra también una venta cuyo folio estaba repetido y se guardó con otro.',
+} as const;
+
+const REPLAYED_RESPONSE = {
+  [IDEMPOTENT_REPLAYED_HEADER]: {
+    description: 'Siempre `true` en esta respuesta.',
+    schema: { type: 'string', enum: ['true'] },
+  },
+};
 
 /** Lo poco que se usa de la respuesta de Express: el estado y los encabezados, para que `Res` no ate el adaptador a su tipo. */
 interface ResponseWithStatus {
@@ -21,7 +74,7 @@ interface ResponseWithStatus {
   setHeader(name: string, value: string): unknown;
 }
 
-/** Adaptador de entrada HTTP: las ventas (C3-03, ADR 0027). */
+/** Adaptador de entrada HTTP: las ventas (C3-03 y C3-04, ADR 0027). */
 @ApiTags('sales')
 @ApiBearerAuth()
 @Controller('v1/sales')
@@ -42,12 +95,7 @@ export class SalesController {
     status: 200,
     description: 'La venta ya se había registrado con esta operación: es la misma de antes.',
     type: SaleDto,
-    headers: {
-      [IDEMPOTENT_REPLAYED_HEADER]: {
-        description: 'Siempre `true` en esta respuesta.',
-        schema: { type: 'string', enum: ['true'] },
-      },
-    },
+    headers: REPLAYED_RESPONSE,
   })
   async create(
     @CurrentSession() session: Session,
@@ -60,5 +108,68 @@ export class SalesController {
       response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
     }
     return sale;
+  }
+
+  @Get()
+  @ApiProblemResponse()
+  @ApiOperation({
+    summary: 'Las ventas',
+    description:
+      'De la más reciente a la más vieja, por la hora en que ocurrieron (no por la de llegada), con cursor. Un cajero ve las ventas de SUS turnos (`sale:view-own-shift`); la gerencia ve todas (`sale:view-all`). La bandeja «Requiere atención» (`attention=true`) es solo de la gerencia: un cajero que la pide recibe 403. Cada venta trae `attention`, que dice si está en la bandeja; la lista no trae líneas ni cobros, para eso está el detalle.',
+  })
+  @ApiQuery(LIMIT)
+  @ApiQuery(CURSOR)
+  @ApiQuery(SHIFT)
+  @ApiQuery(ATTENTION)
+  @ApiQuery(FOLIO)
+  @ApiOkResponse({ type: SalePageDto })
+  list(
+    @CurrentSession() session: Session,
+    @Query() query: unknown,
+  ): Promise<Page<SaleSummaryView>> {
+    return this.sales.list(session, query);
+  }
+
+  @Get(':saleId')
+  @ApiProblemResponse()
+  @ApiOperation({
+    summary: 'Una venta',
+    description:
+      'Con sus líneas, sus cobros, el IVA desglosado, sus marcas y su revisión. La venta de un turno ajeno no existe para un cajero: recibe 404 `sale-not-found`, igual que una que nunca existió.',
+  })
+  @ApiParam({ name: 'saleId', type: String, format: 'uuid' })
+  @ApiOkResponse({ type: SaleDto })
+  get(@CurrentSession() session: Session, @Param('saleId') saleId: string): Promise<SaleView> {
+    return this.sales.get(session, saleId);
+  }
+
+  @Post(':saleId/review')
+  @ApiProblemResponse()
+  @ApiOperation({
+    summary: 'Revisar una venta',
+    description:
+      'La gerencia (`sale:view-all`, con conexión) revisa una venta que pedía atención: la saca de la bandeja SIN cambiarla (sus marcas se conservan) y deja dicho quién y cuándo, con una nota opcional. Una venta se revisa una vez: la primera vez responde 201; revisarla otra vez responde 200 con la revisión que ya tenía y `Idempotent-Replayed: true`.',
+  })
+  @ApiParam({ name: 'saleId', type: String, format: 'uuid' })
+  @ApiBody({ type: SaleReviewRequestDto })
+  @ApiCreatedResponse({ type: SaleReviewResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'La venta ya estaba revisada: es la revisión de antes.',
+    type: SaleReviewResponseDto,
+    headers: REPLAYED_RESPONSE,
+  })
+  async review(
+    @CurrentSession() session: Session,
+    @Param('saleId') saleId: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) response: ResponseWithStatus,
+  ): Promise<SaleReviewResponseDto> {
+    const { review, replayed, saleId: reviewed } = await this.sales.review(session, saleId, body);
+    if (replayed) {
+      response.status(200);
+      response.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
+    }
+    return { saleId: reviewed, ...review };
   }
 }

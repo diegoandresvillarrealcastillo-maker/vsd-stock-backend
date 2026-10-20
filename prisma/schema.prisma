@@ -47,6 +47,7 @@ model Business {
   saleLines      SaleLine[]
   payments       Payment[]
   saleVoids      SaleVoid[]
+  saleReviews    SaleReview[]
 
   @@map("business")
 }
@@ -79,11 +80,12 @@ model AppUser {
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   deactivatedAt       DateTime? @map("deactivated_at") @db.Timestamptz(6)
 
-  business        Business    @relation(fields: [idNegocio], references: [id])
+  business        Business     @relation(fields: [idNegocio], references: [id])
   enrolledDevices Device[]
   operations      Operation[]
-  cashShifts      CashShift[] @relation("ShiftOwner")
-  closedShifts    CashShift[] @relation("ShiftClosedBy")
+  cashShifts      CashShift[]  @relation("ShiftOwner")
+  closedShifts    CashShift[]  @relation("ShiftClosedBy")
+  saleReviews     SaleReview[]
   purchases       Purchase[]
 
   @@unique([idNegocio, id])
@@ -368,12 +370,13 @@ model Sale {
   /// Las marcas que el servidor le puso al aceptarla (ADR 0027); las de la hora viven en la operacion.
   flags           String[] @default([])
 
-  business  Business   @relation(fields: [idNegocio], references: [id])
-  operation Operation  @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
-  shift     CashShift  @relation(fields: [idNegocio, shiftId], references: [idNegocio, id])
+  business  Business    @relation(fields: [idNegocio], references: [id])
+  operation Operation   @relation(fields: [idNegocio, operationId], references: [idNegocio, operationId])
+  shift     CashShift   @relation(fields: [idNegocio, shiftId], references: [idNegocio, id])
   lines     SaleLine[]
   payments  Payment[]
   void      SaleVoid?
+  review    SaleReview?
 
   @@unique([idNegocio, operationId], map: "sale_operation_unique")
   @@unique([idNegocio, folio], map: "sale_folio_unique")
@@ -414,6 +417,23 @@ model Payment {
   sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
 
   @@map("payment")
+}
+
+/// La revision de una venta que pedia atencion (ADR 0027): una fila de solo agregar, quien la miro y cuando.
+model SaleReview {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idNegocio String   @map("id_negocio") @db.Uuid
+  saleId    String   @map("sale_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [idNegocio], references: [id])
+  sale     Sale     @relation(fields: [idNegocio, saleId], references: [idNegocio, id])
+  user     AppUser  @relation(fields: [idNegocio, userId], references: [idNegocio, id])
+
+  @@unique([idNegocio, saleId], map: "sale_review_sale_unique")
+  @@map("sale_review")
 }
 
 model SaleVoid {

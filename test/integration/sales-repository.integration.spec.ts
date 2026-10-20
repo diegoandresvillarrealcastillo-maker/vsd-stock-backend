@@ -5,11 +5,15 @@ import { applicationUrlOf } from '../../scripts/prepare-database.ts';
 import { createPrismaClient } from '../../src/adapters/out/persistence/create-prisma-client.js';
 import { PrismaUnitOfWork } from '../../src/adapters/out/persistence/prisma-unit-of-work.js';
 import { SalesUseCase } from '../../src/application/usecases/sales.usecase.js';
-import { SALE_FLAGS } from '../../src/domain/model/sale-flags.js';
+import type { TimeFlag } from '../../src/domain/model/operation-time.js';
+import type { Role } from '../../src/domain/model/role.js';
+import { requiresAttention } from '../../src/domain/model/sale-attention.js';
+import { SaleNotFoundError } from '../../src/domain/model/sale-errors.js';
+import { SALE_FLAGS, type SaleFlag } from '../../src/domain/model/sale-flags.js';
 import type { Session } from '../../src/domain/ports/in/authenticate.js';
 import type { PaymentRecord, SaleLineRecord } from '../../src/domain/ports/out/sales.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
-import { createAdminPool } from './support/database.js';
+import { asApplication, createAdminPool } from './support/database.js';
 import { BUSINESS_A, BUSINESS_B, resetData, seedBusiness, seedProduct } from './support/seed.js';
 import { select } from './support/sql.js';
 
@@ -62,9 +66,9 @@ describe('sales against PostgreSQL (C3-03)', () => {
     await admin.end();
   });
 
-  const session = (userId: string, businessId = BUSINESS_A): Session => ({
+  const session = (userId: string, businessId = BUSINESS_A, role: Role = 'cashier'): Session => ({
     identity: { subject: randomUUID(), email: null, expiresAt: new Date(Date.now() + 3_600_000) },
-    membership: { userId, businessId, role: 'cashier', active: true, fullName: 'Ana' },
+    membership: { userId, businessId, role, active: true, fullName: 'Ana' },
   });
 
   /** Existencia que ya habia en el estante, escrita como un ajuste. */
@@ -697,5 +701,539 @@ describe('sales against PostgreSQL (C3-03)', () => {
         /sale_folio_shape/,
       );
     });
+  });
+
+  describe('reading and reviewing (C3-04)', () => {
+    const manager = () => session(a.ownerId, BUSINESS_A, 'owner');
+
+    let planted = 0;
+    interface Planted {
+      readonly id?: string;
+      readonly at?: string;
+      readonly shift?: string;
+      readonly userId?: string;
+      readonly folio?: string;
+      readonly folioReported?: string;
+      readonly folioConflict?: boolean;
+      readonly needsAdjustment?: boolean;
+      readonly flags?: readonly SaleFlag[];
+      readonly timeFlags?: readonly TimeFlag[];
+      readonly reviewed?: boolean;
+    }
+
+    /** Escribe una venta con exactamente lo que se pide, sin pasar por el caso de uso: la hora y las marcas las fija la prueba. */
+    async function plant(spec: Planted = {}): Promise<string> {
+      planted += 1;
+      const operationId = randomUUID();
+      const id = spec.id ?? randomUUID();
+      const folio = spec.folio ?? `PL-${String(planted).padStart(6, '0')}`;
+      await admin.query(
+        `INSERT INTO operation (id_negocio, operation_id, kind, user_id, device_id, occurred_at, received_at, time_flags)
+         VALUES ($1, $2, 'sale', $3, $4, $5::timestamptz, now(), $6::text[])`,
+        [
+          BUSINESS_A,
+          operationId,
+          spec.userId ?? a.ownerId,
+          a.deviceId,
+          spec.at ?? new Date().toISOString(),
+          [...(spec.timeFlags ?? [])],
+        ],
+      );
+      await admin.query(
+        `INSERT INTO sale (id, id_negocio, operation_id, shift_id, folio, folio_reported, folio_conflict, total,
+                           needs_adjustment, flags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 1000, $8, $9::text[])`,
+        [
+          id,
+          BUSINESS_A,
+          operationId,
+          spec.shift ?? shiftId,
+          folio,
+          spec.folioReported ?? folio,
+          spec.folioConflict ?? false,
+          spec.needsAdjustment ?? false,
+          [...(spec.flags ?? [])],
+        ],
+      );
+      if (spec.reviewed === true) {
+        await admin.query(
+          `INSERT INTO sale_review (id_negocio, sale_id, user_id, note) VALUES ($1, $2, $3, 'Revisada')`,
+          [BUSINESS_A, id, a.ownerId],
+        );
+      }
+      return id;
+    }
+
+    /** Todas las paginas de una consulta, en el orden en que salen. */
+    async function everything(query: Record<string, unknown>, as = manager()): Promise<string[]> {
+      const ids: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await sales.list(as, {
+          limit: '2',
+          ...query,
+          ...(cursor === null ? {} : { cursor }),
+        });
+        ids.push(...page.items.map((sale) => sale.id));
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+      return ids;
+    }
+
+    describe('the list', () => {
+      it('goes from the newest to the oldest by the hour it happened, not by the hour it arrived', async () => {
+        const morning = await plant({ at: '2026-10-18T10:00:00.000Z' });
+        const noon = await plant({ at: '2026-10-18T12:00:00.000Z' });
+        const late = await plant({ at: '2026-10-18T11:00:00.000Z' });
+
+        const page = await sales.list(manager(), {});
+
+        expect(page.items.map((sale) => sale.id)).toEqual([noon, late, morning]);
+        expect(page.nextCursor).toBeNull();
+      });
+
+      it('pages without repeating or skipping, even where two sales share a millisecond', async () => {
+        // Misma milesima de segundo, distinta millonesima: manda el identificador, que aqui va al reves de la hora.
+        const newest = await plant({ at: '2026-10-18T10:00:01.000000Z' });
+        const early = await plant({
+          id: '00000000-0000-4000-8000-000000000002',
+          at: '2026-10-18T10:00:00.000100Z',
+        });
+        const late = await plant({
+          id: '00000000-0000-4000-8000-000000000001',
+          at: '2026-10-18T10:00:00.000900Z',
+        });
+        const before = await plant({ at: '2026-10-18T09:59:59.000000Z' });
+        const oldest = await plant({ at: '2026-10-18T09:00:00.000000Z' });
+
+        expect(await everything({})).toEqual([newest, early, late, before, oldest]);
+        expect((await sales.list(manager(), { limit: '2' })).nextCursor).not.toBeNull();
+        expect((await sales.list(manager(), { limit: '5' })).nextCursor).toBeNull();
+      });
+
+      it('shows the sales of one shift', async () => {
+        const other = randomUUID();
+        const cashier = await seedUser('cashier');
+        await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.shifts.open({
+            id: other,
+            deviceId: a.deviceId,
+            userId: cashier,
+            openedAt: new Date(Date.now() - 1_800_000),
+            openingAmount: 0,
+          }),
+        );
+        const mine = await plant({ at: '2026-10-18T10:00:00.000Z' });
+        const theirs = await plant({
+          at: '2026-10-18T11:00:00.000Z',
+          shift: other,
+          userId: cashier,
+        });
+
+        expect(await everything({ shiftId: shiftId })).toEqual([mine]);
+        expect(await everything({ shiftId: other })).toEqual([theirs]);
+        expect(await everything({})).toEqual([theirs, mine]);
+      });
+
+      it('shows a cashier only the sales of his own shifts, and the management all of them', async () => {
+        const other = randomUUID();
+        const cashier = await seedUser('cashier');
+        await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.shifts.open({
+            id: other,
+            deviceId: a.deviceId,
+            userId: cashier,
+            openedAt: new Date(Date.now() - 1_800_000),
+            openingAmount: 0,
+          }),
+        );
+        const ofOwner = await plant({ at: '2026-10-18T10:00:00.000Z' });
+        const ofCashier = await plant({
+          at: '2026-10-18T11:00:00.000Z',
+          shift: other,
+          userId: cashier,
+        });
+
+        expect(await everything({}, session(cashier, BUSINESS_A, 'cashier'))).toEqual([ofCashier]);
+        expect(await everything({}, session(a.ownerId, BUSINESS_A, 'cashier'))).toEqual([ofOwner]);
+        expect(await everything({}, session(a.ownerId, BUSINESS_A, 'admin'))).toEqual([
+          ofCashier,
+          ofOwner,
+        ]);
+      });
+
+      it('gives of each sale all that the sale says itself, and not what only the whole sale carries', async () => {
+        const reviewer = await seedUser('admin');
+        await sell({ folio: 'ZZ-000500' });
+        const clash = await sell({
+          folio: 'ZZ-000500',
+          total: 1,
+          deviceTime: '2026-10-18T10:00:00.000Z',
+          clockOffsetMs: 0,
+        });
+        await sales.review(session(reviewer, BUSINESS_A, 'admin'), clash.sale.id, {
+          note: 'Revisada a mano',
+        });
+        const whole = await sales.get(manager(), clash.sale.id);
+        const header = Object.fromEntries(
+          Object.entries(whole).filter(([key]) => !['lines', 'payments', 'summary'].includes(key)),
+        );
+
+        const listed = (await sales.list(manager(), {})).items.find(
+          (item) => item.id === clash.sale.id,
+        );
+
+        expect(listed).toEqual(header);
+        // Lo que la prueba necesita para ser fuerte: cada campo dice algo distinto de los demas.
+        expect(whole.folio).not.toBe(whole.folioReported);
+        expect(whole.receivedAt.getTime()).not.toBe(whole.occurredAt.getTime());
+        expect(whole.review).toMatchObject({
+          reviewedByUserId: reviewer,
+          note: 'Revisada a mano',
+        });
+        expect(whole.deviceId).not.toBeNull();
+      });
+
+      it('never gives more rows than it was asked for', async () => {
+        for (let index = 0; index < 3; index += 1) await plant();
+
+        const rows = await unitOfWork.inBusiness(BUSINESS_A, (s) => s.sales.list({ limit: 2 }));
+
+        expect(rows).toHaveLength(2);
+      });
+
+      it('shows a cashier the sales of his shifts, whoever registered them', async () => {
+        const cashier = await seedUser('cashier');
+        const mine = randomUUID();
+        await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.shifts.open({
+            id: mine,
+            deviceId: a.deviceId,
+            userId: cashier,
+            openedAt: new Date(Date.now() - 1_800_000),
+            openingAmount: 0,
+          }),
+        );
+        const ofHisShift = await plant({ shift: mine, userId: a.ownerId });
+        await plant({ userId: cashier });
+
+        expect(await everything({}, session(cashier, BUSINESS_A, 'cashier'))).toEqual([ofHisShift]);
+      });
+
+      it('also finds a sale by the folio under which it was stored', async () => {
+        const stored = await plant({
+          folio: 'AA-000142~1a2b3c4d',
+          folioReported: 'AA-000142',
+          folioConflict: true,
+        });
+        await plant({ folio: 'AA-000142' });
+
+        const rows = await unitOfWork.inBusiness(BUSINESS_A, (s) =>
+          s.sales.list({ limit: 10, folio: 'AA-000142~1a2b3c4d' }),
+        );
+
+        expect(rows.map((row) => row.id)).toEqual([stored]);
+      });
+
+      it('finds a sale by the folio that the device printed, also when it was saved with another one', async () => {
+        const first = await plant({ folio: 'AA-000142', at: '2026-10-18T10:00:00.000Z' });
+        const repeated = await plant({
+          folio: 'AA-000142~1a2b3c4d',
+          folioReported: 'AA-000142',
+          folioConflict: true,
+          at: '2026-10-18T11:00:00.000Z',
+        });
+        await plant({ folio: 'AA-000143' });
+
+        expect(await everything({ folio: 'AA-000142' })).toEqual([repeated, first]);
+        expect(await everything({ folio: 'AA-000999' })).toEqual([]);
+        expect(await everything({ folio: 'aa-000142' })).toEqual([repeated, first]);
+      });
+
+      it('does not show the sales of another business', async () => {
+        await plant();
+        const otherSeller = await unitOfWork.inBusiness(BUSINESS_B, (s) =>
+          s.sales.list({ limit: 10 }),
+        );
+
+        expect(otherSeller).toEqual([]);
+      });
+    });
+
+    describe('the tray «Requiere atención»', () => {
+      it('holds what asks for attention and nobody has reviewed, for every combination that the domain knows', async () => {
+        const timeCases: readonly (readonly TimeFlag[])[] = [
+          [],
+          ['clock-unverified'],
+          ['stale'],
+          ['clock-skew'],
+          ['future'],
+          ['unreadable'],
+          ['clock-unverified', 'stale'],
+        ];
+        const planned: { id: string; asks: boolean; reviewed: boolean }[] = [];
+        let minute = 0;
+        for (const needsAdjustment of [false, true]) {
+          for (const folioConflict of [false, true]) {
+            for (const flags of [[], ['price-differs']] as const) {
+              for (const timeFlags of timeCases) {
+                for (const reviewed of [false, true]) {
+                  minute += 1;
+                  const id = await plant({
+                    at: new Date(Date.UTC(2026, 9, 18, 0, minute)).toISOString(),
+                    needsAdjustment,
+                    folioConflict,
+                    flags,
+                    timeFlags,
+                    reviewed,
+                    ...(folioConflict
+                      ? {
+                          folioReported: 'AA-000001',
+                          folio: `AA-000001~${String(minute).padStart(8, '0')}`,
+                        }
+                      : {}),
+                  });
+                  planned.push({
+                    id,
+                    asks: requiresAttention({ needsAdjustment, folioConflict, flags, timeFlags }),
+                    reviewed,
+                  });
+                }
+              }
+            }
+          }
+        }
+        const newestFirst = [...planned].reverse();
+
+        const inTray = await everything({ attention: 'true' });
+        const outside = await everything({ attention: 'false' });
+
+        expect(inTray).toEqual(
+          newestFirst.filter((sale) => sale.asks && !sale.reviewed).map((sale) => sale.id),
+        );
+        expect(outside).toEqual(
+          newestFirst.filter((sale) => !(sale.asks && !sale.reviewed)).map((sale) => sale.id),
+        );
+        // Tanto la lista como la venta dicen lo mismo que la bandeja.
+        const listed = await sales.list(manager(), { limit: '200' });
+        for (const sale of listed.items) {
+          expect(sale.attention, sale.id).toBe(inTray.includes(sale.id));
+        }
+        const one = planned.find((sale) => sale.asks && !sale.reviewed);
+        expect((await sales.get(manager(), one!.id)).attention).toBe(true);
+        const reviewedOne = planned.find((sale) => sale.asks && sale.reviewed);
+        expect((await sales.get(manager(), reviewedOne!.id)).attention).toBe(false);
+      });
+
+      it('leaves a sale out of the tray once somebody reviews it, without changing the sale', async () => {
+        const id = await plant({
+          needsAdjustment: true,
+          flags: ['price-differs'],
+          timeFlags: ['future'],
+        });
+        const before = await sales.get(manager(), id);
+        expect(await everything({ attention: 'true' })).toEqual([id]);
+
+        const outcome = await sales.review(manager(), id, { note: 'Se ajustó el inventario' });
+
+        expect(outcome.replayed).toBe(false);
+        expect(outcome.review).toMatchObject({
+          reviewedByUserId: a.ownerId,
+          note: 'Se ajustó el inventario',
+        });
+        expect(await everything({ attention: 'true' })).toEqual([]);
+        expect(await everything({ attention: 'false' })).toEqual([id]);
+        const after = await sales.get(manager(), id);
+        expect(after).toEqual({ ...before, attention: false, review: outcome.review });
+        expect(after.flags).toEqual(['price-differs']);
+        expect(after.needsAdjustment).toBe(true);
+        expect(
+          await select(admin, 'SELECT flags, needs_adjustment FROM sale WHERE id = $1', [id]),
+        ).toEqual([{ flags: ['price-differs'], needs_adjustment: true }]);
+      });
+    });
+
+    describe('the review', () => {
+      it('is made once: the second time gives back the first, with its author, its hour and its note', async () => {
+        const id = await plant({ needsAdjustment: true });
+        const second = await seedUser('admin');
+
+        const first = await sales.review(manager(), id, { note: 'Primera' });
+        const again = await sales.review(session(second, BUSINESS_A, 'admin'), id, {
+          note: 'Segunda',
+        });
+
+        expect(first.replayed).toBe(false);
+        expect(again.replayed).toBe(true);
+        expect(again.review).toEqual(first.review);
+        expect(again.review).toMatchObject({ reviewedByUserId: a.ownerId, note: 'Primera' });
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_review')).toEqual([
+          { n: 1 },
+        ]);
+      });
+
+      it('writes a single review when several people review at the same time', async () => {
+        const id = await plant({ needsAdjustment: true });
+        const people = await Promise.all([seedUser('admin'), seedUser('admin'), seedUser('admin')]);
+
+        const outcomes = await Promise.all([
+          sales.review(manager(), id, {}),
+          ...people.map((userId) => sales.review(session(userId, BUSINESS_A, 'admin'), id, {})),
+        ]);
+
+        expect(outcomes.filter((outcome) => !outcome.replayed)).toHaveLength(1);
+        expect(new Set(outcomes.map((outcome) => outcome.review.reviewedByUserId)).size).toBe(1);
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_review')).toEqual([
+          { n: 1 },
+        ]);
+      });
+
+      it('gives back the review of the sale that was asked for when several were reviewed', async () => {
+        // Identificadores fijos: la base devuelve las filas ordenadas por venta, y la primera revision es la de menor identificador.
+        const first = await plant({
+          id: '00000000-0000-4000-8000-0000000000a1',
+          needsAdjustment: true,
+        });
+        const second = await plant({
+          id: '00000000-0000-4000-8000-0000000000a2',
+          needsAdjustment: true,
+        });
+        const other = await seedUser('admin');
+        await sales.review(manager(), first, { note: 'de la primera' });
+
+        const outcome = await sales.review(session(other, BUSINESS_A, 'admin'), second, {
+          note: 'de la segunda',
+        });
+
+        expect(outcome.review).toMatchObject({ note: 'de la segunda', reviewedByUserId: other });
+        expect((await sales.get(manager(), first)).review?.note).toBe('de la primera');
+      });
+
+      it('can be made without a note', async () => {
+        const id = await plant({ needsAdjustment: true });
+
+        const { review } = await sales.review(manager(), id, {});
+
+        expect(review.note).toBeNull();
+      });
+
+      it('does not exist for a sale that is not there, nor for the sale of another business', async () => {
+        const id = await plant({ needsAdjustment: true });
+
+        await expect(sales.review(manager(), randomUUID(), {})).rejects.toBeInstanceOf(
+          SaleNotFoundError,
+        );
+        await expect(
+          sales.review(session(b.ownerId, BUSINESS_B, 'owner'), id, {}),
+        ).rejects.toBeInstanceOf(SaleNotFoundError);
+        await expect(sales.get(session(b.ownerId, BUSINESS_B, 'owner'), id)).rejects.toBeInstanceOf(
+          SaleNotFoundError,
+        );
+        expect(await select(admin, 'SELECT count(*)::int AS n FROM sale_review')).toEqual([
+          { n: 0 },
+        ]);
+      });
+
+      it('is not visible to another business', async () => {
+        const id = await plant({ needsAdjustment: true, reviewed: true });
+
+        const seen = await asApplication(admin, BUSINESS_B, (client) =>
+          client.query('SELECT 1 FROM sale_review WHERE sale_id = $1', [id]),
+        );
+
+        expect(seen.rowCount).toBe(0);
+      });
+    });
+
+    describe('what the database refuses by itself', () => {
+      it('never changes or erases a review, not even for whoever owns the table', async () => {
+        const id = await plant({ needsAdjustment: true, reviewed: true });
+
+        await expect(
+          admin.query(`UPDATE sale_review SET note = 'Otra' WHERE sale_id = $1`, [id]),
+        ).rejects.toThrow(/append-only/);
+        await expect(
+          admin.query('DELETE FROM sale_review WHERE sale_id = $1', [id]),
+        ).rejects.toThrow(/append-only/);
+        await expect(admin.query('TRUNCATE sale_review')).rejects.toThrow(/append-only/);
+        await expect(
+          asApplication(admin, BUSINESS_A, (client) =>
+            client.query(`UPDATE sale_review SET note = 'Otra'`),
+          ),
+        ).rejects.toThrow(/permission denied/);
+        await expect(
+          asApplication(admin, BUSINESS_A, (client) => client.query('DELETE FROM sale_review')),
+        ).rejects.toThrow(/permission denied/);
+      });
+
+      it('wants a note of one line and of 200 characters at the most, or none', async () => {
+        const note = async (text: string | null) => {
+          const id = await plant({ needsAdjustment: true });
+          await admin.query(
+            `INSERT INTO sale_review (id_negocio, sale_id, user_id, note) VALUES ($1, $2, $3, $4)`,
+            [BUSINESS_A, id, a.ownerId, text],
+          );
+        };
+
+        await expect(note(null)).resolves.toBeUndefined();
+        await expect(note('x')).resolves.toBeUndefined();
+        await expect(note('x'.repeat(200))).resolves.toBeUndefined();
+        await expect(note('')).rejects.toThrow(/sale_review_note_shape/);
+        await expect(note('x'.repeat(201))).rejects.toThrow(/sale_review_note_shape/);
+        await expect(note('dos\nlíneas')).rejects.toThrow(/sale_review_note_shape/);
+        await expect(note('con\ttabulador')).rejects.toThrow(/sale_review_note_shape/);
+      });
+
+      it('wants the sale and the person of the same business as the review', async () => {
+        const id = await plant({ needsAdjustment: true });
+
+        await expect(
+          admin.query(
+            `INSERT INTO sale_review (id_negocio, sale_id, user_id) VALUES ($1, $2, $3)`,
+            [BUSINESS_A, id, b.ownerId],
+          ),
+        ).rejects.toThrow(/sale_review_id_negocio_user_id_fkey/);
+        await expect(
+          admin.query(
+            `INSERT INTO sale_review (id_negocio, sale_id, user_id) VALUES ($1, $2, $3)`,
+            [BUSINESS_B, id, b.ownerId],
+          ),
+        ).rejects.toThrow(/sale_review_id_negocio_sale_id_fkey/);
+      });
+
+      it('does not let a business write a review as if it were another one', async () => {
+        const id = await plant({ needsAdjustment: true });
+
+        await expect(
+          asApplication(admin, BUSINESS_B, (client) =>
+            client.query(
+              `INSERT INTO sale_review (id_negocio, sale_id, user_id) VALUES ($1, $2, $3)`,
+              [BUSINESS_A, id, a.ownerId],
+            ),
+          ),
+        ).rejects.toThrow(/row-level security policy/);
+      });
+
+      it('lets a sale be reviewed once, however the second try gets in', async () => {
+        const id = await plant({ needsAdjustment: true, reviewed: true });
+
+        await expect(
+          admin.query(
+            `INSERT INTO sale_review (id_negocio, sale_id, user_id) VALUES ($1, $2, $3)`,
+            [BUSINESS_A, id, a.ownerId],
+          ),
+        ).rejects.toThrow(/sale_review_sale_unique/);
+      });
+    });
+
+    /** Una persona más del negocio A. */
+    async function seedUser(role: 'admin' | 'cashier'): Promise<string> {
+      const id = randomUUID();
+      await admin.query(
+        `INSERT INTO app_user (id, id_negocio, auth_user_id, full_name, role) VALUES ($1, $2, $3, 'Otra persona', $4)`,
+        [id, BUSINESS_A, randomUUID(), role],
+      );
+      return id;
+    }
   });
 });

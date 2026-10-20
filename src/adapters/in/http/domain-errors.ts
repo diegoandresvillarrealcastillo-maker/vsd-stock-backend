@@ -25,6 +25,7 @@ import {
   NoMembershipError,
   PersonNotFoundError,
 } from '../../../domain/model/people-errors.js';
+import { SaleNotFoundError } from '../../../domain/model/sale-errors.js';
 import {
   ShiftAlreadyOpenError,
   ShiftClosedError,
@@ -98,7 +99,8 @@ export function problemOfDomainError(error: unknown): ApiProblem | undefined {
     problemOfCatalogError(error) ??
     problemOfPurchasingError(error) ??
     problemOfDeviceError(error) ??
-    problemOfShiftError(error)
+    problemOfShiftError(error) ??
+    problemOfSaleError(error)
   );
 }
 
@@ -222,6 +224,14 @@ function problemOfDeviceError(error: unknown): ApiProblem | undefined {
       'device-id-reused',
       'Ese identificador de dispositivo ya se registró con otros datos. Genera uno nuevo para un dispositivo distinto.',
     );
+  }
+  return undefined;
+}
+
+/** Los errores de las ventas (C3-04, ADR 0027). */
+function problemOfSaleError(error: unknown): ApiProblem | undefined {
+  if (error instanceof SaleNotFoundError) {
+    return new ApiProblem(404, 'sale-not-found', 'No existe esa venta en este negocio.');
   }
   return undefined;
 }
