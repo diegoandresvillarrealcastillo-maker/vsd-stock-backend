@@ -30,6 +30,7 @@ import {
   WarehouseController,
 } from '../../adapters/in/http/purchasing.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
+import { SalesController } from '../../adapters/in/http/sales.controller.js';
 import {
   CashMovementsController,
   ShiftsController,
@@ -46,6 +47,7 @@ import {
   INVITE_USER,
   LIST_USERS,
   PRODUCTS,
+  SALES,
   PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
@@ -81,6 +83,7 @@ import { ProductsUseCase } from '../../application/usecases/products.usecase.js'
 import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { SalesUseCase } from '../../application/usecases/sales.usecase.js';
 import { ShiftsUseCase } from '../../application/usecases/shifts.usecase.js';
 import { StockAdjustmentsUseCase } from '../../application/usecases/stock-adjustments.usecase.js';
 import { StockUseCase } from '../../application/usecases/stock.usecase.js';
@@ -296,6 +299,12 @@ export class AppModule {
         useFactory: (work: UnitOfWork) => new CashMovementsUseCase(work),
         inject: [UNIT_OF_WORK],
       },
+      // Ventas (C3-03, ADR 0027).
+      {
+        provide: SALES,
+        useFactory: (work: UnitOfWork, clock: Clock) => new SalesUseCase(work, clock),
+        inject: [UNIT_OF_WORK, CLOCK],
+      },
     ];
 
     return {
@@ -318,6 +327,7 @@ export class AppModule {
         DevicesController,
         ShiftsController,
         CashMovementsController,
+        SalesController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },

@@ -72,8 +72,11 @@ interface Row {
   readonly allowed: readonly Role[];
   /** El estado cuando se logra. */
   readonly success: number;
-  /** Una peticion nueva hacia el negocio de `team`, con su propia cosa para no gastar la de otra prueba. */
-  readonly aim: (team: Team) => Promise<Request>;
+  /**
+   * Una peticion nueva hacia el negocio de `team`, con su propia cosa para no gastar la de otra prueba. `role` es quien la va a
+   * hacer: casi siempre no importa, pero una venta solo se registra en el turno de quien vende.
+   */
+  readonly aim: (team: Team, role?: Role) => Promise<Request>;
   readonly outsider: Outsider;
   /** Lo que recibe, de otro negocio, quien tiene un rol que no puede hacer esto. Por omision, 403. */
   readonly deniedOutsider?: number;
@@ -113,6 +116,7 @@ const USE_CASES: Record<string, readonly string[]> = {
   purchases: ['POST /v1/purchases', 'GET /v1/purchases', 'GET /v1/purchases/:purchaseId'],
   'redeem-invitation': ['POST /v1/invitations/redeem'],
   'regenerate-invitation': ['POST /v1/users/:userId/invitation'],
+  sales: ['POST /v1/sales'],
   shifts: [
     'POST /v1/shifts',
     'POST /v1/shifts/:shiftId/close',
@@ -331,6 +335,21 @@ describe('isolation between businesses and the matrix of roles, through the whol
         clockOffsetMs: 0,
       })
     ).id;
+
+  /** Un turno abierto por la persona que va a vender, en un dispositivo nuevo del negocio. */
+  const makeShiftOf = async (team: Team, role: Role) => {
+    const reply = await call('POST', '/v1/shifts', team.tokens[role], {
+      operationId: randomUUID(),
+      shiftId: randomUUID(),
+      deviceId: await makeDevice(team),
+      openingAmount: 20000,
+      deviceTime: new Date().toISOString(),
+      clockOffsetMs: 0,
+    });
+    expect(reply.status, `abrir turno (preparacion): ${reply.text}`).toBe(201);
+    team.traces.add(reply.body.id);
+    return reply.body.id;
+  };
 
   /** Una persona invitada que todavia no canjea su codigo, y otra que ya trabaja: las dos cajeras del negocio. */
   const makePending = async (team: Team, role: 'admin' | 'cashier' = 'cashier') => {
@@ -716,6 +735,31 @@ describe('isolation between businesses and the matrix of roles, through the whol
       }),
       outsider: { kind: 'unknown-reference', errors: ['/shiftId:unknown-shift'] },
     },
+    // ---------------- ventas
+    {
+      route: 'POST /v1/sales',
+      allowed: EVERYONE,
+      success: 201,
+      aim: async (team, role = 'owner') => {
+        const productId = await makeProduct(team);
+        return {
+          method: 'POST',
+          path: '/v1/sales',
+          body: {
+            operationId: randomUUID(),
+            shiftId: await makeShiftOf(team, role),
+            folio: `ZZ-${String(++counter).padStart(6, '0')}`,
+            total: 3200,
+            lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+            payments: [{ method: 'cash', amount: 3200 }],
+            deviceTime: new Date().toISOString(),
+            clockOffsetMs: 0,
+          },
+        };
+      },
+      // El turno y el producto son del otro negocio: aqui no existen, y se dice por el campo.
+      outsider: { kind: 'unknown-reference', errors: ['/shiftId:unknown-shift'] },
+    },
     // ---------------- personas
     {
       route: 'GET /v1/users',
@@ -856,7 +900,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
 
     it.each(cells)('%s as the %s does what the table says', async (route, role) => {
       const row = ROWS.find((candidate) => candidate.route === route)!;
-      const request = await row.aim(a);
+      const request = await row.aim(a, role);
       const before = await snapshot(a);
 
       const reply = await send(request, a.tokens[role]);
@@ -909,8 +953,8 @@ describe('isolation between businesses and the matrix of roles, through the whol
         const row = ROWS.find((candidate) => candidate.route === route)!;
         // La peticion apunta a cosas de B, y la hace una persona de A. Si nada de ella nombra a otro negocio, es la
         // peticion de A en su negocio: B solo tiene que seguir igual.
-        const pointsAtB = await row.aim(b);
-        const request = row.outsider.kind === 'own-business' ? await row.aim(a) : pointsAtB;
+        const pointsAtB = await row.aim(b, role);
+        const request = row.outsider.kind === 'own-business' ? await row.aim(a, role) : pointsAtB;
         const before = await snapshot(b);
 
         const reply = await send(request, a.tokens[role]);
@@ -935,8 +979,8 @@ describe('isolation between businesses and the matrix of roles, through the whol
       '%s as the %s of B never reads or changes anything of A',
       async (route, role) => {
         const row = ROWS.find((candidate) => candidate.route === route)!;
-        const pointsAtA = await row.aim(a);
-        const request = row.outsider.kind === 'own-business' ? await row.aim(b) : pointsAtA;
+        const pointsAtA = await row.aim(a, role);
+        const request = row.outsider.kind === 'own-business' ? await row.aim(b, role) : pointsAtA;
         const before = await snapshot(a);
 
         const reply = await send(request, b.tokens[role]);

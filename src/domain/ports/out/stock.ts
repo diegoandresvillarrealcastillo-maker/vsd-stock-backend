@@ -11,7 +11,7 @@ export interface StockChange {
   readonly productId: string;
   /** Milesimas de la unidad del producto. */
   readonly delta: number;
-  readonly reason: 'purchase' | 'adjustment';
+  readonly reason: 'purchase' | 'adjustment' | 'sale';
   readonly note: string | null;
 }
 
@@ -74,6 +74,11 @@ export interface StockLedger {
    * una a la otra.
    */
   addMovements(operationId: string, changes: readonly StockChange[]): Promise<void>;
+  /**
+   * Lo que hay ahora de esos productos (milesimas), leido dentro de la transaccion: despues de `addMovements` ve los
+   * saldos ya actualizados, bajo el candado que esos movimientos tomaron (ADR 0013). Un producto sin movimientos vale cero.
+   */
+  quantitiesOf(productIds: readonly string[]): Promise<ReadonlyMap<string, number>>;
   /** La existencia de cada producto, por nombre e id. Un producto sin movimientos aparece con cero. */
   list(request: ListRequest & { filter: StockFilter }): Promise<StockRecord[]>;
   /** El historial de un producto: de lo mas nuevo a lo mas viejo. */

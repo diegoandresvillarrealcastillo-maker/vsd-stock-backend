@@ -192,6 +192,12 @@ export class FakeStock implements StockLedger {
     return Promise.resolve();
   }
 
+  quantitiesOf(productIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    return Promise.resolve(
+      new Map(productIds.map((productId) => [productId, this.balances.get(productId) ?? 0])),
+    );
+  }
+
   list(request: ListRequest & { filter: StockFilter }): Promise<StockRecord[]> {
     const { search, categoryId, active, belowMinimum } = request.filter;
     const rows: StockRecord[] = (this.catalog?.products ?? [])

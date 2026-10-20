@@ -43,6 +43,12 @@ export interface ShiftListRequest {
 /** Puerto de salida: los turnos de caja del negocio de la unidad de trabajo (C3-02, ADR 0026). */
 export interface ShiftRepository {
   find(id: string): Promise<ShiftRecord | null>;
+  /**
+   * Lee el turno y lo deja bloqueado en modo compartido hasta el final de la transaccion: cerrarlo espera a que la venta
+   * que lo bloqueo termine, asi el arqueo no pierde ninguna (ADR 0013). Se llama al final de la venta, para que el
+   * candado dure lo minimo.
+   */
+  lockShared(id: string): Promise<ShiftRecord | null>;
   list(request: ShiftListRequest): Promise<ShiftRecord[]>;
   /**
    * Abre el turno. Lanza `ShiftAlreadyOpenError` si la persona ya tiene uno abierto en ese dispositivo y `ShiftIdReusedError`

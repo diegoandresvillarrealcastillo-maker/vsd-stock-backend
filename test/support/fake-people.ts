@@ -10,6 +10,7 @@ import { FakeCatalog } from './fake-catalog.js';
 import { FakeCash } from './fake-cash.js';
 import { FakeDevices } from './fake-devices.js';
 import { FakePurchasing } from './fake-purchasing.js';
+import { FakeSales } from './fake-sales.js';
 
 /** El orden en que la base lista a las personas: por nombre y luego por id. */
 const byNameThenId = (a: PersonRecord, b: PersonRecord): number =>
@@ -116,6 +117,7 @@ export function fakeUnitOfWork(
   purchasing: FakePurchasing = new FakePurchasing(),
   devices: FakeDevices = new FakeDevices(),
   cash: FakeCash = new FakeCash(),
+  sales: FakeSales = new FakeSales(purchasing.operations, cash.shifts),
 ): UnitOfWork & { openedFor: string[] } {
   const openedFor: string[] = [];
   // El libro de existencias lista los productos del catalogo de mentira, si lo hay.
@@ -141,6 +143,7 @@ export function fakeUnitOfWork(
         devices,
         shifts: cash.shifts,
         cashMovements: cash.movements,
+        sales,
       };
       return work(scope);
     },

@@ -36,6 +36,14 @@ export class FakeShifts implements ShiftRepository {
     return Promise.resolve(this.records.find((shift) => shift.id === id) ?? null);
   }
 
+  /** Cuantas veces se bloqueo un turno para una venta, por turno. */
+  readonly locked: string[] = [];
+
+  lockShared(id: string): Promise<ShiftRecord | null> {
+    this.locked.push(id);
+    return this.find(id);
+  }
+
   list(request: ShiftListRequest): Promise<ShiftRecord[]> {
     const after = request.after;
     const rows = [...this.records]

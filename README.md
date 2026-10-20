@@ -87,6 +87,12 @@ valor** cuando es una cadena de conexión (lleva la clave).
   corrige y nunca la rechaza. `GET /v1/shifts/{id}` trae el **arqueo** (lo que debía haber frente a lo contado, con las ventas
   tardías aparte) y `GET /v1/shifts` los lista (un cajero ve los suyos). `POST /v1/cash-movements` entra o saca efectivo de un
   turno abierto, con motivo (la gerencia, con conexión).
+- `POST /v1/sales` registra una **venta** ([ADR 0027](docs/adr/0027-registro-de-ventas-y-atencion.md)): cualquier persona, en
+  su propio turno y también sin conexión. **Se acepta casi todo y lo raro se marca**: existencia en negativo
+  (`needsAdjustment`), folio repetido (`folioConflict`), precio distinto al del catálogo, total o cobros que no cuadran, turno
+  cerrado, dispositivo dado de baja (`flags`) y las marcas de la hora. Solo rechaza lo que no es una venta: un turno que no es
+  de quien vende y un producto que el negocio no tiene. El servidor calcula el total otra vez y respeta el precio con que se
+  vendió; la venta, sus cobros y la baja de existencias son una sola transacción, idempotente por `operationId`.
 - `GET /v1/ready` dice si el servicio puede atender peticiones de negocio, hoy: si la base responde. Contesta 503 con
   `database-unavailable` (no responde) o `database-not-configured` (falta `DATABASE_URL`).
 

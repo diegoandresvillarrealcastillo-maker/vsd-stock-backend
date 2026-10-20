@@ -310,6 +310,14 @@ export class InputReader {
     this.errors.push({ pointer: `${this.prefix}${pointer}`, code, detail });
   }
 
+  /**
+   * Cuantos problemas se han anotado hasta ahora, contando los de los lectores de dentro (`within`). Sirve para saber si
+   * lo que se acaba de leer sirvio antes de usarlo en una regla que mira varios campos a la vez.
+   */
+  errorCount(): number {
+    return this.errors.length;
+  }
+
   /** Lanza si algo no sirvio; si no, deja usar lo leido. */
   finish(): void {
     if (this.errors.length > 0) throw new ValidationFailedError([...this.errors]);

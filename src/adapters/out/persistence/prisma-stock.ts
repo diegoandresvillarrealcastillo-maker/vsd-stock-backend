@@ -124,6 +124,15 @@ export class PrismaStockLedger implements StockLedger {
     });
   }
 
+  async quantitiesOf(productIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    const rows = await this.tx.stockBalance.findMany({
+      where: { productId: { in: [...productIds] } },
+      select: { productId: true, quantity: true },
+    });
+    const found = new Map(rows.map((row) => [row.productId, Number(row.quantity)]));
+    return new Map(productIds.map((productId) => [productId, found.get(productId) ?? 0]));
+  }
+
   async list(request: ListRequest & { filter: StockFilter }): Promise<StockRecord[]> {
     const { search, categoryId, active, belowMinimum } = request.filter;
     const after = request.after;

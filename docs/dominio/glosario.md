@@ -275,11 +275,24 @@ Contar la mercancía real y compararla con la existencia del sistema. Fuera de l
 La transacción en el mostrador: qué se vendió, a qué precio y cómo se pagó. Es una sola transacción con sus
 movimientos de stock y de caja, lleva su folio y es inmutable. Una venta ya hecha **nunca se rechaza al
 sincronizar** (ver _Requiere ajuste_); solo se rechaza lo inválido de verdad: negocio distinto, firma inválida
-o forma ilegible.
+o forma ilegible. Lo que no cuadra con lo que el servidor sabe (existencia, precio, total, cobros, turno cerrado, dispositivo
+dado de baja, folio repetido) se acepta y se **marca** (ADR 0027); el total lo calcula el servidor otra vez, respetando el precio
+con que se vendió.
 
 **Código:** `Sale`
 
-**Estado:** Decidido (ADR 0009, ADR 0013, ADR 0014 y ADR 0016)
+**Estado:** Decidido (ADR 0009, ADR 0013, ADR 0014, ADR 0016 y ADR 0027)
+
+### Marca de venta
+
+Lo que el servidor encontró raro al aceptar una venta y que pide que alguien la mire: `price-differs`, `total-differs`,
+`payment-mismatch`, `late-shift`, `revoked-device` y `folio-device`, además de _Requiere ajuste_, el folio repetido y las
+marcas de la hora (ADR 0016). Una marca **no rechaza ni cambia** la venta: queda como historia, y la bandeja de atención la
+muestra hasta que la gerencia la revisa (ADR 0027).
+
+**Código:** `SaleFlag`
+
+**Estado:** Decidido (ADR 0027)
 
 ### Línea de venta
 

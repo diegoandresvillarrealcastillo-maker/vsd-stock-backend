@@ -141,6 +141,13 @@ la huella de idempotencia. Lo que solo la base puede saber llega como 400 del ca
 `/shiftId` `unknown-shift` al mover efectivo. Repetir un cierre responde `200` con `Idempotent-Replayed: true` (el cierre no
 crea nada, así que no hay un `201`).
 
+La venta (C3-03, [ADR 0027](adr/0027-registro-de-ventas-y-atencion.md)) no tiene problemas propios: casi todo lo que el
+servidor encuentra raro **se acepta y se marca** en la respuesta (`needsAdjustment`, `folioConflict`, `flags`, `timeFlags`).
+Lo que rechaza llega como `400 validation-failed` con el campo: `/shiftId` `unknown-shift` (no existe o no es el turno de quien
+vende), `/lines/N/productId` `unknown-product` y `/lines/N/quantityMilli` `not-whole`. Como todo lo idempotente, repetirla
+responde `200` con `Idempotent-Replayed: true` y la venta tal como quedó; con otro cuerpo, `409 operation-id-reused`. El dinero
+va en pesos enteros y las cantidades en milésimas.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

@@ -78,6 +78,13 @@ export class PrismaShiftRepository implements ShiftRepository {
     return row === null ? null : recordOf(row);
   }
 
+  async lockShared(id: string): Promise<ShiftRecord | null> {
+    // `FOR SHARE` bloquea el turno hasta el final de la transaccion: cerrarlo (un UPDATE) espera a esta venta. En
+    // READ COMMITTED la lectura que sigue ve lo ultimo que confirmo quien lo cerro mientras esta esperaba.
+    await this.tx.$queryRaw`SELECT id FROM cash_shift WHERE id = ${id}::uuid FOR SHARE`;
+    return this.find(id);
+  }
+
   async list(request: ShiftListRequest): Promise<ShiftRecord[]> {
     const after = request.after;
     const rows = await this.tx.cashShift.findMany({
