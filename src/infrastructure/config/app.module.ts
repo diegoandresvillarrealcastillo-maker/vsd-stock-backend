@@ -31,6 +31,7 @@ import {
 } from '../../adapters/in/http/purchasing.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
 import { SalesController } from '../../adapters/in/http/sales.controller.js';
+import { SyncController } from '../../adapters/in/http/sync.controller.js';
 import {
   CashMovementsController,
   ShiftsController,
@@ -48,6 +49,8 @@ import {
   LIST_USERS,
   PRODUCTS,
   SALES,
+  SYNC,
+  SYNC_COPY,
   PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
@@ -84,6 +87,8 @@ import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.j
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
 import { SalesUseCase } from '../../application/usecases/sales.usecase.js';
+import { SyncCopyUseCase } from '../../application/usecases/sync-copy.usecase.js';
+import { SyncUseCase } from '../../application/usecases/sync.usecase.js';
 import { ShiftsUseCase } from '../../application/usecases/shifts.usecase.js';
 import { StockAdjustmentsUseCase } from '../../application/usecases/stock-adjustments.usecase.js';
 import { StockUseCase } from '../../application/usecases/stock.usecase.js';
@@ -305,6 +310,18 @@ export class AppModule {
         useFactory: (work: UnitOfWork, clock: Clock) => new SalesUseCase(work, clock),
         inject: [UNIT_OF_WORK, CLOCK],
       },
+      // El lote de sincronizacion y la copia de lectura (C3-06, ADR 0028).
+      {
+        provide: SYNC,
+        useFactory: (shifts: ShiftsUseCase, sales: SalesUseCase, clock: Clock) =>
+          new SyncUseCase(shifts, sales, clock),
+        inject: [SHIFTS, SALES, CLOCK],
+      },
+      {
+        provide: SYNC_COPY,
+        useFactory: (work: UnitOfWork, clock: Clock) => new SyncCopyUseCase(work, clock),
+        inject: [UNIT_OF_WORK, CLOCK],
+      },
     ];
 
     return {
@@ -328,6 +345,7 @@ export class AppModule {
         ShiftsController,
         CashMovementsController,
         SalesController,
+        SyncController,
       ],
       providers: [
         { provide: CLOCK, useClass: SystemClock },

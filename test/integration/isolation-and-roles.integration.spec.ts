@@ -130,6 +130,8 @@ const USE_CASES: Record<string, readonly string[]> = {
     'GET /v1/shifts/:shiftId',
   ],
   'stock-adjustments': ['POST /v1/stock-adjustments'],
+  sync: ['POST /v1/sync'],
+  'sync-copy': ['GET /v1/sync/products', 'GET /v1/sync/stock'],
   stock: ['GET /v1/stock', 'GET /v1/stock-movements'],
   suppliers: [
     'GET /v1/suppliers',
@@ -834,6 +836,53 @@ describe('isolation between businesses and the matrix of roles, through the whol
         };
       },
       outsider: { kind: 'not-found', code: 'sale-not-found' },
+    },
+    // ---------------- lote de sincronizacion y copia de lectura
+    {
+      route: 'POST /v1/sync',
+      allowed: EVERYONE,
+      success: 200,
+      // Un lote con un turno nuevo en un dispositivo del negocio. Cada operacion responde por si misma: la peticion es un 200.
+      aim: async (team) => ({
+        method: 'POST',
+        path: '/v1/sync',
+        body: {
+          operations: [
+            {
+              kind: 'shift-open',
+              body: {
+                operationId: randomUUID(),
+                shiftId: randomUUID(),
+                deviceId: await makeDevice(team),
+                openingAmount: 10000,
+                deviceTime: new Date().toISOString(),
+                clockOffsetMs: 0,
+              },
+            },
+          ],
+        },
+      }),
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'GET /v1/sync/products',
+      allowed: EVERYONE,
+      success: 200,
+      aim: async (team) => {
+        await makeProduct(team);
+        return { method: 'GET', path: '/v1/sync/products' };
+      },
+      outsider: { kind: 'own-business' },
+    },
+    {
+      route: 'GET /v1/sync/stock',
+      allowed: EVERYONE,
+      success: 200,
+      aim: async (team) => {
+        await makeProduct(team);
+        return { method: 'GET', path: '/v1/sync/stock' };
+      },
+      outsider: { kind: 'own-business' },
     },
     // ---------------- personas
     {

@@ -10,6 +10,7 @@ import type { NewProduct, ProductChange } from '../../src/domain/model/product-i
 import type {
   CatalogRepository,
   CategoryRecord,
+  ChangedProductsRequest,
   ListRequest,
   ProductFilter,
   ProductRecord,
@@ -105,6 +106,22 @@ export class FakeCatalog implements CatalogRepository {
       rows = rows.filter((product) => product.categoryId === categoryId);
     if (active !== undefined) rows = rows.filter((product) => product.active === active);
     return Promise.resolve(after(rows, request.after).slice(0, request.limit));
+  }
+
+  listProductsChanged(request: ChangedProductsRequest): Promise<ProductRecord[]> {
+    const at = (product: ProductRecord) => product.updatedAt.toISOString();
+    const rows = [...this.products]
+      .sort((a, b) =>
+        at(a) < at(b) ? -1 : at(a) > at(b) ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+      )
+      .filter((product) => request.since === undefined || product.updatedAt > request.since)
+      .filter(
+        (product) =>
+          request.after === undefined ||
+          at(product) > request.after[0] ||
+          (at(product) === request.after[0] && product.id > request.after[1]),
+      );
+    return Promise.resolve(rows.slice(0, request.limit));
   }
 
   findProduct(id: string): Promise<ProductRecord | null> {

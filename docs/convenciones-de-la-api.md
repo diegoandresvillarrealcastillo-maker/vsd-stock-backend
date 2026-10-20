@@ -164,6 +164,16 @@ la venta tuvo efectivo y el turno que se nombró no existe, no es de quien anula
 propio**. Si nadie pagó en efectivo, `shiftId` se puede omitir. Una venta que no existe, o que no es de este negocio, es `404
 sale-not-found` como siempre.
 
+El lote de sincronización (C3-06, [ADR 0028](adr/0028-lote-de-sincronizacion-y-copia-de-lectura.md)) no tiene problemas propios:
+`POST /v1/sync` responde `200` siempre que se procesó, y cada operación dice lo suyo en `results[i]`: `status` es el de su ruta
+individual (`201`, `200` si ya estaba aplicada o si es un cierre de turno, o el `4xx` o `5xx`), y vienen `body` o `problem` (el
+mismo `application/problem+json`, con su `traceId` y la ruta `/v1/sync`), nunca los dos. **Un `500` dentro de un `200`** es una
+operación que no se pudo aplicar por un error inesperado: no tumba a las demás y se reintenta (clase _pasajero_, ADR 0009). Los
+problemas de una operación llevan punteros relativos a ella (`/lines/0/productId`), no al lote; los del lote entero (no es una
+lista de 1 a 50, o un campo que no se conoce) son un `400` normal con puntero `/operations`. La idempotencia es la de siempre,
+por `operationId`, pero se dice en `replayed` y no en la cabecera. La copia de lectura se pide con `since` (un instante ISO 8601
+UTC con `Z`, con o sin milisegundos), `limit` y `cursor`; un `since` que no es un instante es `400 /since invalid-moment`.
+
 ### Qué hace el cliente con cada estado
 
 Es la tabla de las clases de fallo del [ADR 0009](adr/0009-motor-offline-y-libro-de-movimientos.md):

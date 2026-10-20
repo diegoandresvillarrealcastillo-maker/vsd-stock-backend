@@ -25,3 +25,5 @@ export const DEVICES = Symbol('DEVICES');
 export const SHIFTS = Symbol('SHIFTS');
 export const CASH_MOVEMENTS = Symbol('CASH_MOVEMENTS');
 export const SALES = Symbol('SALES');
+export const SYNC = Symbol('SYNC');
+export const SYNC_COPY = Symbol('SYNC_COPY');

@@ -9,11 +9,12 @@ import { isUnitOfMeasure } from '../../../domain/model/unit-of-measure.js';
 import type {
   CatalogRepository,
   CategoryRecord,
+  ChangedProductsRequest,
   ListRequest,
   ProductFilter,
   ProductRecord,
 } from '../../../domain/ports/out/catalog.js';
-import type { Prisma } from '../../../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 import { literal } from './like-literal.js';
 import type { PrismaTransaction } from './prisma-unit-of-work.js';
 
@@ -186,6 +187,36 @@ export class PrismaCatalogRepository implements CatalogRepository {
       select: PRODUCT_SELECT,
     });
     return rows.map(productOf);
+  }
+
+  async listProductsChanged(request: ChangedProductsRequest): Promise<ProductRecord[]> {
+    // La hora se compara al milisegundo, como la lleva el cursor: con la fraccion mas fina, un producto de la misma milesima
+    // que el ultimo de la pagina volveria a salir en la siguiente (o la lista no avanzaria nunca).
+    const conditions: Prisma.Sql[] = [];
+    if (request.since !== undefined) {
+      conditions.push(
+        Prisma.sql`date_trunc('milliseconds', p.updated_at) > ${request.since.toISOString()}::timestamptz`,
+      );
+    }
+    if (request.after !== undefined) {
+      conditions.push(
+        Prisma.sql`(date_trunc('milliseconds', p.updated_at), p.id) > (${request.after[0]}::timestamptz, ${request.after[1]}::uuid)`,
+      );
+    }
+    const where =
+      conditions.length === 0
+        ? Prisma.empty
+        : Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+    const ids = await this.tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT p.id FROM product p ${where}
+       ORDER BY date_trunc('milliseconds', p.updated_at), p.id
+       LIMIT ${request.limit}`);
+    const rows = await this.tx.product.findMany({
+      where: { id: { in: ids.map((row) => row.id) } },
+      select: PRODUCT_SELECT,
+    });
+    const byId = new Map(rows.map((row) => [row.id, productOf(row)]));
+    return ids.flatMap((row) => byId.get(row.id) ?? []);
   }
 
   async findProduct(id: string): Promise<ProductRecord | null> {
