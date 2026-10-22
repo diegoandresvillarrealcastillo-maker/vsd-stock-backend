@@ -83,9 +83,15 @@ describe('ADR 0033: la landing vive en sitio/ y se publica aparte', () => {
   it('lets it import the pure domain and nothing else of the app', () => {
     const fourth = point(4);
     expect(fourth).toContain('`src/domain`');
+    expect(fourth).toContain('`src/presentation/assets/mascotas`');
     expect(fourth).toMatch(
-      /no importa de `application\/`, `adapters\/`, `infrastructure\/` ni `presentation\/`/,
+      /no importa de `application\/`, `adapters\/` ni `infrastructure\/`, ni del resto de `presentation\/`/,
     );
+    expect(fourth).toMatch(
+      /Los tokens de diseño no son un import del código sino un `@import` de CSS/,
+    );
+    expect(fourth).toContain('`eslint/boundaries.mjs`');
+    expect(fourth).toContain('`pagina/`');
   });
 
   it('collects nothing: no forms, no cookies, no analytics; contact is a WhatsApp link', () => {

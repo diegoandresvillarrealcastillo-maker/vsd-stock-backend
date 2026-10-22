@@ -34,8 +34,11 @@ dominio. Lo que queda por decidir es **dónde vive el código y cómo se publica
 3. **Misma pila y mismos tokens:** React, Tailwind v4 con los tokens del producto (los mismos nombres y valores) y Framer Motion con
    `LazyMotion` (ADR 0008). El HTML se prerenderiza al compilar para que el texto esté en la página sin ejecutar JavaScript. Las tipografías
    son fuentes propias, servidas desde el mismo sitio: la página no le pide nada a terceros.
-4. **Puede importar el dominio puro (`src/domain`) y las imágenes de las mascotas,** y nada más de la aplicación: no importa de `application/`,
-   `adapters/`, `infrastructure/` ni `presentation/`. La demo de IVA usa `splitTaxIncluded` y `summarizeSale`, no una copia.
+4. **Puede importar el dominio puro (`src/domain`) y las imágenes de las mascotas (`src/presentation/assets/mascotas`),** y nada más de la
+   aplicación: no importa de `application/`, `adapters/` ni `infrastructure/`, ni del resto de `presentation/`. La demo de IVA usa
+   `splitTaxIncluded` y `summarizeSale`, no una copia. Los tokens de diseño no son un import del código sino un `@import` de CSS
+   (`src/presentation/styles/index.css`): los mismos nombres y valores, no una copia. Lo impone ESLint en el frontend
+   (`eslint/boundaries.mjs`), y la carpeta de la landing se llama `pagina/` y no `src/` para que la regla no confunda lo suyo con lo de la aplicación.
 5. **No recoge nada:** ni formularios, ni cookies, ni analítica. El contacto es un enlace `wa.me` que abre un chat de WhatsApp con el mensaje
    ya escrito. Sin datos propios no hace falta política de tratamiento en la página; quien escriba por WhatsApp lo hace en esa aplicación.
 6. **Todo lo que la página dice sale de un solo archivo de contenido,** y una prueba vigila que no afirme lo que el producto no hace: factura
