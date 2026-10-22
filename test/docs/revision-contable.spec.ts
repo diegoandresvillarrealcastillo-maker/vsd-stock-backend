@@ -75,6 +75,28 @@ describe('ADR 0032: what it leaves written', () => {
     expect(adr).toContain('citas de la norma no se contrastaron');
   });
 
+  it('records the review as an external technical accounting review, with no name, as the project owner decided', () => {
+    expect(adr).toContain('revisión técnica contable externa');
+    expect(adr).toContain('sin nombre propio');
+  });
+
+  it('keeps the validation with whoever files the store declarations for before real sales', () => {
+    expect(adr).toContain('quien lleva las declaraciones de la tienda');
+    expect(adr).toMatch(/antes de operar en vivo con ventas reales/);
+  });
+
+  it('says the store handles its invoicing with the DIAN outside the system, so VSD Stock stays internal control', () => {
+    expect(adr).toContain('facturador gratuito de la DIAN');
+    expect(adr).toMatch(/por fuera del sistema/);
+    expect(adr).toMatch(/control interno de inventario y cuadre de caja/);
+  });
+
+  it('plans the exempt / excluded type for the start of Ciclo 4, before the monthly reports and the real sales', () => {
+    expect(adr).toMatch(
+      /decidió hacerlo al inicio del Ciclo 4, antes de los reportes mensuales y de las ventas reales/,
+    );
+  });
+
   it('says what is still true of the sale line today, so nobody assumes the type is stored', () => {
     expect(adr).toContain('tax_rate_bp');
     expect(adr).toContain('sale_void');

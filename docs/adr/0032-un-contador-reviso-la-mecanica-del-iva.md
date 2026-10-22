@@ -11,9 +11,9 @@ hipótesis sin verificar con la norma ni con un contador**, y que era «el riesg
 [ADR 0020](0020-se-congela-el-modelo-del-dominio.md) lo dejó en su lista de riesgos abiertos: «una persona, con quien lleve la
 contabilidad, antes de la entrega».
 
-El 22 de octubre de 2026 el dueño del proyecto le entregó a un contador una hoja con las siete reglas de cálculo, cinco ejemplos con
-números y ocho preguntas, y recibió una respuesta por escrito. Este ADR **deja constancia de lo que contestó** y de lo que pidió. No
-cambia el cálculo.
+El 22 de octubre de 2026 el dueño del proyecto le entregó a un contador, como consulta tributaria externa, una hoja con las siete reglas
+de cálculo, cinco ejemplos con números y ocho preguntas, y recibió una respuesta por escrito. Este ADR **deja constancia de lo que
+contestó** y de lo que pidió, junto con tres decisiones que el dueño del proyecto tomó al leerla. No cambia el cálculo.
 
 ## Decisión
 
@@ -39,8 +39,10 @@ cambia el cálculo.
    modelo, su ADR (el modelo está congelado, ADR 0020):
    - **Distinguir lo exento de lo excluido.** Para el cálculo da igual (los dos dan $ 0 de IVA), pero para declarar hay que separarlos
      en renglones distintos. Hoy el producto y la línea de venta guardan solo la tarifa en puntos básicos (`tax_rate_bp`: 0, 500 o 1900),
-     así que **una venta ya registrada con 0 % no se podrá clasificar después.** Conviene agregar el tipo tributario del producto (y
-     copiarlo a la línea, como ya se copian el precio y la tarifa) **antes de la primera venta real en PROD.**
+     así que **una venta ya registrada con 0 % no se podrá clasificar después.** **El dueño del proyecto decidió hacerlo al inicio del
+     Ciclo 4, antes de los reportes mensuales y de las ventas reales:** se agregará el tipo tributario del producto (y se copiará a la
+     línea, como ya se copian el precio y la tarifa). Mientras no haya ventas reales no se pierde nada: PROD está en pausa y PRE trabaja
+     con datos ficticios.
    - **Anulaciones con folio propio.** Hoy una anulación no borra nada: agrega un registro `sale_void` aparte, ligado a la venta, con su
      fecha, y compensa base e IVA exactos. Lo que no tiene es un **folio consecutivo propio** que referencie el de la venta. El contador
      lo pide para que la auditoría de consecutivos no tenga saltos.
@@ -52,14 +54,18 @@ cambia el cálculo.
 
 3. **La factura electrónica sigue fuera de la entrega, y el dueño del negocio tiene que saberlo.** El contador advierte que quien es
    responsable de IVA (cobra 5 % o 19 %) está obligado a expedir factura electrónica de venta o el documento equivalente POS
-   electrónico, sin importar el monto, y que el comprobante de VSD Stock sirve para el control interno de caja e inventario. Hasta que
-   eso se resuelva (con el facturador gratuito de la DIAN o con un proveedor tecnológico), **VSD Stock no reemplaza el documento fiscal.**
-   El comprobante ya lo dice: «Comprobante de venta — no es factura».
+   electrónico, sin importar el monto, y que el comprobante de VSD Stock sirve para el control interno de caja e inventario. **El dueño
+   del proyecto confirmó que la tienda maneja hoy esa obligación ante la DIAN por fuera del sistema** (con el facturador gratuito de la
+   DIAN o con su propio proceso externo, cuando aplica). Por eso, en esta etapa, **VSD Stock es solo control interno de inventario y
+   cuadre de caja y no reemplaza el documento fiscal.** El comprobante ya lo dice: «Comprobante de venta — no es factura». Si algún día
+   se integra un proveedor tecnológico, será otro ADR.
 
-4. **Quién lo dijo y qué se verificó.** Respondió por escrito un contador consultado por el dueño del proyecto. **En este repositorio no
-   consta su nombre ni si lleva la contabilidad del negocio de referencia**, que era lo que pedía el ADR 0014: eso lo confirma el dueño
-   del proyecto. Las normas que cita (artículos del Estatuto Tributario, resoluciones de la DIAN y el valor del impuesto a las bolsas) son
-   suyas: **el equipo no las contrastó con la fuente oficial.** La respuesta original la guarda el dueño del proyecto, fuera de Git.
+4. **Quién lo dijo y qué se verificó.** Fue una consulta tributaria externa para verificar las fórmulas y las reglas del Estatuto
+   Tributario. **En el repositorio consta como «revisión técnica contable externa», sin nombre propio** (decisión del dueño del
+   proyecto). No es la validación de quien lleva las declaraciones de la tienda, que era lo que pedía el ADR 0014: **antes de operar en
+   vivo con ventas reales, el dueño del proyecto la valida con quien lleva las declaraciones de la tienda.** Las normas que cita
+   (artículos del Estatuto Tributario, resoluciones de la DIAN y el valor del impuesto a las bolsas) son suyas: **el equipo no las
+   contrastó con la fuente oficial.** La respuesta original la guarda el dueño del proyecto, fuera de Git.
 
 ## Alternativas consideradas
 
@@ -76,13 +82,14 @@ este.
 ### Agregar el tipo tributario ahora
 
 Es lo que más conviene (punto 2), pero toca el modelo congelado: una migración, el catálogo, la línea de venta y las dos aplicaciones, con su
-ADR y su ticket. No cabe en el cierre del Ciclo 3 sin sacar algo, y la decisión de cuándo es del dueño del proyecto. Queda dicho aquí
-que **cuanto más tarde, más ventas quedan sin clasificar.**
+ADR y su ticket. No cabe en el cierre del Ciclo 3 sin sacar algo: el dueño del proyecto decidió hacerlo al inicio del Ciclo 4 (punto 2).
+Queda dicho aquí que **cuanto más tarde, más ventas quedan sin clasificar.**
 
 ### Meter la factura electrónica en la entrega
 
-Cambia el alcance que el ADR 0014 ya dejó fuera (integrar un proveedor tecnológico y sus resoluciones es un proyecto aparte). Lo
-decide el dueño del proyecto con su contador; este ADR solo se asegura de que nadie lo dé por hecho.
+Cambia el alcance que el ADR 0014 ya dejó fuera (integrar un proveedor tecnológico y sus resoluciones es un proyecto aparte). El dueño
+del proyecto confirmó que la tienda lleva esa obligación por fuera del sistema (punto 3); este ADR solo se asegura de que nadie dé por
+hecho que VSD Stock la cubre.
 
 ## Consecuencias
 
@@ -95,7 +102,10 @@ decide el dueño del proyecto con su contador; este ADR solo se asegura de que n
 
 ### En contra
 
-- Es **la respuesta escrita de una persona,** no una certificación ni un concepto firmado, y aquí no consta quién es.
+- Es **la respuesta escrita de una persona,** no una certificación ni un concepto firmado, y por decisión del dueño del proyecto aquí
+  no consta quién es.
+- **No es la validación de quien lleva las declaraciones de la tienda,** que el ADR 0014 pedía y sigue pendiente antes de operar con
+  ventas reales.
 - **Las tarifas y las citas de la norma no se contrastaron** con la fuente oficial; si alguna cambia, este ADR no lo sabrá.
 - **Sin el tipo tributario, VSD Stock no puede separar exentos de excluidos,** y cada venta real sin él es una que no se podrá
   clasificar después.
