@@ -42,6 +42,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0030](0030-aplicacion-instalable-motor-de-envio-y-pantalla-que-dice-la-verdad.md) | La aplicación instalable, el motor de envío y una pantalla que dice la verdad                            | Aceptada |
 | [0031](0031-hosts-de-pre-render-y-cloudflare-pages.md)                             | Los hosts de PRE: la API en Render y la web en Cloudflare Pages                                          | Aceptada |
 | [0032](0032-un-contador-reviso-la-mecanica-del-iva.md)                             | Un contador revisó la mecánica del IVA: se mantiene, y quedan cuatro precisiones                         | Aceptada |
+| [0033](0033-la-landing-vive-en-sitio-del-frontend-y-se-publica-aparte.md)          | La landing vive en `sitio/` del frontend y se publica como un proyecto aparte                            | Aceptada |
 
 ## Reglas
 
