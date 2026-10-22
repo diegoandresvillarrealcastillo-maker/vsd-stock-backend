@@ -29,6 +29,9 @@ node_modules/
 
 # ---------- Pruebas y cobertura ----------
 coverage/
+# Roturas a proposito (Stryker, C3-17): el informe, lo que aprendio la ultima corrida y su copia de trabajo.
+reports/
+.stryker-tmp/
 
 # Cliente de Prisma: se genera de prisma/schema.prisma (npm run prisma:generate, y solo al instalar).
 src/generated/

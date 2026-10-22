@@ -63,6 +63,49 @@ migraciones las aplica **una persona** a un ambiente real, con `npm run db:migra
 Husky corre ESLint y Prettier sobre lo que cambia antes de cada commit, y valida el mensaje. **No uses
 `--no-verify`**: el CI repite todo y no se puede saltar.
 
+### Roturas a propósito con Stryker (C3-17)
+
+Una prueba que pasa no prueba que vigile algo. [Stryker](https://stryker-mutator.io) rompe el código **a propósito**, de a una
+cosa por vez (invierte una condición, quita una rama, cambia un `<` por `<=`), corre las pruebas que tocan esa línea y cuenta
+cuántas roturas **notó alguna prueba**. Lo que ninguna prueba nota es un hueco: un comportamiento que nadie vigila.
+
+```bash
+npm run mutation          # la primera vez, ~5 min con doce núcleos; el informe queda en reports/mutation/mutation.html
+```
+
+- **Qué rompe:** solo `domain/` y `application/`, las capas con lógica. No rompe los adaptadores, la infraestructura ni el
+  cliente que genera Prisma. Repite solo las pruebas de esas capas y los vectores de cálculo del contrato
+  (`vitest.mutation.config.mts`); las de integración y las de documentos no vigilan esas capas.
+- **Cómo leer el informe:** abre `reports/mutation/mutation.html`. Cada rotura queda _muerta_ (una prueba la notó), _sobrevivió_
+  (ninguna la notó: falta una prueba o el código sobra), _sin cobertura_ (ninguna prueba pasa por ahí) o _tiempo agotado_
+  (la rotura hizo que el código se colgara, y cuenta como notada). Empieza por las que sobrevivieron.
+- **Puntaje:** el porcentaje de roturas notadas. La base de `desarrollo` dio **87,50 %** (2.878 notadas, 389 sobrevivientes y 22
+  sin cobertura, de 3.289). Verde desde 90 %, aviso por debajo de 87 % y **rojo por debajo de 85 %** (`thresholds` en
+  `stryker.config.json`). El piso se sube a medida que se cubren los huecos; nunca se baja para que pase.
+- **Qué son los sobrevivientes de hoy:** 216 de los 411 son el cambio de un texto, casi todos el mensaje o la etiqueta de un
+  error que ninguna prueba compara palabra por palabra; y varios de los demás son filtros opcionales de las listas (con o sin
+  la clave `undefined` el resultado es el mismo). Son los primeros candidatos a _equivalentes_. Antes de darlos por
+  equivalentes, mira el informe: cada uno dice qué se cambió y en qué línea.
+- **Es incremental:** Stryker guarda lo que aprendió en `reports/stryker-incremental.json` y la siguiente corrida solo repite lo
+  que cambió (el código roto o las pruebas que lo tocan). Con nada que repetir, `npm run mutation` tarda unos 25 segundos.
+  Para empezar de cero, borra ese archivo. En el CI la memoria se guarda en la caché del repositorio: la corrida de un PR parte
+  de la de su rama y, si no hay, de la de `desarrollo`.
+- **En el CI** corre como el trabajo **«Roturas a proposito (Stryker)»** y guarda el informe como artefacto
+  (`informes-roturas`). Por ahora **no es obligatorio**: no está en el conjunto de reglas de las ramas y no bloquea ningún PR
+  hasta que Diego lo marque. Aun así queda en rojo si el puntaje baja del piso: es una señal, no un adorno. Y recuerda que
+  **un check del CI es su nombre**: renombrarlo equivale a quitar el check exigido.
+- **Cuando cambias `domain/` o `application/`,** corre `npm run mutation` y mira solo lo que tocaste:
+  `npx stryker run --mutate "src/domain/model/mi-archivo.ts"` tarda un par de minutos.
+- **Una rotura que sobrevive y es equivalente** (cambia el código pero no el comportamiento) se deja y se anota en el PR; no se
+  escribe una prueba que fuerce un detalle sin importancia.
+- **Por qué existe `scripts/mutation.ts`:** el runner de Vitest de Stryker 10.0.0 es anterior a Vitest 5 y busca cada prueba por su
+  nombre con los nombres unidos por espacios, mientras Vitest 5 los une con « > ». No encuentra ninguna, no corre ninguna prueba y
+  todas las roturas «sobreviven» (puntaje 0 con un código bien probado). El script repara esa línea del runner antes de correr y se
+  detiene si el runner cambia. Cuando Stryker publique un runner con soporte para Vitest 5, se borran el script y su prueba y el
+  script `mutation` vuelve a ser `stryker run`.
+- **Por qué `package.json` tiene `overrides`:** Stryker trae `typed-rest-client`, que fija `qs` en una versión con avisos de
+  seguridad (`npm audit`). El `overrides` sube solo esa dependencia a `^6.16.1`; si Stryker la actualiza, se borra.
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/) **en español, en plural, con tildes** y tono

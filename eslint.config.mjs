@@ -16,6 +16,9 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'coverage/**',
+      // Informe y copia de trabajo de las roturas a proposito (Stryker): los genera la herramienta.
+      'reports/**',
+      '.stryker-tmp/**',
       'node_modules/**',
       '*.config.mjs',
       'eslint/**',
