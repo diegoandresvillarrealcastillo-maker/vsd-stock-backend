@@ -10,6 +10,9 @@
 #    4. que las pruebas de integracion pasen contra un PostgreSQL real;
 #    5. que la imagen de Docker se construya y el contenedor responda.
 #
+#  Y una sexta que solo informa (no bloquea): las roturas a proposito con
+#  Stryker, que rompen el dominio y la aplicacion y miran si alguna prueba lo nota.
+#
 #  El analisis de codigo (CodeQL) y las vulnerabilidades de las dependencias
 #  van en sus propios archivos: codeql.yml y dependencias.yml.
 # ============================================================
@@ -237,3 +240,62 @@ jobs:
       - name: Mostrar el registro del contenedor si algo fallo
         if: failure()
         run: docker logs stock-ci || true
+
+  roturas:
+    name: Roturas a proposito (Stryker)
+    runs-on: ubuntu-24.04
+    # Informativo (C3-17): rompe a proposito el codigo del dominio y de la aplicacion
+    # y mira si alguna prueba lo nota. El puntaje tiene un piso en
+    # stryker.config.json y el trabajo queda en rojo si baja de el, pero NO esta en
+    # el conjunto de reglas de las ramas: no bloquea ningun Pull Request hasta que
+    # Diego lo marque como obligatorio. Por eso no lleva
+    # `continue-on-error`: marcado como obligatorio, tiene que poder fallar.
+    # Ningun otro trabajo lo espera (`needs`).
+    #
+    # La primera corrida, sin nada guardado, rompe todo el dominio y la aplicacion y tarda
+    # mucho en un ejecutor de pocos nucleos. Por eso Stryker corre en modo incremental:
+    # guarda lo que aprendio en reports/stryker-incremental.json y la siguiente corrida solo
+    # repite lo que cambio. La memoria se busca primero en la rama del Pull Request y
+    # despues en la base (`desarrollo`), donde la deja cada push.
+    timeout-minutes: 120
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Recuperar lo que aprendio la corrida anterior
+        uses: actions/cache/restore@v6
+        with:
+          path: reports/stryker-incremental.json
+          key: roturas-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            roturas-${{ github.head_ref || github.ref_name }}-
+            roturas-${{ github.base_ref || github.ref_name }}-
+
+      - name: Romper el codigo a proposito y ver si las pruebas lo notan
+        run: npm run mutation
+
+      # Se guarda aunque el puntaje haya bajado del piso: lo aprendido sirve igual.
+      - name: Guardar lo que aprendio esta corrida
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: reports/stryker-incremental.json
+          key: roturas-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
+
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: informes-roturas
+          path: reports/mutation/
+          if-no-files-found: ignore
+          retention-days: 14
