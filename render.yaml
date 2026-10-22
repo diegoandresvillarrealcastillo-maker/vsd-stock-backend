@@ -1,0 +1,36 @@
+# La API de VSD Stock en PRE, en Render (ADR 0031). Es un Blueprint: una persona lo conecta una vez desde el panel de
+# Render (New → Blueprint) y Render crea el servicio con lo que dice aqui. El asistente de codigo no opera ese panel
+# (docs/ambientes.md, «Crear los hosts de PRE»).
+#
+# Este archivo NO lleva ningun secreto. Lo que depende de PRE o lleva una contrasena (`sync: false`) lo pide Render al crear el
+# servicio, y vive solo en su panel: nunca en este archivo, en un chat ni en el repositorio. PROD no existe aqui: sigue en
+# pausa (docs/ambientes.md).
+services:
+  - type: web
+    name: vsd-stock-api-pre
+    runtime: docker
+    # El plan gratuito: la API se duerme tras 15 minutos sin trafico y tarda alrededor de un minuto en despertar. Lo que eso
+    # cuesta, y por que se acepta en PRE, esta en el ADR 0031.
+    plan: free
+    # Cerca del proyecto de Supabase de PRE (AWS us-east-1): cada consulta cruza esa distancia.
+    region: virginia
+    # Solo la rama de PRE: nada llega a este servicio hasta que el dueno del proyecto aprueba la promocion (ADR 0010).
+    branch: preproduccion
+    autoDeployTrigger: commit
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # No toca la base de datos: sirve para saber que el proceso esta en pie. Que llegue a la base lo dice GET /v1/ready.
+    healthCheckPath: /health
+    envVars:
+      # El puerto (PORT) lo da Render y la API escucha donde se le dice: no se fija aqui.
+      # Jamas la conexion del rol duenio de las tablas (la de las migraciones): se usa a mano, desde la maquina de una persona.
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AUTH_ISSUER
+        sync: false
+      - key: AUTH_JWKS_URL
+        sync: false
+      - key: AUTH_AUDIENCE
+        value: authenticated

@@ -1,0 +1,696 @@
+# Glosario del dominio de VSD Stock
+
+El vocabulario del negocio, en español, con el nombre que tiene cada cosa en el código. Sirve para que quien
+escribe una historia de usuario, una prueba o un documento use la misma palabra para la misma cosa.
+
+> **Desde el Ciclo 1 el modelo está congelado** para todo lo que entra en la entrega (ADR 0020): cada término
+> «Decidido» cita el ADR que lo fijó y no cambia sin otro ADR que lo reemplace. Lo único que sigue como
+> _Hipótesis_ es lo que la entrega deja **fuera de la entrega**: existe el vocabulario, no hay tabla ni código, y
+> nadie debe construir encima. El [mapa de contextos](mapa-de-contextos.md) agrupa estos términos en las partes
+> del sistema y el [modelo de datos](modelo-de-datos.md) dice cómo se llaman sus tablas.
+
+## Cómo leerlo
+
+**Estado de cada término:**
+
+| Estado        | Qué significa                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Decidido**  | Está escrito en un ADR, que el término cita. No cambia sin otro ADR que lo reemplace.                                  |
+| **Requisito** | Lo pidió el encargo inicial o el dueño del proyecto, pero todavía no tiene ADR. Se fija en el ciclo que lo implemente. |
+| **Hipótesis** | Solo para lo que queda fuera de la entrega: el concepto existe en el vocabulario y nada más.                           |
+
+**Idioma:** los documentos y los textos para la persona usuaria van en español; el código y sus identificadores,
+en inglés. La columna **Código** de cada término dice cómo se llama en el código (`—` si no tiene).
+Los nombres de las tablas y las columnas están en el [modelo de datos](modelo-de-datos.md); la columna de
+aislamiento, `id_negocio`, es la única en español (ADR 0005).
+
+**Alcance de la entrega:** donde un término dice _fuera de la entrega_, el concepto existe en el vocabulario pero
+no se construye antes del 2026-11-16 (ver el mapa de contextos).
+
+## Identidad y acceso
+
+### Negocio
+
+La empresa que usa VSD Stock: una tienda, un restaurante, una ferretería. Todo dato pertenece a un negocio y un
+negocio nunca ve los datos de otro. El negocio sale del token verificado, no de lo que declare el cliente.
+
+**Código:** `Business` (en la base de datos, `id_negocio`)
+
+**Estado:** Decidido (ADR 0005)
+
+### Sucursal
+
+Un local físico de un negocio (tabla `branch`). Se modela desde el inicio para no rehacer el modelo después,
+pero la entrega opera con una sola por negocio.
+
+**Código:** `Branch`
+
+**Estado:** Decidido (ADR 0020)
+
+### Usuario
+
+Una persona con acceso a un negocio, con un rol y activa o dada de baja (tabla `app_user`). Se identifica con
+Supabase Auth y la API verifica su token contra las claves públicas del servicio; el negocio y el rol salen de nuestra
+base de datos, no del token (ADR 0022).
+
+**Código:** `User`
+
+**Estado:** Decidido (ADR 0017 y ADR 0020)
+
+### Invitación
+
+Cómo entra a un negocio quien no lo creó: el dueño o un administrador invita a alguien con un rol y recibe un
+**código** de ochenta bits (`0123-4567-89AB-CDEF`) que se muestra una sola vez y se entrega en persona. Quien lo recibe se
+registra en el servicio de identidad y lo canjea; sirve una sola vez y vence a los siete días. El servidor solo guarda el
+hash del código. Una invitación pendiente es una fila de `app_user` sin identidad (ADR 0023).
+
+**Código:** `invitationCodeFromBytes` y `normalizeInvitationCode`
+
+**Estado:** Decidido (ADR 0023)
+
+### Rol
+
+Lo que una persona puede hacer en un negocio. Son tres, fijos: **dueño**, **administrador** y **cajero**. Un cajero
+no ve utilidades ni anula ventas. Cada acción tiene su tabla de quién la puede hacer y si funciona sin conexión
+([Permisos](permisos.md)); se niega por omisión y el negocio se revisa antes que el rol. Los permisos son una regla
+de negocio que vive en `domain/`, con una prueba en negativo por cada regla: no basta que el dueño acceda, otro
+negocio debe ser rechazado (ADR 0017).
+
+**Código:** `Role`, `Action` y `authorize`
+
+**Estado:** Decidido (ADR 0017)
+
+### Dispositivo
+
+El equipo en el que corre la aplicación: un teléfono, una tablet o un computador. Guarda la base local de cada
+persona que lo usa y puede ser compartido entre varias. Se registra con conexión la primera vez y el servidor le
+da un código corto, único en su negocio y que nunca se reutiliza (`AA`, `AB`...); ese código encabeza sus folios
+(ADR 0016). Darlo de baja no borra nada: queda marcado y su código no se vuelve a dar (C3-01).
+
+**Código:** `Device` y `DeviceCode`
+
+**Estado:** Decidido (ADR 0016)
+
+### Sesión
+
+El periodo en que una persona está identificada en un dispositivo. Una sesión caducada conserva lo guardado en
+el dispositivo, cifrado y con la interfaz bloqueada, para no perder ventas; cerrar sesión de forma explícita lo
+borra (_olvidar_, ADR 0018). El token de acceso vive solo en memoria; sin conexión, el mostrador se reanuda hasta
+72 horas después de la última verificación y luego la interfaz se bloquea (ADR 0022).
+
+**Código:** `Session`
+
+**Estado:** Decidido (ADR 0022)
+
+## Catálogo
+
+### Producto
+
+Lo que el negocio vende o compra: «Arroz 500 g». Tiene un nombre, un SKU, un código de barras opcional, una
+unidad de medida, un precio con el IVA incluido y la tarifa de ese IVA. Cada presentación (unidad, paca, caja) es
+otro producto. Un producto con historial no se borra: se archiva y conserva sus códigos (ADR 0015).
+
+**Código:** `Product`
+
+**Estado:** Decidido (ADR 0015)
+
+### Variante
+
+Una presentación distinta del mismo producto (talla, color, tamaño). **No existe en la entrega:** cada
+presentación es un producto independiente con su propio código, sin conversión entre ellas (ADR 0015).
+
+**Código:** `Variant`
+
+**Estado:** Decidido (ADR 0015)
+
+### Categoría
+
+Agrupación opcional de productos, de un solo nivel, para encontrarlos: «Granos», «Aseo». El nombre es único por
+negocio y un producto puede no tener categoría.
+
+**Código:** `Category`
+
+**Estado:** Decidido (ADR 0020)
+
+### Unidad de medida
+
+Cómo se cuenta un producto, en un conjunto cerrado: unidad, kilo, gramo, libra, litro y mililitro. No hay caja,
+paca ni docena (serían otro producto). La cantidad es un entero de milésimas de la unidad, y la unidad se cuenta
+solo en enteros (ADR 0015).
+
+**Código:** `UnitOfMeasure` y `Quantity`
+
+**Estado:** Decidido (ADR 0015)
+
+### Precio
+
+Cuánto cuesta un producto al venderlo, en pesos enteros y **con el IVA incluido**. Es dinero (ver _Dinero_). La
+línea de venta guarda el precio y la tarifa que tenían en ese momento, no una referencia que pueda cambiar
+después (ADR 0014).
+
+**Código:** `Price`
+
+**Estado:** Decidido (ADR 0014)
+
+### Impuesto
+
+El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
+sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
+siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Las tarifas y
+la mecánica frente a la norma son una hipótesis que debe verificar quien lleve la contabilidad.
+
+**Código:** `Tax`
+
+**Estado:** Decidido (ADR 0014)
+
+### Código de barras
+
+El identificador impreso en el empaque que lee el lector o la cámara del dispositivo. Es opcional, de 8, 12, 13 o
+14 dígitos y con el dígito de control comprobado; el UPC-A y el EAN-13 que le antepone un cero son el mismo
+código, y es único por negocio. La entrega soporta lector de código de barras y cámara, sin impresora (ADR 0015).
+
+**Código:** `Barcode`
+
+**Estado:** Decidido (ADR 0015)
+
+### SKU
+
+El identificador interno de un producto dentro de un negocio, el que el negocio le da a su mercancía. Es
+obligatorio, de 1 a 40 caracteres, y único por negocio sin distinguir mayúsculas (ADR 0015).
+
+**Código:** `Sku`
+
+**Estado:** Decidido (ADR 0015)
+
+## Inventario
+
+### Bodega
+
+El lugar donde está la mercancía de un negocio. Se modela desde el inicio, pero la entrega opera con una sola.
+
+**Código:** `Warehouse`
+
+**Estado:** Decidido (ADR 0020)
+
+### Movimiento de stock
+
+Un registro **inmutable** de que la existencia de un producto subió o bajó, con su motivo: venta, compra, ajuste,
+devolución. El inventario es un libro de movimientos, no un número que se sobrescribe. Corregir es agregar otro
+movimiento que compensa; nunca se edita.
+
+**Código:** `StockMovement`
+
+**Estado:** Decidido (ADR 0009)
+
+### Existencia
+
+Cuánta mercancía hay de un producto: la **suma** de sus movimientos de stock. Se lee de un saldo por producto
+que mantiene un disparador de la base de datos en la misma transacción que el movimiento; la aplicación solo lo
+lee, y la suma de los movimientos sigue siendo la verdad (ADR 0013).
+
+**Código:** `StockOnHand`
+
+**Estado:** Decidido (ADR 0009 y ADR 0013)
+
+### Requiere ajuste
+
+La marca que lleva una venta aceptada al sincronizar que dejó la existencia en negativo. La mercancía ya salió
+del mostrador, así que la venta **nunca se rechaza**: el servidor la acepta, la marca y avisa al dueño o al
+administrador (no al cajero).
+
+**Código:** `NeedsAdjustment`
+
+**Estado:** Decidido (ADR 0009)
+
+### Ajuste
+
+Un movimiento de stock que corrige la existencia (mercancía dañada, un conteo, un error). Reemplaza editar.
+Abrir una caja en unidades es un ajuste (ADR 0015).
+
+En la API un ajuste dice **cuánto sube o baja** la existencia (`deltaMilli`, nunca cero) y **por qué** (obligatorio, queda
+como la nota del movimiento); no dice cuánto debe haber. La existencia puede quedar en negativo: el libro cuenta lo que
+pasó y una persona lo corrige con otro ajuste.
+
+**Código:** `Adjustment`
+
+**Estado:** Decidido (ADR 0013 y ADR 0020)
+
+### Compra
+
+La entrada de mercancía que se le compra a un proveedor. Genera movimientos de stock de entrada.
+
+**Código:** `Purchase`
+
+**Estado:** Decidido (ADR 0020)
+
+### Proveedor
+
+A quien el negocio le compra la mercancía. Solo se guarda su nombre y, si se quiere, un dato de contacto.
+
+**Código:** `Supplier`
+
+**Estado:** Decidido (ADR 0020)
+
+### Alerta de stock mínimo
+
+El aviso de que la existencia de un producto bajó del mínimo que el negocio fijó (un campo opcional del
+producto). Avisa cuando hay **estrictamente menos** que el mínimo: igual al mínimo todavía no avisa. Si el plazo aprieta, se recorta después de la mascota y de los reportes.
+
+**Código:** `LowStockAlert`
+
+**Estado:** Decidido (ADR 0020)
+
+### Conteo físico
+
+Contar la mercancía real y compararla con la existencia del sistema. Fuera de la entrega.
+
+**Código:** `PhysicalCount`
+
+**Estado:** Hipótesis
+
+## Ventas
+
+### Venta
+
+La transacción en el mostrador: qué se vendió, a qué precio y cómo se pagó. Es una sola transacción con sus
+movimientos de stock y de caja, lleva su folio y es inmutable. Una venta ya hecha **nunca se rechaza al
+sincronizar** (ver _Requiere ajuste_); solo se rechaza lo inválido de verdad: negocio distinto, firma inválida
+o forma ilegible. Lo que no cuadra con lo que el servidor sabe (existencia, precio, total, cobros, turno cerrado, dispositivo
+dado de baja, folio repetido) se acepta y se **marca** (ADR 0027); el total lo calcula el servidor otra vez, respetando el precio
+con que se vendió.
+
+**Código:** `Sale`
+
+**Estado:** Decidido (ADR 0009, ADR 0013, ADR 0014, ADR 0016 y ADR 0027)
+
+### Marca de venta
+
+Lo que el servidor encontró raro al aceptar una venta y que pide que alguien la mire: `price-differs`, `total-differs`,
+`payment-mismatch`, `late-shift`, `revoked-device` y `folio-device`, además de _Requiere ajuste_, el folio repetido y las
+marcas de la hora (ADR 0016). Una marca **no rechaza ni cambia** la venta: queda como historia, y la bandeja de atención la
+muestra hasta que la gerencia la revisa (ADR 0027).
+
+**Código:** `SaleFlag`
+
+**Estado:** Decidido (ADR 0027)
+
+### Bandeja «Requiere atención»
+
+La lista de ventas que el servidor aceptó marcadas y que nadie de la gerencia ha revisado: existencia en negativo, folio
+repetido, cualquier _Marca de venta_ o una hora en la que no se puede confiar (reloj desviado, hora del futuro o ilegible;
+un dispositivo que todavía no midió su reloj o una operación que esperó horas **no** cuentan, es lo normal sin conexión). Es
+solo de la gerencia (ADR 0027).
+
+**Código:** `requiresAttention`, `GET /v1/sales?attention=true`
+
+**Estado:** Decidido (ADR 0027)
+
+### Revisión de venta
+
+Lo que la gerencia deja dicho al mirar una venta de la bandeja: quién, cuándo y una nota corta. **No cambia la venta**: es
+una fila aparte que solo se agrega (la venta es historia inmutable, ADR 0009 y 0013), así que las marcas se conservan. Una
+venta se revisa una sola vez; revisarla otra vez devuelve la primera revisión. La venta revisada sale de la bandeja pero
+sigue siendo una venta que pidió atención.
+
+**Código:** `SaleReview`, tabla `sale_review`
+
+**Estado:** Decidido (ADR 0027)
+
+### Lote de sincronización
+
+Las operaciones que el dispositivo hizo sin conexión (abrir un turno, vender, cerrar un turno), enviadas juntas, de 1 a 50, en el
+orden en que se hicieron. El servidor las aplica una tras otra y **cada una en su propia transacción**, con las reglas de su ruta
+individual, y contesta con un resultado por cada una: una que falla no deshace ni detiene a las demás. Repetirlo es seguro: lo
+que ya se aplicó se contesta como repetido (ADR 0028).
+
+**Código:** `POST /v1/sync`, `Sync`
+
+**Estado:** Decidido (ADR 0009, ADR 0019 y ADR 0028)
+
+### Línea de venta
+
+Un producto, una cantidad (en milésimas), el precio y la tarifa que tenían al vender y el descuento de la línea,
+dentro de una venta.
+
+**Código:** `SaleLine`
+
+**Estado:** Decidido (ADR 0014 y ADR 0015)
+
+### Pago
+
+Con qué se cobró una venta. La entrega acepta efectivo y el **registro manual** de tarjeta o transferencia, sin
+pasarela de pagos. Solo el efectivo entra a la caja.
+
+**Código:** `Payment`
+
+**Estado:** Decidido (ADR 0020)
+
+### Descuento
+
+Una rebaja en pesos sobre una línea, con el IVA incluido, que no pasa del valor de la línea. Un porcentaje se
+convierte a pesos con la misma regla de redondeo. El descuento sobre toda la venta queda fuera de la entrega.
+
+**Código:** `Discount`
+
+**Estado:** Decidido (ADR 0014)
+
+### Anulación
+
+Dejar sin efecto una venta ya registrada. No borra ni edita nada: agrega los movimientos que compensan, de
+stock y de caja. Es de la gerencia, necesita conexión y se hace una sola vez por venta. La existencia vuelve con un
+movimiento por producto, y el **efectivo que se cobró sale del turno abierto de quien anula**, no del turno de la venta (que
+puede estar cerrado y contado): la venta anulada sigue sumada en el arqueo de su turno y la devolución se ve en el de quien
+anula. Si hubo efectivo y quien anula no tiene un turno abierto, no se anula (ADR 0027).
+
+**Código:** `SaleVoid`, tabla `sale_void`, `POST /v1/sales/{id}/void`
+
+**Estado:** Decidido (ADR 0009 y ADR 0027)
+
+### Devolución
+
+Que el cliente regresa mercancía. Las devoluciones parciales quedan fuera de la entrega.
+
+**Código:** `Return`
+
+**Estado:** Hipótesis
+
+### Cliente
+
+A quien se le vende. Es opcional: una venta de mostrador puede no tener cliente. Fuera de la entrega: sin fiado
+no hace falta saber a quién se vende y así no se guardan datos personales de clientes (ADR 0020); no hay tabla.
+
+**Código:** `Customer`
+
+**Estado:** Hipótesis
+
+### Fiado
+
+Vender ahora y cobrar después, y las cuentas por cobrar que eso genera. Fuera de la entrega.
+
+**Código:** `CustomerCredit`
+
+**Estado:** Hipótesis
+
+## Caja
+
+### Turno de caja
+
+El periodo entre que una persona abre la caja y la cierra. Todo cobro en efectivo ocurre dentro de un turno, y
+cerrarlo espera a las ventas en curso para que el arqueo no se pierda ninguna (ADR 0013). Hay **un turno abierto por
+dispositivo y por persona**, y el identificador lo crea el dispositivo para poder abrir la caja sin red (ADR 0026).
+
+**Código:** `CashShift`
+
+**Estado:** Decidido (ADR 0013, ADR 0020 y ADR 0026)
+
+### Arqueo
+
+Al cerrar el turno, comparar el efectivo que **debería haber** (apertura, más cobros en efectivo, más entradas, menos
+salidas) con el que **se cuenta**. La diferencia (contado menos esperado) se calcula al consultar, porque una venta
+hecha antes del cierre puede llegar después; las ventas tardías se muestran aparte y no se suman a lo esperado (ADR 0026).
+
+**Código:** `ShiftCashSummary`
+
+**Estado:** Decidido (ADR 0020 y ADR 0026)
+
+### Venta tardía
+
+Una venta que ocurrió **después** de que su turno se cerró y llegó a él (un teléfono sin conexión que siguió vendiendo
+mientras la gerencia cerraba el turno). Se acepta —una venta ya hecha nunca se rechaza, ADR 0009—, queda en ese turno y el
+arqueo la muestra aparte, sin sumarla a lo esperado. Una venta hecha antes del cierre que solo llegó después **no** es
+tardía (ADR 0026).
+
+**Código:** `ShiftCashTotals.late`
+
+**Estado:** Decidido (ADR 0026)
+
+### Movimiento de caja
+
+Un ingreso o un egreso de efectivo: el cobro de una venta o algo que no es una venta, como pagar al repartidor o
+retirar para el banco. Lo registra un administrador o el dueño y necesita conexión (ADR 0017).
+
+**Código:** `CashMovement`
+
+**Estado:** Decidido (ADR 0017 y ADR 0020)
+
+### Folio
+
+El número con que se identifica una venta ante la persona: el código del dispositivo que la hizo y la serie de ese
+dispositivo, como `AA-000142`. Dos cajas sin conexión no pueden repetirlo porque sus códigos son distintos. No
+cambia al sincronizar, no ordena las ventas entre dispositivos (para eso está la hora) y puede tener saltos
+(ADR 0016).
+
+**Código:** `Folio`
+
+**Estado:** Decidido (ADR 0016)
+
+## Finanzas y reportes
+
+### Flujo de caja
+
+Cuánto dinero entró y salió en un periodo. Se **deriva** de las ventas y los movimientos de caja; no es una tabla
+que alguien escribe. El flujo de caja completo queda fuera de la entrega; los reportes mínimos sí entran.
+
+**Código:** `CashFlow`
+
+**Estado:** Hipótesis
+
+### Gasto
+
+Lo que el negocio paga para operar: arriendo, servicios, nómina. Fuera de la entrega.
+
+**Código:** `Expense`
+
+**Estado:** Hipótesis
+
+### Cuenta por cobrar y por pagar
+
+Lo que a un negocio le deben (clientes) y lo que debe (proveedores). Fuera de la entrega.
+
+**Código:** `Receivable` y `Payable`
+
+**Estado:** Hipótesis
+
+### Reporte
+
+Una vista **derivada** del libro de movimientos y de las ventas: ventas por día, productos más vendidos,
+existencias. Nunca una tabla escrita a mano.
+
+**Código:** `Report`
+
+**Estado:** Requisito
+
+## Sincronización y conexión
+
+### Operación
+
+Algo que la persona hizo en el dispositivo y que falta enviar al servidor: una venta, un movimiento de stock, la
+apertura de un turno. Se guarda en la cola hasta que el servidor la confirma.
+
+**Código:** `Operation`
+
+**Estado:** Decidido (ADR 0009)
+
+### operationId
+
+El identificador de una operación: un UUID que se crea **una sola vez** y no cambia. El servidor lo usa como
+clave de idempotencia por negocio, así que reenviar una operación tras perder la respuesta devuelve lo que ya
+existe y no crea nada dos veces.
+
+**Código:** `operationId`
+
+**Estado:** Decidido (ADR 0009)
+
+### Cola de operaciones
+
+Lo que se hizo en el dispositivo y falta enviar. Junto con las copias de lectura, es lo único que se guarda en el
+dispositivo.
+
+**Código:** `OperationQueue`
+
+**Estado:** Decidido (ADR 0009)
+
+### Copia de lectura
+
+Una copia local de datos que la persona necesita para trabajar sin red: el catálogo y las existencias (los precios y las tarifas
+van en el catálogo). Se baja completa la primera vez y después solo lo que cambió (`since`); cada página dice la hora del servidor al
+leerla (`asOf`), y la existencia que muestra el mostrador lleva esa hora («al…»), más lo vendido aquí y todavía sin enviar, porque no
+es la de hoy en todas las cajas. Los productos archivados vienen marcados para que el dispositivo los quite (ADR 0028).
+
+**Código:** `ReadCopy`, `GET /v1/sync/products`, `GET /v1/sync/stock`, `SyncCopy`
+
+**Estado:** Decidido (ADR 0009 y ADR 0028)
+
+### Olvidar
+
+Borrar del dispositivo todo lo de una persona en un solo paso: su base y la clave con que se cifró. Ocurre al
+cerrar sesión de forma explícita (avisando antes cuántas operaciones sin enviar se perderían) y al dar de baja a la
+persona o a su dispositivo (sincronizando antes lo pendiente). Un dispositivo olvidado se registra de nuevo y recibe un
+código nuevo (ADR 0016 y ADR 0018).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0018)
+
+### Sincronización
+
+Enviar la cola al servidor y traer lo nuevo. Es idempotente y ocurre **una a la vez** aunque haya varias
+pestañas abiertas (Web Locks).
+
+**Código:** `Sync`
+
+**Estado:** Decidido (ADR 0009)
+
+### Estado de conexión
+
+Lo que la persona ve de la conexión, siempre honesto: _en línea_, _sin conexión_, _sincronizando_, _N
+pendientes_ y _requiere atención_. Nunca se dice «guardado» si solo está en el dispositivo. El frontend
+implementa _comprobando_, _en línea_ y _sin conexión_ desde el ticket C0-08; el resto llega con el motor de
+sincronización.
+
+**Código:** `ConnectionStatus`
+
+**Estado:** Decidido (ADR 0009)
+
+### Comprobación de salud
+
+`GET /health`: la pregunta que confirma que el servidor está en pie. **Es lo que decide si hay conexión;**
+`navigator.onLine` solo es una pista de cuándo preguntar.
+
+**Código:** `HealthReport`
+
+**Estado:** Decidido (ADR 0009)
+
+### Clase de fallo
+
+Cómo se trata un fallo al sincronizar: **red** (se detiene todo), **sesión** (se detiene todo y la cola se
+conserva), **pasajero** (espera creciente), **conflicto** (se marca, no se pisa nada) y **permanente** (se marca
+para atención sin bloquear a las demás).
+
+**Código:** `FailureClass`
+
+**Estado:** Decidido (ADR 0009)
+
+## Dinero y reglas transversales
+
+### Dinero
+
+Una cantidad con su moneda. **Nunca un `float`**: un entero de pesos, sin centavos, en un objeto de valor
+inmutable. Hay una sola regla de redondeo (la mitad exacta se aleja de cero) y los cálculos se prueban con
+vectores que comparten el backend y el frontend (ADR 0014).
+
+**Código:** `Money`
+
+**Estado:** Decidido (ADR 0014)
+
+### Moneda
+
+El peso colombiano (COP). La entrega es para Colombia y no maneja otra moneda (ADR 0014).
+
+**Código:** `Currency`
+
+**Estado:** Decidido (ADR 0014)
+
+### Auditoría
+
+Las ventas, las anulaciones y los ajustes son inmutables: lo que pasó queda escrito y corregirlo es agregar un
+movimiento que compensa, no editar.
+
+**Código:** —
+
+**Estado:** Requisito
+
+### Datos personales
+
+La Ley 1581 de Colombia: consentimiento, exportación y eliminación de los datos de una persona, y nada de datos
+personales en los registros ni en las direcciones. Exportar y eliminar la cuenta queda fuera de la entrega, como
+deuda con su ADR.
+
+**Código:** —
+
+**Estado:** Requisito
+
+## Arquitectura y proceso
+
+### Contrato OpenAPI
+
+El documento (`openapi.json`) que describe la API y es **lo único que une** al backend con el frontend. Lo
+genera el backend de su propio código y el frontend deriva de él sus tipos.
+
+**Código:** `openapi.json`
+
+**Estado:** Decidido (ADR 0001)
+
+### Problema
+
+Cómo contesta la API a todo error: un `application/problem+json` (RFC 9457) con un `code` estable por el que el
+cliente decide, el estado HTTP, un identificador de seguimiento (`traceId`, el mismo `X-Request-Id` de la
+petición) y, si la validación falla, los campos inválidos. Un error inesperado nunca revela su causa. Las demás
+convenciones de la API (versión, enteros, instantes, idempotencia, paginación) están en
+[Convenciones de la API](../convenciones-de-la-api.md) (ADR 0019).
+
+**Código:** `Problem` y `ProblemDetailsDto`
+
+**Estado:** Decidido (ADR 0019)
+
+### Puerto
+
+Una interfaz que el dominio declara para lo que necesita de afuera (un reloj, un almacén, una API) o para lo que
+ofrece (un caso de uso). Vive en `domain/ports/`.
+
+**Código:** `Port`
+
+**Estado:** Decidido (ADR 0002)
+
+### Adaptador
+
+Lo que implementa un puerto con una tecnología concreta (HTTP, Prisma, `localStorage`). Vive en `adapters/`.
+
+**Código:** `Adapter`
+
+**Estado:** Decidido (ADR 0002)
+
+### Caso de uso
+
+Una cosa que la aplicación hace: «registrar una venta», «vigilar la conexión». Orquesta el dominio a través de
+puertos y vive en `application/usecases/`.
+
+**Código:** `UseCase`
+
+**Estado:** Decidido (ADR 0002)
+
+### Ambiente
+
+Dónde corre el sistema: **local**, **DEV** (la rama `desarrollo`, verificada por el CI), **PRE** y **PROD**. PROD
+está en pausa. Ver el [plan de ambientes](../ambientes.md).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0010)
+
+### Ciclo
+
+La unidad de entrega: un objetivo, tickets pequeños y una demostración verificable. Empieza con
+`APROBADO CICLO N` y termina con `CERRADO CICLO N`; en medio, la revisión de cada PR por la otra persona.
+
+**Código:** —
+
+**Estado:** Requisito
+
+### Ticket
+
+Un Issue de GitHub con el prefijo de su ciclo en el título (`[C1-07]`): una unidad de trabajo para una persona y
+un PR por repositorio. Ver la [guía de GitHub](../guia-github.md).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0010)
+
+### ADR
+
+Una decisión de arquitectura escrita, con su contexto, las alternativas que se descartaron y lo que se pierde.
+No se edita: si cambia, otro ADR lo reemplaza. Ver [el índice](../adr/README.md).
+
+**Código:** —
+
+**Estado:** Decidido (ADR 0010)

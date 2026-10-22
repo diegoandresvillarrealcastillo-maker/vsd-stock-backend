@@ -1,0 +1,19 @@
+# Base de datos local para las pruebas de integracion (npm run db:up).
+#
+# Es una base de trabajo, no de datos reales. No lleva contrasena: el puerto
+# solo se publica en 127.0.0.1, asi que nadie fuera de esta maquina llega a
+# ella, y asi no hay ninguna credencial en el repositorio.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: stock
+      POSTGRES_DB: stock_test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - '127.0.0.1:5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U stock -d stock_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30

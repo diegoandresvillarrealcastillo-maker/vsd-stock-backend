@@ -1,0 +1,31 @@
+# Configuracion del escaneo de secretos.
+#
+# Parte de las reglas por defecto de gitleaks. La tentacion al ver un falso
+# positivo es relajar la regla; aqui se hace lo contrario: si hace falta
+# perdonar algo, se nombra el valor exacto y se explica por que.
+#
+# Un escaner de secretos que grita demasiado acaba ignorandose, y un escaner
+# que se ignora es peor que no tenerlo: da tranquilidad sin darla.
+
+[extend]
+useDefault = true
+
+# Contrasenas FALSAS de las pruebas. Sirven para comprobar que ningun mensaje, registro o respuesta repite una cadena de
+# conexion (que en la vida real lleva la clave): la prueba necesita una clave reconocible para poder buscarla. No son de
+# ningun servicio. Se nombra cada valor exacto; no se perdona ninguna regla ni ninguna ruta.
+[[allowlists]]
+description = "Contrasenas falsas de las pruebas que vigilan que no se filtre una cadena de conexion"
+regexes = ['''^(S3cretoLargo123|ContrasenaLarga123|SecretoLargo123)$''']
+
+# Clave PUBLICABLE FALSA de las pruebas de la verificacion de PRE. Va junto al nombre `KEY` y la regla de claves genericas
+# la toma por una clave. No es de ningun proyecto: la prueba necesita una cadena reconocible para comprobar que nunca sale en
+# el informe. Se nombra el valor exacto.
+[[allowlists]]
+description = "Clave publicable falsa de las pruebas de la verificacion de PRE"
+regexes = ['''^sb_publishable_FALSA1234567890$''']
+
+# Identificador FALSO de una persona (el `sub` de un token) en las pruebas. Es un UUID cualquiera, sin cuenta detras; la
+# regla de claves genericas lo toma por una clave porque se escribe junto al nombre `authUserId`. Se nombra el valor exacto.
+[[allowlists]]
+description = "Identificador falso de una persona en las pruebas"
+regexes = ['''^9b2f6c1e-0d5a-4c1b-8f3e-2a7d6e5c4b3a$''']

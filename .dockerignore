@@ -1,0 +1,28 @@
+# Lo que no debe entrar al contexto de construccion de la imagen.
+# Reduce el tamano y, sobre todo, evita que un secreto local viaje a la imagen.
+
+# Secretos y entorno
+.env
+.env.*
+!.env.example
+
+# Dependencias y artefactos: se instalan y compilan dentro de la imagen
+node_modules
+dist
+coverage
+# El cliente de Prisma se genera dentro de la imagen, del esquema.
+src/generated
+
+# Control de versiones y herramientas del equipo
+.git
+.github
+.husky
+.vscode
+.idea
+
+# Pruebas y documentacion: no hacen falta para ejecutar
+test
+docs
+**/*.spec.ts
+eslint
+*.md

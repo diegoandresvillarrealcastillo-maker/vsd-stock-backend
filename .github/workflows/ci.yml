@@ -1,0 +1,239 @@
+# ============================================================
+#  VSD Stock (backend) - Integracion continua
+# ============================================================
+#  Primera barrera automatica del proyecto. Cubre cinco cosas:
+#
+#    1. que no entre ningun secreto al repositorio;
+#    2. que todo commit siga Conventional Commits y cite su Issue;
+#    3. que el codigo pase estilo, fronteras de la arquitectura, formato,
+#       tipos, pruebas con cobertura, contrato OpenAPI al dia y compilacion;
+#    4. que las pruebas de integracion pasen contra un PostgreSQL real;
+#    5. que la imagen de Docker se construya y el contenedor responda.
+#
+#  El analisis de codigo (CodeQL) y las vulnerabilidades de las dependencias
+#  van en sus propios archivos: codeql.yml y dependencias.yml.
+# ============================================================
+
+name: CI
+
+on:
+  # Cualquier Pull Request, sin filtrar por rama destino: filtrarlo a las tres
+  # ramas fijas dejaria sin CI a los Pull Request apilados, y un PR sin una
+  # sola comprobacion se lee como si no hubiera nada que comprobar.
+  pull_request:
+  push:
+    branches: [desarrollo, preproduccion, produccion]
+
+# Principio de minimo privilegio: el CI solo necesita leer el codigo.
+permissions:
+  contents: read
+
+# Si se empuja dos veces seguidas, la ejecucion anterior se cancela.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: '8.30.1'
+  # Los hooks de Husky son una comodidad local; en el CI no hacen falta.
+  HUSKY: '0'
+
+jobs:
+  secretos:
+    name: Escaneo de secretos
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Descargar el codigo con el historial completo
+        uses: actions/checkout@v7
+        with:
+          # Gitleaks revisa todos los commits, no solo el ultimo:
+          # un secreto borrado despues sigue estando en el historial.
+          fetch-depth: 0
+
+      - name: Instalar Gitleaks
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --silent --show-error --fail --location "$url" --output gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          rm -f gitleaks gitleaks.tar.gz
+          gitleaks version
+
+      - name: Buscar secretos en todo el historial
+        # --redact evita que el secreto encontrado quede impreso en el
+        # registro del trabajo, que seria una segunda filtracion.
+        # --config explicito: si el archivo se moviera o se renombrara, se
+        # prefiere que el trabajo falle a que escanee con las reglas por
+        # defecto sin avisar.
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --verbose
+
+  commits:
+    name: Convencion de commits
+    runs-on: ubuntu-24.04
+    # Solo en los PR de cada ticket. Una promocion (desarrollo -> preproduccion
+    # -> produccion) trae commits que ya se revisaron al entrar a desarrollo y
+    # que no se pueden corregir sin reescribir una rama compartida. Saltado, el
+    # trabajo cuenta como aprobado para la proteccion de la rama.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref != 'desarrollo' &&
+      github.head_ref != 'preproduccion'
+    steps:
+      - name: Descargar el codigo con el historial completo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias sin ejecutar scripts
+        # commitlint y su configuracion son dependencias de desarrollo del
+        # proyecto: las versiones las fija package-lock.json, no el CI.
+        run: npm ci --ignore-scripts
+
+      - name: Validar los mensajes de commit del Pull Request
+        env:
+          # Se pasan por variable de entorno y no interpoladas dentro del
+          # script, para no inyectar contenido del evento en la shell.
+          COMMIT_DESDE: ${{ github.event.pull_request.base.sha }}
+          COMMIT_HASTA: ${{ github.event.pull_request.head.sha }}
+        run: npx commitlint --from "$COMMIT_DESDE" --to "$COMMIT_HASTA" --verbose
+
+  calidad:
+    name: Calidad del codigo
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        # npm ci respeta package-lock.json al pie de la letra: el CI instala
+        # exactamente las mismas versiones que hay en el equipo.
+        run: npm ci
+
+      - name: Revisar el estilo y las fronteras de la arquitectura
+        run: npm run lint
+
+      - name: Revisar el formato
+        run: npm run format:check
+
+      - name: Revisar los tipos
+        run: npm run typecheck
+
+      - name: Ejecutar las pruebas con cobertura
+        # Falla si domain/ o application/ bajan del 80 %. Incluye la prueba
+        # que compara openapi.json con lo que produce el codigo: si el
+        # contrato quedo desactualizado, el mensaje dice `npm run openapi`.
+        run: npm run test:coverage
+
+      - name: Compilar
+        run: npm run build
+
+  integracion:
+    name: Pruebas contra PostgreSQL
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: stock
+          POSTGRES_DB: stock_test
+          # El contenedor vive lo que dura el trabajo, no sale de la maquina de
+          # GitHub y no guarda datos de nadie: no hace falta contrasena.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stock -d stock_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://stock@localhost:5432/stock_test
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Preparar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar las pruebas de integracion
+        # En serie (ver vitest.integration.config.mts): en paralelo se pisan.
+        run: npm run test:integration
+
+  imagen:
+    name: Imagen de Docker
+    runs-on: ubuntu-24.04
+    env:
+      # Opcional: con credenciales de Docker Hub se evita el limite de
+      # descargas anonimas (`toomanyrequests`). Las pone una persona como
+      # secretos del repositorio; sin ellas, el trabajo sigue sin iniciar sesion.
+      DOCKERHUB_USUARIO: ${{ secrets.DOCKERHUB_USUARIO }}
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v7
+
+      - name: Iniciar sesion en Docker Hub (si hay credenciales)
+        if: env.DOCKERHUB_USUARIO != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USUARIO }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Construir la imagen
+        run: docker build --tag vsd-stock-backend:ci .
+
+      - name: Arrancar el contenedor y esperar a que este sano
+        run: |
+          set -euo pipefail
+          docker run --detach --name stock-ci --publish 3000:3000 vsd-stock-backend:ci
+          estado="starting"
+          for _ in $(seq 1 30); do
+            estado="$(docker inspect --format '{{.State.Health.Status}}' stock-ci)"
+            if [ "$estado" = "healthy" ]; then break; fi
+            sleep 2
+          done
+          if [ "$estado" != "healthy" ]; then
+            echo "El contenedor no llego a estar sano (estado: $estado)."
+            docker logs stock-ci
+            exit 1
+          fi
+
+      - name: Comprobar GET /health y que no corra como root
+        run: |
+          set -euo pipefail
+          # Sin tuberias hacia grep -q: con pipefail, grep cierra la tuberia al
+          # primer acierto y curl recibe SIGPIPE (fallo que ya nos costo tiempo
+          # en VSD Health).
+          respuesta="$(curl --silent --show-error --fail http://127.0.0.1:3000/health)"
+          echo "$respuesta"
+          case "$respuesta" in
+            *'"status":"ok"'*) ;;
+            *) echo "Respuesta inesperada de /health"; exit 1 ;;
+          esac
+          usuario="$(docker exec stock-ci id -u)"
+          if [ "$usuario" = "0" ]; then
+            echo "El contenedor corre como root."
+            exit 1
+          fi
+
+      - name: Mostrar el registro del contenedor si algo fallo
+        if: failure()
+        run: docker logs stock-ci || true

@@ -1,0 +1,60 @@
+# ============================================================
+#  VSD Stock (backend) - archivos que nunca deben llegar al repositorio
+# ============================================================
+
+# ---------- Secretos y entorno ----------
+# Regla critica: ningun archivo de entorno real se versiona.
+# Solo .env.example, que contiene los nombres de las variables sin valores.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+service-account*.json
+
+# ---------- Dependencias ----------
+node_modules/
+
+# ---------- Artefactos de construccion ----------
+# Anclados a la raiz con "/" inicial. Sin el ancla, "out/" tambien ignoraria
+# src/domain/ports/out/, que es una carpeta del codigo fuente y no un
+# artefacto (fallo que ya nos costo tiempo en VSD Health).
+/dist/
+/build/
+/out/
+*.tsbuildinfo
+
+# ---------- Pruebas y cobertura ----------
+coverage/
+
+# Cliente de Prisma: se genera de prisma/schema.prisma (npm run prisma:generate, y solo al instalar).
+src/generated/
+.nyc_output/
+test-results/
+
+# ---------- Cache de herramientas ----------
+.cache/
+.eslintcache
+
+# ---------- Registros ----------
+logs/
+*.log
+npm-debug.log*
+
+# ---------- Editores ----------
+.idea/
+# Del editor se comparte lo que afecta al proyecto y se ignora lo que es
+# personal de cada maquina.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# ---------- Sistema operativo ----------
+.DS_Store
+Thumbs.db
+desktop.ini

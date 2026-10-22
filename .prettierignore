@@ -1,0 +1,13 @@
+dist/
+coverage/
+# Codigo generado por Prisma.
+src/generated/
+node_modules/
+package-lock.json
+
+# Contrato generado: se compara byte a byte con lo que produce `npm run openapi`,
+# y Prettier lo reescribiria.
+openapi.json
+
+# Contrato generado desde el dominio (npm run permissions): se compara byte a byte y Prettier lo reescribiria.
+contract/permissions.json
