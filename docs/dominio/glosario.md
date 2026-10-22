@@ -156,8 +156,10 @@ después (ADR 0014).
 
 El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
 sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
-siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Las tarifas y
-la mecánica frente a la norma son una hipótesis que debe verificar quien lleve la contabilidad.
+siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Un contador revisó la
+mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones pendientes: distinguir lo exento de lo excluido, dar
+folio propio a las anulaciones, un reporte mensual por tarifa y los impuestos que no son IVA. También advirtió que el negocio, si es
+responsable de IVA, debe expedir factura electrónica o documento equivalente por su cuenta.
 
 **Código:** `Tax`
 

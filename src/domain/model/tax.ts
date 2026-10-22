@@ -3,8 +3,8 @@ import { divideRounded } from './rounding.js';
 
 /**
  * Las tarifas de IVA del catalogo, en puntos basicos (1 % = 100): exento o excluido,
- * reducida y general. HIPOTESIS pendiente de verificar con quien lleve la contabilidad
- * del negocio de referencia (ADR 0014); la aritmetica sirve para cualquier tarifa.
+ * reducida y general. Un contador reviso la mecanica y estas tarifas (ADR 0032); la
+ * aritmetica sirve para cualquier tarifa. Hoy no distingue exento de excluido (ADR 0032).
  */
 export const TAX_RATES_BP: readonly number[] = [0, 500, 1900];
 
