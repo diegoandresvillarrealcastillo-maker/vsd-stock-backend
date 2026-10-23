@@ -30,6 +30,7 @@ import {
   WarehouseController,
 } from '../../adapters/in/http/purchasing.controller.js';
 import { ReadinessController } from '../../adapters/in/http/readiness.controller.js';
+import { ReportsController } from '../../adapters/in/http/reports.controller.js';
 import { SalesController } from '../../adapters/in/http/sales.controller.js';
 import { SyncController } from '../../adapters/in/http/sync.controller.js';
 import {
@@ -54,6 +55,7 @@ import {
   PURCHASES,
   REDEEM_INVITATION,
   REGENERATE_INVITATION,
+  REPORTS,
   SHIFTS,
   STOCK,
   STOCK_ADJUSTMENTS,
@@ -86,6 +88,7 @@ import { ProductsUseCase } from '../../application/usecases/products.usecase.js'
 import { PurchasesUseCase } from '../../application/usecases/purchases.usecase.js';
 import { RedeemInvitationUseCase } from '../../application/usecases/redeem-invitation.usecase.js';
 import { RegenerateInvitationUseCase } from '../../application/usecases/regenerate-invitation.usecase.js';
+import { ReportsUseCase } from '../../application/usecases/reports.usecase.js';
 import { SalesUseCase } from '../../application/usecases/sales.usecase.js';
 import { SyncCopyUseCase } from '../../application/usecases/sync-copy.usecase.js';
 import { SyncUseCase } from '../../application/usecases/sync.usecase.js';
@@ -310,6 +313,12 @@ export class AppModule {
         useFactory: (work: UnitOfWork, clock: Clock) => new SalesUseCase(work, clock),
         inject: [UNIT_OF_WORK, CLOCK],
       },
+      // El reporte mensual (C4-R1, ADR 0035).
+      {
+        provide: REPORTS,
+        useFactory: (work: UnitOfWork) => new ReportsUseCase(work),
+        inject: [UNIT_OF_WORK],
+      },
       // El lote de sincronizacion y la copia de lectura (C3-06, ADR 0028).
       {
         provide: SYNC,
@@ -345,6 +354,7 @@ export class AppModule {
         ShiftsController,
         CashMovementsController,
         SalesController,
+        ReportsController,
         SyncController,
       ],
       providers: [

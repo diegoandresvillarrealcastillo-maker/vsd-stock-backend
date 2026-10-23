@@ -100,6 +100,14 @@ export interface SaleRecord extends SaleHeader {
   readonly payments: readonly PaymentRecord[];
 }
 
+/** Las ventas de un periodo, con lo unico que el reporte mensual necesita de cada una: sus lineas y sus cobros (ADR 0035). */
+export interface SalesOfPeriod {
+  /** Las ventas cuya hora efectiva cae en el periodo, anuladas despues o no. */
+  readonly sold: readonly Pick<SaleRecord, 'lines' | 'payments'>[];
+  /** Las ventas anuladas dentro del periodo, sea cual sea el mes de la venta. */
+  readonly voided: readonly Pick<SaleRecord, 'lines' | 'payments'>[];
+}
+
 /** El listado va de la venta mas reciente a la mas vieja; la posicion es (hora efectiva en milisegundos, id). */
 export interface SaleListRequest {
   readonly limit: number;
@@ -126,6 +134,11 @@ export interface SaleRepository {
   /** La venta que una operacion de anular anulo, o `null` si esa operacion no anulo ninguna. */
   findByVoid(operationId: string): Promise<SaleRecord | null>;
   list(request: SaleListRequest): Promise<SaleHeader[]>;
+  /**
+   * Las ventas de `[from, to)`: las HECHAS en el periodo (por su hora efectiva, ADR 0016) y las ANULADAS en el (por el momento en que
+   * el servidor anoto la anulacion), cada una con sus lineas y sus cobros tal como se vendieron (ADR 0035).
+   */
+  inPeriod(from: Date, to: Date): Promise<SalesOfPeriod>;
   /**
    * Agrega la revision de una venta que ya existe. Una venta se revisa una vez: si ya tenia revision, no agrega otra y
    * devuelve la que habia (`created: false`).

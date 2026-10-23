@@ -105,6 +105,11 @@ valor** cuando es una cadena de conexión (lleva la clave).
   un egreso del turno _abierto de quien anula_** (`shiftId`), no del de la venta. Si hubo efectivo y no se nombra un turno suyo
   abierto, `409 shift-required`; una venta ya anulada es `409 sale-voided`. Es idempotente por `operationId`. La venta anulada
   sigue sumada en el arqueo de su turno.
+- `GET /v1/reports/monthly?month=AAAA-MM` es el **reporte mensual** que pidió el contador ([ADR 0035](docs/adr/0035-el-reporte-mensual-suma-lo-que-dijo-cada-recibo-y-corta-a-hora-de-bogota.md); la gerencia, con
+  conexión): las ventas del mes por tarifa y tipo tributario (gravado al 19 %, gravado al 5 %, exento y excluido, siempre los
+  cuatro renglones), las **anulaciones del mes en un bloque aparte** (no se restan) y lo cobrado por medio de pago. El IVA se saca
+  **venta por venta**, como en cada recibo, y los meses se cortan a medianoche de Bogotá. No es la declaración ni reemplaza la
+  factura electrónica.
 - `POST /v1/sync` recibe un **lote** de 1 a 50 operaciones hechas sin conexión ([ADR 0028](docs/adr/0028-lote-de-sincronizacion-y-copia-de-lectura.md)):
   `shift-open`, `shift-close` o `sale`, cada una con el cuerpo **exacto** de su ruta individual (cerrar un turno lleva además su
   `shiftId`). Se aplican **una tras otra y cada una en su propia transacción**, con las reglas de su ruta, así que una que falla no

@@ -8,6 +8,7 @@ import type {
   SaleRepository,
   SaleReviewRecord,
   SaleVoidRecord,
+  SalesOfPeriod,
   NewSaleVoid,
 } from '../../src/domain/ports/out/sales.js';
 import type { FakeShifts } from './fake-cash.js';
@@ -118,6 +119,17 @@ export class FakeSales implements SaleRepository {
           (sale.occurredAt.toISOString() === after[0] && sale.id < after[1]),
       );
     return Promise.resolve(rows.slice(0, request.limit).map((sale) => this.headerOf(sale)));
+  }
+
+  inPeriod(from: Date, to: Date): Promise<SalesOfPeriod> {
+    const within = (at: Date): boolean => at >= from && at < to;
+    return Promise.resolve({
+      sold: this.records.filter((sale) => within(sale.occurredAt)),
+      voided: this.records.filter((sale) => {
+        const voided = this.voids.get(sale.id);
+        return voided !== undefined && within(voided.voidedAt);
+      }),
+    });
   }
 
   review(

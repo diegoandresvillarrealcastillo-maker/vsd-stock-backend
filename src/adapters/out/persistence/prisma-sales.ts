@@ -6,13 +6,21 @@ import type { TaxKind } from '../../../domain/model/tax.js';
 import type {
   NewSale,
   NewSaleVoid,
+  PaymentRecord,
   SaleHeader,
+  SaleLineRecord,
   SaleListRequest,
   SaleRecord,
   SaleRepository,
+  SalesOfPeriod,
   SaleReviewRecord,
 } from '../../../domain/ports/out/sales.js';
-import { Prisma, type Sale } from '../../../generated/prisma/client.js';
+import {
+  Prisma,
+  type Payment,
+  type Sale,
+  type SaleLine,
+} from '../../../generated/prisma/client.js';
 import type { PrismaTransaction } from './prisma-unit-of-work.js';
 
 /** El orden en que el dispositivo vendio las lineas y cobro los pagos; el identificador desempata. */
@@ -157,6 +165,27 @@ export class PrismaSaleRepository implements SaleRepository {
     return rows.map(headerOf);
   }
 
+  async inPeriod(from: Date, to: Date): Promise<SalesOfPeriod> {
+    const select = {
+      lines: { orderBy: [...IN_ORDER] },
+      payments: { orderBy: [...IN_ORDER] },
+    } satisfies Prisma.SaleSelect;
+    // Una consulta tras otra, nunca varias a la vez por la misma conexion de la transaccion.
+    const sold = await this.tx.sale.findMany({
+      where: { operation: { occurredAt: { gte: from, lt: to } } },
+      select,
+    });
+    const voided = await this.tx.sale.findMany({
+      where: { void: { createdAt: { gte: from, lt: to } } },
+      select,
+    });
+    const shape = (row: (typeof sold)[number]) => ({
+      lines: row.lines.map(lineOf),
+      payments: row.payments.map(paymentOf),
+    });
+    return { sold: sold.map(shape), voided: voided.map(shape) };
+  }
+
   async review(
     saleId: string,
     userId: string,
@@ -257,20 +286,8 @@ export class PrismaSaleRepository implements SaleRepository {
               operationId: voided.operationId,
               reason: voided.reason,
             },
-      lines: lines.map((line) => ({
-        productId: line.productId,
-        quantityMilli: Number(line.quantityMilli),
-        unitPrice: Number(line.unitPrice),
-        discount: Number(line.discount),
-        taxRateBp: line.taxRateBp,
-        // La base solo deja guardar los tres tipos (`sale_line_tax_kind_fits_rate`, ADR 0034).
-        taxKind: line.taxKind as TaxKind,
-      })),
-      payments: payments.map((payment) => ({
-        method: payment.method as PaymentMethod,
-        amount: Number(payment.amount),
-        reference: payment.reference,
-      })),
+      lines: lines.map(lineOf),
+      payments: payments.map(paymentOf),
     };
   }
 
@@ -314,6 +331,26 @@ export class PrismaSaleRepository implements SaleRepository {
     }
     throw new Error(`No folio was left for the sale of ${sale.operationId}`);
   }
+}
+
+function lineOf(line: SaleLine): SaleLineRecord {
+  return {
+    productId: line.productId,
+    quantityMilli: Number(line.quantityMilli),
+    unitPrice: Number(line.unitPrice),
+    discount: Number(line.discount),
+    taxRateBp: line.taxRateBp,
+    // La base solo deja guardar los tres tipos (`sale_line_tax_kind_fits_rate`, ADR 0034).
+    taxKind: line.taxKind as TaxKind,
+  };
+}
+
+function paymentOf(payment: Payment): PaymentRecord {
+  return {
+    method: payment.method as PaymentMethod,
+    amount: Number(payment.amount),
+    reference: payment.reference,
+  };
 }
 
 function headerOf(row: ListRow): SaleHeader {

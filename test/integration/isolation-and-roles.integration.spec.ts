@@ -116,6 +116,7 @@ const USE_CASES: Record<string, readonly string[]> = {
   purchases: ['POST /v1/purchases', 'GET /v1/purchases', 'GET /v1/purchases/:purchaseId'],
   'redeem-invitation': ['POST /v1/invitations/redeem'],
   'regenerate-invitation': ['POST /v1/users/:userId/invitation'],
+  reports: ['GET /v1/reports/monthly'],
   sales: [
     'POST /v1/sales',
     'GET /v1/sales',
@@ -856,6 +857,20 @@ describe('isolation between businesses and the matrix of roles, through the whol
         };
       },
       outsider: { kind: 'not-found', code: 'sale-not-found' },
+    },
+    // ---------------- reportes
+    {
+      route: 'GET /v1/reports/monthly',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => {
+        await makeSaleOf(team, 'owner');
+        return {
+          method: 'GET',
+          path: `/v1/reports/monthly?month=${new Date().toISOString().slice(0, 7)}`,
+        };
+      },
+      outsider: { kind: 'own-business' },
     },
     // ---------------- lote de sincronizacion y copia de lectura
     {
