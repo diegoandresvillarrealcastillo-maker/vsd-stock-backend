@@ -40,6 +40,7 @@ const product: ProductRecord = {
   unit: 'unit',
   unitPrice: 3500,
   taxRateBp: 1900,
+  taxKind: 'taxed',
   active: true,
   categoryId: null,
   minStockMilli: null,
@@ -94,7 +95,14 @@ const sale = (change: Record<string, unknown> = {}) => ({
     folio: `AA-${String(counter + 1).padStart(6, '0')}`,
     total: 7_000,
     lines: [
-      { productId: COLA, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
+      {
+        productId: COLA,
+        quantityMilli: 2_000,
+        unitPrice: 3_500,
+        discount: 0,
+        taxRateBp: 1900,
+        taxKind: 'taxed',
+      },
     ],
     payments: [{ method: 'cash', amount: 7_000 }],
     deviceTime: '2026-10-18T14:30:00.000Z',
@@ -181,6 +189,7 @@ describe('SyncUseCase', () => {
             unitPrice: 1_000,
             discount: 0,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         ],
       });

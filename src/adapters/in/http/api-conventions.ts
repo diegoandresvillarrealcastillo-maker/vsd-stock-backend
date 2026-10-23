@@ -39,7 +39,9 @@ function checkProperty(where: string, name: string, schema: Schema): string[] {
   if (!/^[a-z][A-Za-z0-9]*$/.test(name)) {
     found.push(`${describe}: los nombres de los campos van en camelCase`);
   }
-  if (words(name).some((word) => MONEY_WORDS.has(word)) && !isInteger) {
+  // Un campo que termina en «Kind» (`taxKind`) clasifica, no es una cantidad de pesos: es un texto de una lista (ADR 0034).
+  const classifies = words(name).at(-1) === 'kind';
+  if (!classifies && words(name).some((word) => MONEY_WORDS.has(word)) && !isInteger) {
     found.push(`${describe}: el dinero es un integer de pesos, no ${schema.type ?? 'otra cosa'}`);
   }
   if (/(?:Milli|Bp)$/.test(name) && !isInteger) {

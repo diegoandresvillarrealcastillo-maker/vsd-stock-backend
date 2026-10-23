@@ -44,6 +44,7 @@ interface SaleBody {
     unitPrice: number;
     discount: number;
     taxRateBp: number;
+    taxKind: string;
   }[];
   payments: { method: string; amount: number; reference: string | null }[];
   summary: {
@@ -172,6 +173,7 @@ describe('sales, end to end (C3-03)', () => {
           unit,
           unitPrice,
           taxRateBp,
+          taxKind: taxRateBp > 0 ? 'taxed' : 'exempt',
         })
       ).body.id;
     return {
@@ -211,8 +213,22 @@ describe('sales, end to end (C3-03)', () => {
       folio: `AA-${String(serial).padStart(6, '0')}`,
       total: 13_000,
       lines: [
-        { productId: t.cola, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-        { productId: t.bread, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+        {
+          productId: t.cola,
+          quantityMilli: 2_000,
+          unitPrice: 3_500,
+          discount: 0,
+          taxRateBp: 1900,
+          taxKind: 'taxed',
+        },
+        {
+          productId: t.bread,
+          quantityMilli: 1_500,
+          unitPrice: 4_000,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
       ],
       payments: [
         { method: 'cash', amount: 10_000 },
@@ -268,6 +284,93 @@ describe('sales, end to end (C3-03)', () => {
         });
         expect(reply.headers.get('idempotent-replayed')).toBeNull();
       }
+    });
+
+    describe('the tax kind of each line (ADR 0034)', () => {
+      it('keeps the kind each line was sold with, and gives it back when the sale is read again', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+
+        const created = await call('POST', '/v1/sales', t.cashier.token, sale(t, shiftId));
+        const read = await call('GET', `/v1/sales/${created.body.id}`, t.owner);
+
+        expect(created.status).toBe(201);
+        expect(created.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'exempt']);
+        expect(read.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'exempt']);
+      });
+
+      it('wants the kind in every line: a sale without it is refused, and says which line', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const { taxKind: _kind, ...withoutKind } = base.lines[1] as Record<string, unknown>;
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], withoutKind] }),
+        );
+
+        expect(reply.status).toBe(400);
+        expect(fields(reply)).toEqual(['/lines/1/taxKind:required']);
+      });
+
+      it('refuses a line whose kind does not fit its rate, and registers nothing', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const wrong = { ...(base.lines[1] as Record<string, unknown>), taxKind: 'taxed' };
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], wrong] }),
+        );
+
+        expect(reply.status).toBe(400);
+        expect(fields(reply)).toEqual(['/lines/1/taxKind:tax-kind-rate-mismatch']);
+        expect((await call('GET', '/v1/sales', t.owner)).body.items).toEqual([]);
+      });
+
+      it('accepts a line sold with another kind than the catalog has today, keeps it and marks the sale', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        // El catalogo de hoy dice que el pan es exento; el dispositivo, con un catalogo anterior, lo vendio como excluido.
+        const other = { ...(base.lines[1] as Record<string, unknown>), taxKind: 'excluded' };
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], other] }),
+        );
+
+        expect(reply.status).toBe(201);
+        expect(reply.body.flags).toEqual(['price-differs']);
+        expect(reply.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'excluded']);
+      });
+
+      it('does not let the same operation be reused with a different kind: it is another sale', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const first = await call('POST', '/v1/sales', t.cashier.token, base);
+        const changed = {
+          ...base,
+          lines: [
+            base.lines[0],
+            { ...(base.lines[1] as Record<string, unknown>), taxKind: 'excluded' },
+          ],
+        };
+
+        const again = await call('POST', '/v1/sales', t.cashier.token, changed);
+
+        expect(first.status).toBe(201);
+        expect(again.status).toBe(409);
+      });
     });
 
     it('answers every amount as a whole number of pesos', async () => {
@@ -382,6 +485,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 3_000,
         discount: 0,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       };
 
       const reply = await call(
@@ -579,6 +683,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 1,
         discount: 0,
         taxRateBp: 0,
+        taxKind: 'exempt',
       };
       const half = {
         productId: t.cola,
@@ -586,6 +691,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 3_500,
         discount: 0,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       };
 
       const reply = await call(

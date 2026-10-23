@@ -43,6 +43,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0031](0031-hosts-de-pre-render-y-cloudflare-pages.md)                             | Los hosts de PRE: la API en Render y la web en Cloudflare Pages                                          | Aceptada |
 | [0032](0032-un-contador-reviso-la-mecanica-del-iva.md)                             | Un contador revisó la mecánica del IVA: se mantiene, y quedan cuatro precisiones                         | Aceptada |
 | [0033](0033-la-landing-vive-en-sitio-del-frontend-y-se-publica-aparte.md)          | La landing vive en `sitio/` del frontend y se publica como un proyecto aparte                            | Aceptada |
+| [0034](0034-el-tipo-tributario-vive-en-el-producto-y-se-copia-a-la-linea.md)       | El tipo tributario (gravado, exento o excluido) vive en el producto y se copia a la línea de venta       | Aceptada |
 
 ## Reglas
 

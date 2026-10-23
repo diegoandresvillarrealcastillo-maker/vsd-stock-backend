@@ -35,15 +35,15 @@ describe('stock ledger and sale as one operation (ADR 0013)', () => {
     await seedBusiness(admin, BUSINESS_B);
     // Cincuenta productos del negocio A, del ...0000 al ...0049 (los usa la carga masiva), y uno del B.
     await admin.query(
-      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
+      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind)
        SELECT ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, $1, 'P' || n, 'SKU-' || n,
-              'unit', 1000, 0
+              'unit', 1000, 0, 'exempt'
          FROM generate_series(0, 49) AS n`,
       [BUSINESS_A],
     );
     await admin.query(
-      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
-       VALUES ($1, $2, 'Producto de B', 'B-1', 'unit', 1000, 0)`,
+      `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind)
+       VALUES ($1, $2, 'Producto de B', 'B-1', 'unit', 1000, 0, 'exempt')`,
       [PRODUCT_OF_B, BUSINESS_B],
     );
   });

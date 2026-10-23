@@ -24,6 +24,7 @@ interface ProductBody {
   unit: string;
   unitPrice: number;
   taxRateBp: number;
+  taxKind: string;
   active: boolean;
   categoryId: string | null;
   minStockMilli: number | null;
@@ -50,7 +51,14 @@ interface Reply {
 const UPC_A = '036000291452';
 const EAN_13_OF_THE_UPC_A = '0036000291452';
 
-const arroz = { name: 'Arroz 500 g', sku: 'ARR-500', unit: 'unit', unitPrice: 3200, taxRateBp: 0 };
+const arroz = {
+  name: 'Arroz 500 g',
+  sku: 'ARR-500',
+  unit: 'unit',
+  unitPrice: 3200,
+  taxRateBp: 0,
+  taxKind: 'exempt',
+};
 
 /**
  * De punta a punta (ADR 0015): un token firmado, la API real y la base real. El catalogo que ve y cambia cada rol, lo
@@ -268,6 +276,7 @@ describe('the catalog, end to end (ADR 0015)', () => {
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
         active: true,
         categoryId: null,
         minStockMilli: 2500,
@@ -308,6 +317,7 @@ describe('the catalog, end to end (ADR 0015)', () => {
         unit: 'box',
         unitPrice: -1,
         taxRateBp: 7,
+        taxKind: 'taxed',
         categoryId: 'x',
         minStockMilli: -3,
         extra: true,
@@ -326,6 +336,122 @@ describe('the catalog, end to end (ADR 0015)', () => {
         '/categoryId:invalid-id',
         '/minStockMilli:out-of-range',
       ]);
+    });
+
+    describe('the tax kind (ADR 0034)', () => {
+      it.each([
+        ['taxed', 1900],
+        ['taxed', 500],
+        ['exempt', 0],
+        ['excluded', 0],
+      ])(
+        'keeps a product that is %s at %i basis points, in the reading and in the list',
+        async (taxKind, taxRateBp) => {
+          const { owner } = await team();
+
+          const created = await create(owner, { taxKind, taxRateBp });
+
+          expect(created).toMatchObject({ taxKind, taxRateBp });
+          expect((await call('GET', `/v1/products/${created.id}`, owner)).body).toMatchObject({
+            taxKind,
+            taxRateBp,
+          });
+          expect((await call('GET', '/v1/products', owner)).body.items[0]).toMatchObject({
+            taxKind,
+            taxRateBp,
+          });
+        },
+      );
+
+      it('refuses a kind that does not fit the rate, as a problem of the kind', async () => {
+        const { owner } = await team();
+
+        const reply = await call('POST', '/v1/products', owner, {
+          ...arroz,
+          taxKind: 'taxed',
+          taxRateBp: 0,
+        });
+
+        expect(reply.status).toBe(400);
+        expect(reply.body.errors).toEqual([
+          {
+            pointer: '/taxKind',
+            code: 'tax-kind-rate-mismatch',
+            detail:
+              'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.',
+          },
+        ]);
+        expect((await call('GET', '/v1/products', owner)).body.items).toEqual([]);
+      });
+
+      it('wants the kind: a product without it is refused, not classified by itself', async () => {
+        const { owner } = await team();
+        const { taxKind: _kind, ...withoutKind } = arroz;
+
+        const reply = await call('POST', '/v1/products', owner, withoutKind);
+
+        expect(reply.status).toBe(400);
+        expect(reply.body.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
+          '/taxKind:required',
+        ]);
+      });
+
+      it('moves an exempt product to excluded with the kind alone', async () => {
+        const { owner } = await team();
+        const created = await create(owner);
+
+        const changed = await call('PATCH', `/v1/products/${created.id}`, owner, {
+          taxKind: 'excluded',
+        });
+
+        expect(changed.status).toBe(200);
+        expect(changed.body).toMatchObject({ taxKind: 'excluded', taxRateBp: 0 });
+      });
+
+      it('moves a product to taxed when the kind and the rate come together', async () => {
+        const { owner } = await team();
+        const created = await create(owner);
+
+        const changed = await call('PATCH', `/v1/products/${created.id}`, owner, {
+          taxKind: 'taxed',
+          taxRateBp: 1900,
+        });
+
+        expect(changed.status).toBe(200);
+        expect(changed.body).toMatchObject({ taxKind: 'taxed', taxRateBp: 1900 });
+      });
+
+      it('refuses the rate alone when it does not fit the kind the product already has, and changes nothing', async () => {
+        const { owner } = await team();
+        const created = await create(owner);
+
+        const reply = await call('PATCH', `/v1/products/${created.id}`, owner, {
+          taxRateBp: 1900,
+        });
+
+        expect(reply.status).toBe(400);
+        expect(reply.body.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
+          '/taxRateBp:tax-kind-rate-mismatch',
+        ]);
+        expect((await call('GET', `/v1/products/${created.id}`, owner)).body).toMatchObject({
+          taxKind: 'exempt',
+          taxRateBp: 0,
+        });
+      });
+
+      it('refuses the kind alone when it does not fit the rate the product already has', async () => {
+        const { owner } = await team();
+        const created = await create(owner, { taxKind: 'taxed', taxRateBp: 1900 });
+
+        const reply = await call('PATCH', `/v1/products/${created.id}`, owner, {
+          taxKind: 'exempt',
+        });
+
+        expect(reply.status).toBe(400);
+        expect(reply.body.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
+          '/taxKind:tax-kind-rate-mismatch',
+        ]);
+      });
     });
 
     it('keeps the SKU and the barcode unique, whatever the case and whatever the form of the barcode', async () => {

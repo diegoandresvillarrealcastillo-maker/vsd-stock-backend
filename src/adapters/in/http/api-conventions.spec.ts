@@ -185,6 +185,23 @@ describe('API conventions (ADR 0019)', () => {
       ).toHaveLength(1);
     });
 
+    it.each(['taxKind', 'priceKind'])(
+      'lets %s be a string: a field that ends in «Kind» names a classification, not an amount (ADR 0034)',
+      (name) => {
+        const kind = { type: 'string', enum: ['taxed', 'exempt', 'excluded'] };
+
+        expect(findConventionViolations(documentWith({}, schemaWith({ [name]: kind })))).toEqual(
+          [],
+        );
+      },
+    );
+
+    it('still wants an amount to be an integer when «kind» is not its last word', () => {
+      expect(
+        findConventionViolations(documentWith({}, schemaWith({ kindTotal: { type: 'string' } }))),
+      ).toHaveLength(1);
+    });
+
     it.each(['quantityMilli', 'stockMilli', 'rateBp', 'percentBp'])(
       'wants %s to be an integer',
       (name) => {

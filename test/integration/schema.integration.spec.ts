@@ -244,8 +244,8 @@ describe('real schema (ADR 0021)', () => {
       const code = await codeOf(
         asApplication(admin, BUSINESS_A, (client) =>
           client.query(
-            `INSERT INTO product (id_negocio, name, sku, unit, unit_price, tax_rate_bp, category_id)
-             VALUES ($1, 'Agua', 'AGUA-1', 'unit', 1000, 0, $2)`,
+            `INSERT INTO product (id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind, category_id)
+             VALUES ($1, 'Agua', 'AGUA-1', 'unit', 1000, 0, 'exempt', $2)`,
             [BUSINESS_A, categoryOfB],
           ),
         ),
@@ -487,7 +487,7 @@ describe('real schema (ADR 0021)', () => {
         'INSERT INTO stock_movement (id_negocio, operation_id, warehouse_id, product_id, delta, reason, note)';
       const movement = (f: Family) => [f.businessId, f.operationId, f.warehouseId, f.productId];
       const SALE_LINE =
-        'INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, discount)';
+        'INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, discount, tax_kind)';
       const CASH =
         'INSERT INTO cash_movement (id_negocio, operation_id, shift_id, direction, amount, reason)';
 
@@ -620,27 +620,47 @@ describe('real schema (ADR 0021)', () => {
         ],
         [
           'a sale line of zero',
-          `${SALE_LINE} VALUES ($1, $2, $3, 0, 1, 0, 0)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, 0, 1, 0, 0, 'exempt')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [
           'a sale line above the maximum quantity',
-          `${SALE_LINE} VALUES ($1, $2, $3, ${MAX_QUANTITY_MILLI + 1}, 1, 0, 0)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, ${MAX_QUANTITY_MILLI + 1}, 1, 0, 0, 'exempt')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [
           'a sale line with a negative price',
-          `${SALE_LINE} VALUES ($1, $2, $3, 1, -1, 0, 0)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, -1, 0, 0, 'exempt')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [
           'a sale line with a negative discount',
-          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 0, -1)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 0, -1, 'exempt')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [
           'a sale line with a tax rate outside the catalogue',
-          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 800, 0)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 800, 0, 'taxed')`,
+          (f) => [f.businessId, f.saleId, f.productId],
+        ],
+        [
+          'a sale line sold as taxed at 0 %',
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 0, 0, 'taxed')`,
+          (f) => [f.businessId, f.saleId, f.productId],
+        ],
+        [
+          'a sale line sold as exempt at 19 %',
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 1900, 0, 'exempt')`,
+          (f) => [f.businessId, f.saleId, f.productId],
+        ],
+        [
+          'a sale line sold as excluded at 5 %',
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 500, 0, 'excluded')`,
+          (f) => [f.businessId, f.saleId, f.productId],
+        ],
+        [
+          'a sale line with a tax kind that does not exist',
+          `${SALE_LINE} VALUES ($1, $2, $3, 1, 1, 0, 0, 'gravado')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [
@@ -706,7 +726,7 @@ describe('real schema (ADR 0021)', () => {
         ],
         [
           'a sale line at the limits',
-          `${SALE_LINE} VALUES ($1, $2, $3, ${MAX_QUANTITY_MILLI}, ${MAX_PESOS}, 1900, ${MAX_PESOS}), ($1, $2, $3, 1, 0, 0, 0)`,
+          `${SALE_LINE} VALUES ($1, $2, $3, ${MAX_QUANTITY_MILLI}, ${MAX_PESOS}, 1900, ${MAX_PESOS}, 'taxed'), ($1, $2, $3, 1, 0, 0, 0, 'exempt')`,
           (f) => [f.businessId, f.saleId, f.productId],
         ],
         [

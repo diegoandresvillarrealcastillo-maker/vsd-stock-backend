@@ -30,6 +30,7 @@ const product = (
     unit: NewProduct['unit'];
     unitPrice: number;
     taxRateBp: number;
+    taxKind: NewProduct['taxKind'];
     categoryId: string | null;
     minStockMilli: number | null;
   }> = {},
@@ -40,6 +41,7 @@ const product = (
   unit: overrides.unit ?? 'unit',
   unitPrice: overrides.unitPrice ?? 3200,
   taxRateBp: overrides.taxRateBp ?? 0,
+  taxKind: overrides.taxKind ?? ((overrides.taxRateBp ?? 0) > 0 ? 'taxed' : 'exempt'),
   categoryId: overrides.categoryId ?? null,
   minStockMilli: overrides.minStockMilli ?? null,
 });
@@ -179,6 +181,7 @@ describe('the catalog against PostgreSQL (ADR 0015)', () => {
         unit: 'unit',
         unitPrice: 1_000_000_000_000,
         taxRateBp: 0,
+        taxKind: 'exempt',
         active: true,
         categoryId: null,
         minStockMilli: 2500,
@@ -501,8 +504,8 @@ describe('the catalog against PostgreSQL (ADR 0015)', () => {
       ];
       for (const [index, id] of ids.entries()) {
         await admin.query(
-          `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
-           VALUES ($1, $2, 'Igual', $3, 'unit', 1000, 0)`,
+          `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind)
+           VALUES ($1, $2, 'Igual', $3, 'unit', 1000, 0, 'exempt')`,
           [id, BUSINESS_A, `IGUAL-${index}`],
         );
       }

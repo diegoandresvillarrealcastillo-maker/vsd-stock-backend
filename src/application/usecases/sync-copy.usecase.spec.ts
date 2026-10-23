@@ -22,6 +22,7 @@ const product = (n: number, change: Partial<ProductRecord> = {}): ProductRecord 
   unit: 'unit',
   unitPrice: 3500,
   taxRateBp: 1900,
+  taxKind: 'taxed',
   active: true,
   categoryId: null,
   minStockMilli: null,

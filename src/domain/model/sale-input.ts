@@ -11,7 +11,8 @@ import {
   summarizeSale,
   type SaleSummary,
 } from './sale-totals.js';
-import { TAX_RATES_BP } from './tax.js';
+import { TAX_RATES_BP, type TaxKind } from './tax.js';
+import { readTaxKind, refuseTaxKindMismatch } from './tax-kind-input.js';
 import type { InputReader } from './validation.js';
 
 /** Los campos de una venta, de cada una de sus lineas y de cada uno de sus cobros. */
@@ -30,6 +31,7 @@ export const SALE_LINE_FIELDS = [
   'unitPrice',
   'discount',
   'taxRateBp',
+  'taxKind',
 ] as const;
 export const PAYMENT_FIELDS = ['method', 'amount', 'reference'] as const;
 
@@ -56,6 +58,8 @@ export interface SaleLineInput {
   readonly discount: number;
   /** Puntos basicos: 0, 500 o 1900. */
   readonly taxRateBp: number;
+  /** Con que tipo tributario se vendio: gravado, exento o excluido (ADR 0034). */
+  readonly taxKind: TaxKind;
 }
 
 export interface PaymentInput {
@@ -128,10 +132,12 @@ export function readSale(reader: InputReader): SaleInput {
       unitPrice: line.integer('unitPrice', { label: 'El precio', min: 0, max: MAX_PESOS }),
       discount: line.integer('discount', { label: 'El descuento', min: 0, max: MAX_PESOS }),
       taxRateBp: readTaxRate(line),
+      taxKind: readTaxKind(line),
     };
     if (reader.errorCount() === before) {
       checkLineAmounts(line, read);
     }
+    refuseTaxKindMismatch(line, before, read.taxKind, read.taxRateBp);
     linesAreSound = linesAreSound && reader.errorCount() === before;
     return read;
   });
@@ -245,6 +251,7 @@ export function saleFingerprint(sale: SaleInput): string {
       unitPrice: line.unitPrice,
       discount: line.discount,
       taxRateBp: line.taxRateBp,
+      taxKind: line.taxKind,
     })),
     payments: sale.payments.map((payment) => ({
       method: payment.method,

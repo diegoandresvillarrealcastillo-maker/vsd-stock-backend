@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { TAX_KINDS, type TaxKind } from '../../../domain/model/tax.js';
 import type {
   RateSummaryView,
   SaleSummaryView,
@@ -56,6 +57,15 @@ export class SaleLineRequestDto {
     description: 'Tarifa de IVA con que se vendió, en puntos básicos.',
   })
   readonly taxRateBp!: number;
+
+  @ApiProperty({
+    type: String,
+    enum: [...TAX_KINDS],
+    example: 'taxed',
+    description:
+      'El tipo tributario con que se vendió (ADR 0034): `taxed` lleva 5 % o 19 %; `exempt` y `excluded` llevan 0 %. Es obligatorio: una venta sin él no se podría clasificar después. Si no es el del catálogo de hoy, la venta se acepta con el que trae y se marca `price-differs`.',
+  })
+  readonly taxKind!: TaxKind;
 }
 
 /** Un cobro. */
@@ -167,6 +177,9 @@ export class SaleLineDto implements SaleLineRecord {
 
   @ApiProperty({ type: 'integer', enum: [0, 500, 1900] })
   readonly taxRateBp!: number;
+
+  @ApiProperty({ type: String, enum: [...TAX_KINDS] })
+  readonly taxKind!: TaxKind;
 }
 
 export class PaymentDto implements PaymentRecord {

@@ -1,3 +1,5 @@
+import type { TaxKind } from './tax.js';
+
 /**
  * Las marcas que el servidor le pone a una venta que acepta (ADR 0027). Una venta ya ocurrio en el mostrador, asi que
  * nunca se rechaza por algo que el servidor sabe y el dispositivo no (ADR 0009): se acepta y se marca para que alguien la
@@ -19,7 +21,7 @@ export type SaleFlag = (typeof SALE_FLAGS)[number];
 
 /** Lo que el servidor sabe de una venta al momento de aceptarla. */
 export interface SaleFacts {
-  /** Alguna linea se vendio a un precio o con una tarifa que no son los del catalogo de hoy. */
+  /** Alguna linea se vendio a un precio, con una tarifa o con un tipo tributario que no son los del catalogo de hoy. */
   readonly priceDiffers: boolean;
   /** El total que el dispositivo le cobro al cliente. */
   readonly claimedTotal: number;
@@ -58,10 +60,14 @@ export function flagsOfSale(facts: SaleFacts): SaleFlag[] {
   return flags;
 }
 
-/** Si la linea se vendio al precio y con la tarifa que el producto tiene hoy en el catalogo. */
+/** Si la linea se vendio al precio, con la tarifa y con el tipo tributario que el producto tiene hoy en el catalogo (ADR 0034). */
 export function soldAtCatalogPrice(
-  line: { readonly unitPrice: number; readonly taxRateBp: number },
-  product: { readonly unitPrice: number; readonly taxRateBp: number },
+  line: { readonly unitPrice: number; readonly taxRateBp: number; readonly taxKind: TaxKind },
+  product: { readonly unitPrice: number; readonly taxRateBp: number; readonly taxKind: TaxKind },
 ): boolean {
-  return line.unitPrice === product.unitPrice && line.taxRateBp === product.taxRateBp;
+  return (
+    line.unitPrice === product.unitPrice &&
+    line.taxRateBp === product.taxRateBp &&
+    line.taxKind === product.taxKind
+  );
 }
