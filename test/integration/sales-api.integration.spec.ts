@@ -21,6 +21,7 @@ interface VoidBody {
   voidedByUserId: string;
   operationId: string;
   reason: string;
+  folio: string;
 }
 
 interface SaleBody {
@@ -1209,6 +1210,80 @@ describe('sales, end to end (C3-03)', () => {
         expect(await stockOf(t.cola)).toBe(100_000);
         expect(await select(admin, 'SELECT count(*)::int AS n FROM cash_movement')).toEqual([
           { n: 1 },
+        ]);
+      });
+
+      it('gives the void its own consecutive folio, apart from the folio of the sale, and shows it in the list and one by one (C4-A1)', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const cashierShift = await openShift(t, t.cashier.token);
+        const first = await plain(t, t.cashier.token, cashierShift);
+        const second = await plain(t, t.cashier.token, cashierShift);
+        const untouched = await plain(t, t.cashier.token, cashierShift);
+
+        const ofSecond = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+        const ofFirst = await call(
+          'POST',
+          `/v1/sales/${first.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+
+        expect(ofSecond.body.voided?.folio).toBe('ANU-000001');
+        expect(ofFirst.body.voided?.folio).toBe('ANU-000002');
+        expect(ofFirst.body.folio).toBe(first.folio);
+        const one = await call('GET', `/v1/sales/${second.id}`, t.owner);
+        const listed = await call('GET', '/v1/sales', t.owner);
+        const folioInList = (id: string) =>
+          listed.body.items.find((item) => item.id === id)?.voided?.folio;
+        expect(one.body.voided?.folio).toBe('ANU-000001');
+        expect(folioInList(first.id)).toBe('ANU-000002');
+        expect(folioInList(second.id)).toBe('ANU-000001');
+        expect(listed.body.items.find((item) => item.id === untouched.id)?.voided).toBeNull();
+      });
+
+      it('answers a repeated void with the same folio and takes no number for a void that is refused (C4-A1)', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const cashierShift = await openShift(t, t.cashier.token);
+        const first = await plain(t, t.cashier.token, cashierShift);
+        const second = await plain(t, t.cashier.token, cashierShift);
+        const body = voidBody(shiftId);
+        const done = await call('POST', `/v1/sales/${first.id}/void`, t.admin.token, body);
+
+        const again = await call('POST', `/v1/sales/${first.id}/void`, t.admin.token, body);
+        const twice = await call(
+          'POST',
+          `/v1/sales/${first.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+        const noShift = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(randomUUID()),
+        );
+        const next = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+
+        expect(done.body.voided?.folio).toBe('ANU-000001');
+        expect(again.body.voided?.folio).toBe('ANU-000001');
+        expect(twice.status).toBe(409);
+        expect(noShift.status).toBe(409);
+        expect(next.body.voided?.folio).toBe('ANU-000002');
+        expect(await select(admin, 'SELECT number FROM sale_void ORDER BY number')).toEqual([
+          { number: 1 },
+          { number: 2 },
         ]);
       });
 

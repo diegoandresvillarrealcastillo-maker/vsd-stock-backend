@@ -60,6 +60,7 @@ const PRIVILEGES: Record<string, string> = {
   payment: 'SI',
   sale_void: 'SI',
   sale_review: 'SI',
+  void_counter: 'SIU',
 };
 
 const PRIVILEGE_NAMES = { S: 'SELECT', I: 'INSERT', U: 'UPDATE', D: 'DELETE' } as const;
@@ -129,7 +130,7 @@ describe('real schema (ADR 0021)', () => {
       );
 
       expect(result.rows.map((row) => row.table_name)).toEqual(tablesInModelDocument());
-      expect(result.rows).toHaveLength(21);
+      expect(result.rows).toHaveLength(22);
     });
 
     it('have forced row level security when they carry id_negocio', async () => {
@@ -685,7 +686,7 @@ describe('real schema (ADR 0021)', () => {
         ],
         [
           'a void with a blank reason',
-          "INSERT INTO sale_void (id_negocio, sale_id, operation_id, reason) VALUES ($1, $2, $3, ' ')",
+          "INSERT INTO sale_void (id_negocio, sale_id, operation_id, number, reason) VALUES ($1, $2, $3, 1, ' ')",
           (f) => [f.businessId, f.saleId, f.operationId],
         ],
       ];

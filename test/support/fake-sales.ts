@@ -1,5 +1,6 @@
 import { requiresAttention } from '../../src/domain/model/sale-attention.js';
 import { SaleVoidedError } from '../../src/domain/model/sale-errors.js';
+import { voidFolio } from '../../src/domain/model/void-folio.js';
 import type {
   NewSale,
   SaleHeader,
@@ -154,7 +155,9 @@ export class FakeSales implements SaleRepository {
     if (claimed === undefined) {
       return Promise.reject(new Error(`The operation ${request.operationId} was not claimed`));
     }
+    // El numero sale hasta que la anulacion se acepta: una rechazada no gasta ninguno (ADR 0036).
     this.voids.set(request.saleId, {
+      folio: voidFolio(this.voids.size + 1),
       voidedAt: this.voidedAt,
       voidedByUserId: claimed.userId,
       operationId: request.operationId,

@@ -1,5 +1,6 @@
 import type { TimeFlag } from '../../../domain/model/operation-time.js';
 import { SaleVoidedError } from '../../../domain/model/sale-errors.js';
+import { voidFolio } from '../../../domain/model/void-folio.js';
 import type { SaleFlag } from '../../../domain/model/sale-flags.js';
 import type { PaymentMethod } from '../../../domain/model/sale-input.js';
 import type { TaxKind } from '../../../domain/model/tax.js';
@@ -49,6 +50,7 @@ interface ListRow {
   readonly voided_by: string | null;
   readonly void_operation_id: string | null;
   readonly void_reason: string | null;
+  readonly void_number: number | null;
 }
 
 /**
@@ -152,7 +154,7 @@ export class PrismaSaleRepository implements SaleRepository {
              s.needs_adjustment, s.flags, o.user_id, o.device_id, o.occurred_at, o.received_at, o.time_flags,
              r.created_at AS reviewed_at, r.user_id AS reviewed_by, r.note AS review_note,
              v.created_at AS voided_at, vo.user_id AS voided_by, v.operation_id AS void_operation_id,
-             v.reason AS void_reason
+             v.reason AS void_reason, v.number AS void_number
         FROM sale s
         JOIN operation o ON o.id_negocio = s.id_negocio AND o.operation_id = s.operation_id
         JOIN cash_shift sh ON sh.id_negocio = s.id_negocio AND sh.id = s.shift_id
@@ -205,6 +207,15 @@ export class PrismaSaleRepository implements SaleRepository {
   }
 
   async recordVoid(request: NewSaleVoid): Promise<SaleRecord> {
+    // El numero sale del contador del negocio, con el candado de su fila puesto hasta que esta transaccion termine: las anulaciones se
+    // turnan, cada una recibe el siguiente y ninguna se salta uno. Si la anulacion no se acepta, la transaccion se deshace y el contador
+    // vuelve a donde estaba (ADR 0036). La primera anulacion del negocio crea la fila con 2 y recibe el 1.
+    const [counter] = await this.tx.$queryRaw<{ number: number | bigint }[]>`
+      INSERT INTO void_counter (id_negocio, next_number) VALUES (${this.businessId}::uuid, 2)
+      ON CONFLICT (id_negocio) DO UPDATE SET next_number = void_counter.next_number + 1
+      RETURNING next_number - 1 AS number`;
+    if (counter === undefined) throw new Error('The void counter did not answer');
+
     // `ON CONFLICT DO NOTHING`: si otra peticion la esta anulando a la vez, espera a que termine y decide con lo que deje.
     const { count } = await this.tx.saleVoid.createMany({
       data: [
@@ -212,12 +223,13 @@ export class PrismaSaleRepository implements SaleRepository {
           idNegocio: this.businessId,
           saleId: request.saleId,
           operationId: request.operationId,
+          number: Number(counter.number),
           reason: request.reason,
         },
       ],
       skipDuplicates: true,
     });
-    // Ya estaba anulada: lo que esta transaccion hizo antes (existencias, efectivo) se deshace con ella.
+    // Ya estaba anulada: lo que esta transaccion hizo antes (existencias, efectivo, el numero) se deshace con ella.
     if (count !== 1) throw new SaleVoidedError();
     const sale = await this.find(request.saleId);
     if (sale === null)
@@ -281,6 +293,7 @@ export class PrismaSaleRepository implements SaleRepository {
         voided === null || voidOperation === null
           ? null
           : {
+              folio: voidFolio(voided.number),
               voidedAt: voided.createdAt,
               voidedByUserId: voidOperation.userId,
               operationId: voided.operationId,
@@ -377,9 +390,11 @@ function headerOf(row: ListRow): SaleHeader {
       row.voided_at === null ||
       row.voided_by === null ||
       row.void_operation_id === null ||
-      row.void_reason === null
+      row.void_reason === null ||
+      row.void_number === null
         ? null
         : {
+            folio: voidFolio(row.void_number),
             voidedAt: row.voided_at,
             voidedByUserId: row.voided_by,
             operationId: row.void_operation_id,

@@ -247,6 +247,14 @@ export class SaleReviewDto implements SaleReviewRecord {
 }
 
 export class SaleVoidDto implements SaleVoidRecord {
+  @ApiProperty({
+    type: String,
+    example: 'ANU-000001',
+    description:
+      'El folio propio de la anulación (ADR 0036): `ANU-` y el número de anulación del negocio, con seis cifras como mínimo. Es la secuencia del negocio, sin saltos y en el orden en que se anotaron, y no se parece al folio de ninguna venta.',
+  })
+  readonly folio!: string;
+
   @ApiProperty({ type: String, format: 'date-time', description: 'Cuándo se anuló.' })
   readonly voidedAt!: Date;
 

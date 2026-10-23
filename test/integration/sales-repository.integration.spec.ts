@@ -1543,5 +1543,228 @@ describe('sales against PostgreSQL (C3-03)', () => {
       ).rejects.toBeInstanceOf(SaleNotFoundError);
       expect(await count('sale_void')).toBe(0);
     });
+
+    describe('the folio of the void (C4-A1, ADR 0036)', () => {
+      const folioOf = (outcome: { sale: { voided: { folio: string } | null } }) =>
+        outcome.sale.voided?.folio;
+      const numbers = async (): Promise<number[]> =>
+        (await select(admin, 'SELECT number FROM sale_void ORDER BY number')).map((row) =>
+          Number(row['number']),
+        );
+      const nextNumber = async (businessId = BUSINESS_A): Promise<number | null> => {
+        const rows = await select(
+          admin,
+          'SELECT next_number FROM void_counter WHERE id_negocio = $1',
+          [businessId],
+        );
+        return rows.length === 0 ? null : Number(rows[0]?.['next_number']);
+      };
+
+      it('numbers the voids from 1, one after the other, in the order they are made and whichever sale they void', async () => {
+        const first = await sell();
+        const second = await sell();
+        const third = await sell();
+
+        const ofThird = await sales.voidSale(owner(), third.sale.id, voidBody());
+        const ofFirst = await sales.voidSale(owner(), first.sale.id, voidBody());
+        const ofSecond = await sales.voidSale(owner(), second.sale.id, voidBody());
+
+        expect([ofThird, ofFirst, ofSecond].map(folioOf)).toEqual([
+          'ANU-000001',
+          'ANU-000002',
+          'ANU-000003',
+        ]);
+        expect(await numbers()).toEqual([1, 2, 3]);
+        expect(
+          await select(
+            admin,
+            `SELECT s.folio, v.number FROM sale_void v JOIN sale s ON s.id = v.sale_id ORDER BY v.number`,
+          ),
+        ).toEqual([
+          { folio: third.sale.folio, number: 1 },
+          { folio: first.sale.folio, number: 2 },
+          { folio: second.sale.folio, number: 3 },
+        ]);
+      });
+
+      it('shows the folio of each void in the list and one by one, and none in the sales that were not voided', async () => {
+        const first = await sell();
+        const second = await sell();
+        const third = await sell();
+        await sales.voidSale(owner(), first.sale.id, voidBody());
+        await sales.voidSale(owner(), third.sale.id, voidBody());
+
+        const listed = (await sales.list(owner(), {})).items;
+        const folioInList = (id: string) => listed.find((item) => item.id === id)?.voided?.folio;
+
+        expect(folioInList(first.sale.id)).toBe('ANU-000001');
+        expect(folioInList(second.sale.id)).toBeUndefined();
+        expect(folioInList(third.sale.id)).toBe('ANU-000002');
+        expect((await sales.get(owner(), first.sale.id)).voided?.folio).toBe('ANU-000001');
+        expect((await sales.get(owner(), second.sale.id)).voided).toBeNull();
+        expect((await sales.get(owner(), third.sale.id)).voided?.folio).toBe('ANU-000002');
+      });
+
+      it('answers a repeated request with the same folio and takes no new number', async () => {
+        const first = await sell();
+        const second = await sell();
+        const body = voidBody();
+        await sales.voidSale(owner(), first.sale.id, body);
+
+        const again = await sales.voidSale(owner(), first.sale.id, body);
+        const next = await sales.voidSale(owner(), second.sale.id, voidBody());
+
+        expect(again.replayed).toBe(true);
+        expect(folioOf(again)).toBe('ANU-000001');
+        expect(folioOf(next)).toBe('ANU-000002');
+        expect(await numbers()).toEqual([1, 2]);
+        expect(await nextNumber()).toBe(3);
+      });
+
+      it('leaves no hole when a void is refused: it takes no number, and the claim goes with it', async () => {
+        const first = await sell();
+        const second = await sell();
+        await sales.voidSale(owner(), first.sale.id, voidBody());
+
+        await expect(sales.voidSale(owner(), first.sale.id, voidBody())).rejects.toBeInstanceOf(
+          SaleVoidedError,
+        );
+        await expect(
+          sales.voidSale(owner(), second.sale.id, voidBody({ shiftId: randomUUID() })),
+        ).rejects.toBeInstanceOf(ShiftRequiredError);
+        const next = await sales.voidSale(owner(), second.sale.id, voidBody());
+
+        expect(folioOf(next)).toBe('ANU-000002');
+        expect(await numbers()).toEqual([1, 2]);
+        expect(await nextNumber()).toBe(3);
+      });
+
+      it('does not touch the counter of a business that never voided anything', async () => {
+        await sell();
+
+        expect(await nextNumber()).toBeNull();
+      });
+
+      it('gives consecutive numbers, with no repeats and no holes, to voids made at the same time', async () => {
+        const made = [];
+        for (let i = 0; i < 6; i += 1) made.push(await sell());
+
+        const outcomes = await Promise.all(
+          made.map(({ sale }) => sales.voidSale(owner(), sale.id, voidBody())),
+        );
+
+        expect(new Set(outcomes.map(folioOf))).toEqual(
+          new Set([1, 2, 3, 4, 5, 6].map((n) => `ANU-00000${String(n)}`)),
+        );
+        expect(await numbers()).toEqual([1, 2, 3, 4, 5, 6]);
+        expect(await nextNumber()).toBe(7);
+      });
+
+      it('takes a number only for the one that wins when many ask to void the same sale at once', async () => {
+        const { sale } = await sell();
+        const other = await sell();
+        const people = await Promise.all([
+          managerWithShift(),
+          managerWithShift(),
+          managerWithShift(),
+        ]);
+
+        await Promise.allSettled(
+          people.map((person) =>
+            sales.voidSale(person.as, sale.id, voidBody({ shiftId: person.shift })),
+          ),
+        );
+        const next = await sales.voidSale(owner(), other.sale.id, voidBody());
+
+        expect(await count('sale_void')).toBe(2);
+        expect(await numbers()).toEqual([1, 2]);
+        expect(folioOf(next)).toBe('ANU-000002');
+      });
+
+      it('lets each business count its own voids from 1', async () => {
+        const { sale } = await sell();
+        await sales.voidSale(owner(), sale.id, voidBody());
+        const again = await sell();
+        await sales.voidSale(owner(), again.sale.id, voidBody());
+        const productOfB = await seedProduct(admin, BUSINESS_B);
+        const shiftOfB = randomUUID();
+        await unitOfWork.inBusiness(BUSINESS_B, async (scope) => {
+          await scope.shifts.open({
+            id: shiftOfB,
+            deviceId: b.deviceId,
+            userId: b.ownerId,
+            openedAt: new Date(Date.now() - 3_600_000),
+            openingAmount: 0,
+          });
+          const operationId = randomUUID();
+          await scope.operations.claim({
+            operationId,
+            kind: 'adjustment',
+            userId: b.ownerId,
+            fingerprint: operationId,
+          });
+          await scope.stock.addMovements(operationId, [
+            { productId: productOfB, delta: 10_000, reason: 'adjustment', note: 'Inventario' },
+          ]);
+        });
+        const ownerOfB = session(b.ownerId, BUSINESS_B, 'owner');
+        const { sale: saleOfB } = await sales.create(
+          ownerOfB,
+          body({
+            shiftId: shiftOfB,
+            total: 1_000,
+            lines: [
+              {
+                productId: productOfB,
+                quantityMilli: 1_000,
+                unitPrice: 1_000,
+                discount: 0,
+                taxRateBp: 1900,
+                taxKind: 'taxed',
+              },
+            ],
+            payments: [{ method: 'card', amount: 1_000, reference: 'aprobacion' }],
+          }),
+        );
+
+        const ofB = await sales.voidSale(ownerOfB, saleOfB.id, voidBody({ shiftId: null }));
+
+        expect(folioOf(ofB)).toBe('ANU-000001');
+        expect(await nextNumber(BUSINESS_A)).toBe(3);
+        expect(await nextNumber(BUSINESS_B)).toBe(2);
+      });
+
+      it('is refused by the database itself when a number repeats inside a business, is below 1 or is missing', async () => {
+        const first = await sell();
+        const second = await sell();
+        await sales.voidSale(owner(), first.sale.id, voidBody());
+        const operationId = randomUUID();
+        await admin.query(
+          `INSERT INTO operation (id_negocio, operation_id, kind, user_id) VALUES ($1, $2, 'sale_void', $3)`,
+          [BUSINESS_A, operationId, a.ownerId],
+        );
+        const insert = (number: number | null) =>
+          admin.query(
+            `INSERT INTO sale_void (id_negocio, sale_id, operation_id, reason, number) VALUES ($1, $2, $3, 'Prueba', $4)`,
+            [BUSINESS_A, second.sale.id, operationId, number],
+          );
+
+        await expect(insert(1)).rejects.toMatchObject({ code: '23505' });
+        await expect(insert(0)).rejects.toMatchObject({ code: '23514' });
+        await expect(insert(null)).rejects.toMatchObject({ code: '23502' });
+        expect(await count('sale_void')).toBe(1);
+      });
+
+      it('keeps the counter from going back to a number that was already given', async () => {
+        const { sale } = await sell();
+        await sales.voidSale(owner(), sale.id, voidBody());
+
+        await expect(
+          admin.query(`UPDATE void_counter SET next_number = 1 WHERE id_negocio = $1`, [
+            BUSINESS_A,
+          ]),
+        ).rejects.toMatchObject({ code: '23514' });
+      });
+    });
   });
 });

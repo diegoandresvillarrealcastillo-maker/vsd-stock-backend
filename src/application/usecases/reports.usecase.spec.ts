@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ForbiddenError, NoMembershipError } from '../../domain/model/people-errors.js';
 import type { Role } from '../../domain/model/role.js';
 import { ValidationFailedError } from '../../domain/model/validation.js';
+import { voidFolio } from '../../domain/model/void-folio.js';
 import { UserInactiveError } from '../../domain/ports/in/authenticate.js';
 import type { PaymentRecord, SaleLineRecord } from '../../domain/ports/out/sales.js';
 import { FakeCash } from '../../../test/support/fake-cash.js';
@@ -76,6 +77,7 @@ const seed = (
   });
   if (voidedAt !== undefined) {
     sales.voids.set(id, {
+      folio: voidFolio(sales.voids.size + 1),
       voidedAt: new Date(voidedAt),
       voidedByUserId: '11111111-1111-4111-8111-111111111111',
       operationId: `5e6f7a8b-4e5f-4a6b-8c7d-${String(counter).padStart(12, '0')}`,

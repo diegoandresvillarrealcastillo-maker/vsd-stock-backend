@@ -45,6 +45,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0033](0033-la-landing-vive-en-sitio-del-frontend-y-se-publica-aparte.md)                | La landing vive en `sitio/` del frontend y se publica como un proyecto aparte                                   | Aceptada |
 | [0034](0034-el-tipo-tributario-vive-en-el-producto-y-se-copia-a-la-linea.md)             | El tipo tributario (gravado, exento o excluido) vive en el producto y se copia a la línea de venta              | Aceptada |
 | [0035](0035-el-reporte-mensual-suma-lo-que-dijo-cada-recibo-y-corta-a-hora-de-bogota.md) | El reporte mensual suma lo que dijo cada recibo, deja las anulaciones aparte y corta los meses a hora de Bogotá | Aceptada |
+| [0036](0036-las-anulaciones-tienen-su-propio-folio-consecutivo.md)                       | Las anulaciones tienen su propio folio consecutivo, sin saltos, que da el servidor                              | Aceptada |
 
 ## Reglas
 

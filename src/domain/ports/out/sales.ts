@@ -48,6 +48,8 @@ export interface SaleReviewRecord {
 
 /** La anulacion de una venta: quien la hizo, cuando y por que (ADR 0027). Una fila de solo agregar. */
 export interface SaleVoidRecord {
+  /** El folio propio de la anulacion, como `ANU-000001`: la secuencia del negocio, sin saltos (ADR 0036). */
+  readonly folio: string;
   readonly voidedAt: Date;
   readonly voidedByUserId: string;
   /** La operacion de anular: bajo ella quedaron los movimientos que compensan. */
