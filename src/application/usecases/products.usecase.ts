@@ -5,12 +5,18 @@ import {
   PRODUCT_CHANGE_FIELDS,
   readNewProduct,
   readProductChange,
+  type ProductChange,
 } from '../../domain/model/product-input.js';
+import {
+  TAX_KIND_RATE_CODE,
+  TAX_KIND_RATE_DETAIL,
+  taxKindFitsRate,
+} from '../../domain/model/tax.js';
 import { isUuid } from '../../domain/model/uuid.js';
 import { InputReader, ValidationFailedError } from '../../domain/model/validation.js';
 import type { Session } from '../../domain/ports/in/authenticate.js';
 import type { ProductView, Products } from '../../domain/ports/in/catalog.js';
-import type { ProductFilter } from '../../domain/ports/out/catalog.js';
+import type { ProductFilter, ProductRecord } from '../../domain/ports/out/catalog.js';
 import type { BusinessScope, UnitOfWork } from '../../domain/ports/out/unit-of-work.js';
 import { ensureCan, requireMember } from '../session-guards.js';
 
@@ -31,6 +37,25 @@ async function requireCategory(
   if ((await scope.catalog.findCategory(categoryId)) === null) {
     throw new ValidationFailedError([UNKNOWN_CATEGORY]);
   }
+}
+
+/**
+ * El tipo tributario y la tarifa que quedarian (lo que el producto ya tiene mas lo que cambia) tienen que caber juntos (ADR 0034).
+ * Si la peticion trae los dos, el lector ya los comparo; aqui se compara cuando trae uno solo. El problema cae en el campo que la
+ * persona mando.
+ */
+function requireTaxKindToFit(change: ProductChange, current: ProductRecord): void {
+  if (change.taxKind === undefined && change.taxRateBp === undefined) return;
+  if (taxKindFitsRate(change.taxKind ?? current.taxKind, change.taxRateBp ?? current.taxRateBp)) {
+    return;
+  }
+  throw new ValidationFailedError([
+    {
+      pointer: change.taxKind === undefined ? '/taxRateBp' : '/taxKind',
+      code: TAX_KIND_RATE_CODE,
+      detail: TAX_KIND_RATE_DETAIL,
+    },
+  ]);
 }
 
 /**
@@ -120,6 +145,7 @@ export class ProductsUseCase implements Products {
     return this.work.inBusiness(actor.businessId, async (scope) => {
       const current = await scope.catalog.findProduct(productId);
       if (current === null) throw new ProductNotFoundError();
+      requireTaxKindToFit(change, current);
       await requireCategory(scope, change.categoryId);
       // La unidad no cambia si ya hay movimientos: la base lo impide tambien, pero aqui se dice con su nombre.
       if (

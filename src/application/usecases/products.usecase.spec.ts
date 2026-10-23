@@ -18,7 +18,14 @@ const BARCODE = '7701234567897';
 const OTHER_BARCODE = '7709876543217';
 const MISSING = '99999999-9999-4999-8999-999999999999';
 
-const arroz = { name: 'Arroz 500 g', sku: 'ARR-500', unit: 'unit', unitPrice: 3200, taxRateBp: 0 };
+const arroz = {
+  name: 'Arroz 500 g',
+  sku: 'ARR-500',
+  unit: 'unit',
+  unitPrice: 3200,
+  taxRateBp: 0,
+  taxKind: 'exempt',
+};
 
 const setup = () => {
   const catalog = new FakeCatalog();
@@ -46,10 +53,50 @@ describe('ProductsUseCase', () => {
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
         active: true,
         categoryId: null,
         minStockMilli: null,
       });
+    });
+
+    it.each([
+      ['taxed', 1900],
+      ['taxed', 500],
+      ['exempt', 0],
+      ['excluded', 0],
+    ] as const)('keeps the tax kind %s with %i basis points', async (taxKind, taxRateBp) => {
+      const { useCase } = setup();
+
+      const product = await useCase.create(memberSession('admin'), {
+        ...arroz,
+        taxKind,
+        taxRateBp,
+      });
+
+      expect(product).toMatchObject({ taxKind, taxRateBp });
+    });
+
+    it('refuses a tax kind that does not fit the rate and creates nothing', async () => {
+      const { catalog, useCase } = setup();
+
+      const failure = await failureOf(
+        useCase.create(memberSession('admin'), { ...arroz, taxKind: 'taxed', taxRateBp: 0 }),
+      );
+
+      expect(failure.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual([
+        '/taxKind:tax-kind-rate-mismatch',
+      ]);
+      expect(catalog.products).toEqual([]);
+    });
+
+    it('wants the tax kind: a product without it would sell without a classification (ADR 0034)', async () => {
+      const { useCase } = setup();
+      const { taxKind: _omitted, ...withoutKind } = arroz;
+
+      const failure = await failureOf(useCase.create(memberSession('admin'), withoutKind));
+
+      expect(failure.errors.map((e) => `${e.pointer}:${e.code}`)).toEqual(['/taxKind:required']);
     });
 
     it('works inside the business of the person who asks', async () => {
@@ -117,6 +164,7 @@ describe('ProductsUseCase', () => {
           unit: 'box',
           unitPrice: -1,
           taxRateBp: 7,
+          taxKind: 'taxed',
         }),
       );
 
@@ -152,6 +200,7 @@ describe('ProductsUseCase', () => {
         unit: 'unit',
         unitPrice: 4500,
         taxRateBp: 0,
+        taxKind: 'exempt',
       });
       await useCase.create(owner, {
         name: 'Leche entera',
@@ -159,6 +208,7 @@ describe('ProductsUseCase', () => {
         unit: 'liter',
         unitPrice: 4200,
         taxRateBp: 500,
+        taxKind: 'taxed',
         barcode: OTHER_BARCODE,
       });
       const archived = await useCase.create(owner, {
@@ -167,6 +217,7 @@ describe('ProductsUseCase', () => {
         unit: 'liter',
         unitPrice: 12000,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       });
       await useCase.update(owner, archived.id, { active: false });
       return { catalog, useCase, granos };
@@ -389,6 +440,92 @@ describe('ProductsUseCase', () => {
       );
 
       expect(failure.errors[0]).toMatchObject({ pointer: '/categoryId', code: 'unknown-category' });
+    });
+
+    describe('the tax kind and the rate (ADR 0034)', () => {
+      const mismatch = (pointer: string) => ({
+        pointer,
+        code: 'tax-kind-rate-mismatch',
+        detail:
+          'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.',
+      });
+
+      it('moves a product from exempt to excluded with the kind alone, because the rate stays at 0 %', async () => {
+        const { useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), arroz);
+
+        const updated = await useCase.update(memberSession('owner'), created.id, {
+          taxKind: 'excluded',
+        });
+
+        expect(updated).toMatchObject({ taxKind: 'excluded', taxRateBp: 0 });
+      });
+
+      it('moves a product to taxed when the kind and the rate come together', async () => {
+        const { useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), arroz);
+
+        const updated = await useCase.update(memberSession('owner'), created.id, {
+          taxKind: 'taxed',
+          taxRateBp: 1900,
+        });
+
+        expect(updated).toMatchObject({ taxKind: 'taxed', taxRateBp: 1900 });
+      });
+
+      it('changes the rate of a taxed product between 5 % and 19 % with the rate alone', async () => {
+        const { useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), {
+          ...arroz,
+          taxKind: 'taxed',
+          taxRateBp: 500,
+        });
+
+        const updated = await useCase.update(memberSession('owner'), created.id, {
+          taxRateBp: 1900,
+        });
+
+        expect(updated).toMatchObject({ taxKind: 'taxed', taxRateBp: 1900 });
+      });
+
+      it('refuses the rate alone when it does not fit the kind the product already has', async () => {
+        const { catalog, useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), arroz);
+
+        const failure = await failureOf(
+          useCase.update(memberSession('owner'), created.id, { taxRateBp: 1900 }),
+        );
+
+        expect(failure.errors).toEqual([mismatch('/taxRateBp')]);
+        expect(catalog.products[0]).toMatchObject({ taxKind: 'exempt', taxRateBp: 0 });
+      });
+
+      it('refuses the kind alone when it does not fit the rate the product already has', async () => {
+        const { catalog, useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), {
+          ...arroz,
+          taxKind: 'taxed',
+          taxRateBp: 1900,
+        });
+
+        const failure = await failureOf(
+          useCase.update(memberSession('owner'), created.id, { taxKind: 'exempt' }),
+        );
+
+        expect(failure.errors).toEqual([mismatch('/taxKind')]);
+        expect(catalog.products[0]).toMatchObject({ taxKind: 'taxed', taxRateBp: 1900 });
+      });
+
+      it('does not judge the pair that is stored when the change does not touch the tax', async () => {
+        const { catalog, useCase } = setup();
+        const created = await useCase.create(memberSession('owner'), arroz);
+        // La base no deja guardar un par que no cabe; si alguna vez hubiera uno, cambiar el nombre no es lo que lo arregla ni lo que lo impide.
+        catalog.products[0] = { ...catalog.products[0]!, taxKind: 'taxed', taxRateBp: 0 };
+
+        const updated = await useCase.update(memberSession('owner'), created.id, { name: 'Arroz' });
+
+        expect(updated.name).toBe('Arroz');
+      });
     });
 
     describe('the unit', () => {

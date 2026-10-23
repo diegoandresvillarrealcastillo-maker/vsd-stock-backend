@@ -90,17 +90,34 @@ describe('the flags of a sale', () => {
 });
 
 describe('selling at the catalog price', () => {
-  const product = { unitPrice: 8_500, taxRateBp: 1900 };
+  const product = { unitPrice: 8_500, taxRateBp: 1900, taxKind: 'taxed' } as const;
 
-  it('is true when the price and the tax rate are the ones of the product today', () => {
-    expect(soldAtCatalogPrice({ unitPrice: 8_500, taxRateBp: 1900 }, product)).toBe(true);
+  it('is true when the price, the tax rate and the tax kind are the ones of the product today', () => {
+    expect(
+      soldAtCatalogPrice({ unitPrice: 8_500, taxRateBp: 1900, taxKind: 'taxed' }, product),
+    ).toBe(true);
   });
 
   it('is false when the price changed', () => {
-    expect(soldAtCatalogPrice({ unitPrice: 8_000, taxRateBp: 1900 }, product)).toBe(false);
+    expect(
+      soldAtCatalogPrice({ unitPrice: 8_000, taxRateBp: 1900, taxKind: 'taxed' }, product),
+    ).toBe(false);
   });
 
   it('is false when the tax rate changed', () => {
-    expect(soldAtCatalogPrice({ unitPrice: 8_500, taxRateBp: 500 }, product)).toBe(false);
+    expect(
+      soldAtCatalogPrice({ unitPrice: 8_500, taxRateBp: 500, taxKind: 'taxed' }, product),
+    ).toBe(false);
+  });
+
+  it('is false when only the tax kind changed: the device sold with an older classification (ADR 0034)', () => {
+    const exempt = { unitPrice: 3_000, taxRateBp: 0, taxKind: 'exempt' } as const;
+
+    expect(soldAtCatalogPrice({ unitPrice: 3_000, taxRateBp: 0, taxKind: 'exempt' }, exempt)).toBe(
+      true,
+    );
+    expect(
+      soldAtCatalogPrice({ unitPrice: 3_000, taxRateBp: 0, taxKind: 'excluded' }, exempt),
+    ).toBe(false);
   });
 });

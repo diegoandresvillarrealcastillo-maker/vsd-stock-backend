@@ -42,6 +42,7 @@ const product = (id: string, overrides: Partial<ProductRecord>): ProductRecord =
   unit: 'unit',
   unitPrice: 1000,
   taxRateBp: 0,
+  taxKind: 'exempt',
   active: true,
   categoryId: null,
   minStockMilli: null,
@@ -53,8 +54,14 @@ const product = (id: string, overrides: Partial<ProductRecord>): ProductRecord =
 const setup = async ({ closedAt, revokedAt }: { closedAt?: Date; revokedAt?: Date } = {}) => {
   const catalog = new FakeCatalog();
   catalog.products.push(
-    product(COLA, { name: 'Gaseosa', unitPrice: 3500, taxRateBp: 1900 }),
-    product(BREAD, { name: 'Pan', unit: 'kilogram', unitPrice: 4000, taxRateBp: 0 }),
+    product(COLA, { name: 'Gaseosa', unitPrice: 3500, taxRateBp: 1900, taxKind: 'taxed' }),
+    product(BREAD, {
+      name: 'Pan',
+      unit: 'kilogram',
+      unitPrice: 4000,
+      taxRateBp: 0,
+      taxKind: 'exempt',
+    }),
     product(OLD, { name: 'Viejo', active: false, unitPrice: 1000 }),
   );
   const devices = new FakeDevices();
@@ -87,8 +94,22 @@ const body = (change: Record<string, unknown> = {}) => ({
   folio: 'AA-000142',
   total: 13_000,
   lines: [
-    { productId: COLA, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-    { productId: BREAD, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+    {
+      productId: COLA,
+      quantityMilli: 2_000,
+      unitPrice: 3_500,
+      discount: 0,
+      taxRateBp: 1900,
+      taxKind: 'taxed',
+    },
+    {
+      productId: BREAD,
+      quantityMilli: 1_500,
+      unitPrice: 4_000,
+      discount: 0,
+      taxRateBp: 0,
+      taxKind: 'exempt',
+    },
   ],
   payments: [
     { method: 'cash', amount: 10_000 },
@@ -128,8 +149,22 @@ describe('SalesUseCase', () => {
         needsAdjustment: false,
         flags: [],
         lines: [
-          { productId: COLA, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-          { productId: BREAD, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+          {
+            productId: COLA,
+            quantityMilli: 2_000,
+            unitPrice: 3_500,
+            discount: 0,
+            taxRateBp: 1900,
+            taxKind: 'taxed',
+          },
+          {
+            productId: BREAD,
+            quantityMilli: 1_500,
+            unitPrice: 4_000,
+            discount: 0,
+            taxRateBp: 0,
+            taxKind: 'exempt',
+          },
         ],
         payments: [
           { method: 'cash', amount: 10_000, reference: null },
@@ -199,6 +234,7 @@ describe('SalesUseCase', () => {
         unitPrice: 3_000,
         discount: 0,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       };
 
       const { sale } = await useCase.create(
@@ -217,7 +253,7 @@ describe('SalesUseCase', () => {
 
     it('says a different tax rate is not the one of the catalog either', async () => {
       const { useCase } = await setup();
-      const line = { ...body().lines[0], taxRateBp: 500 };
+      const line = { ...body().lines[0], taxRateBp: 500, taxKind: 'taxed' };
 
       const { sale } = await useCase.create(
         memberSession('cashier'),
@@ -226,6 +262,43 @@ describe('SalesUseCase', () => {
 
       expect(sale.flags).toEqual(['price-differs']);
       expect(sale.lines[0]?.taxRateBp).toBe(500);
+    });
+
+    it('says a different tax kind is not the one of the catalog either, and keeps the one the device sold with (ADR 0034)', async () => {
+      const { useCase } = await setup();
+      // El catalogo de hoy dice que el pan es exento; el dispositivo lo vendio como excluido.
+      const line = { ...body().lines[1], taxKind: 'excluded' };
+
+      const { sale } = await useCase.create(
+        memberSession('cashier'),
+        body({ lines: [body().lines[0], line] }),
+      );
+
+      expect(sale.flags).toEqual(['price-differs']);
+      expect(sale.lines.map((each) => each.taxKind)).toEqual(['taxed', 'excluded']);
+    });
+
+    it('does not mark a sale whose kind and rate are the ones of the catalog', async () => {
+      const { useCase } = await setup();
+
+      const { sale } = await useCase.create(memberSession('cashier'), body());
+
+      expect(sale.flags).toEqual([]);
+      expect(sale.lines.map((each) => each.taxKind)).toEqual(['taxed', 'exempt']);
+    });
+
+    it('refuses a line sold as taxed at 0 %, which no classification explains', async () => {
+      const { useCase } = await setup();
+      const line = { ...body().lines[1], taxKind: 'taxed' };
+
+      const attempt = useCase.create(
+        memberSession('cashier'),
+        body({ lines: [body().lines[0], line] }),
+      );
+
+      await expect(attempt).rejects.toMatchObject({
+        errors: [{ pointer: '/lines/1/taxKind', code: 'tax-kind-rate-mismatch' }],
+      });
     });
 
     it('keeps the total it calculated when the device charged another, and says so', async () => {
@@ -282,6 +355,7 @@ describe('SalesUseCase', () => {
         unitPrice: 1_000,
         discount: 0,
         taxRateBp: 0,
+        taxKind: 'exempt',
       };
 
       const { sale } = await useCase.create(

@@ -78,8 +78,8 @@ export async function seedProduct(
 ): Promise<string> {
   productCounter += 1;
   await admin.query(
-    `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
-     VALUES ($1, $2, $3, $4, $5, 1000, 1900)`,
+    `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind)
+     VALUES ($1, $2, $3, $4, $5, 1000, 1900, 'taxed')`,
     [
       productId,
       businessId,

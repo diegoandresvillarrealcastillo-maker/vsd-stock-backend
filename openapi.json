@@ -3003,6 +3003,15 @@
               1900
             ]
           },
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ],
+            "description": "El tipo tributario (ADR 0034): `taxed` (gravado, lleva 5 % o 19 %), `exempt` (exento) o `excluded` (excluido); los dos últimos llevan 0 %. Una combinación imposible se rechaza con `tax-kind-rate-mismatch`."
+          },
           "active": {
             "type": "boolean",
             "description": "`false` si está archivado."
@@ -3034,6 +3043,7 @@
           "unit",
           "unitPrice",
           "taxRateBp",
+          "taxKind",
           "active",
           "categoryId",
           "minStockMilli",
@@ -3110,6 +3120,16 @@
             "example": 0,
             "description": "La tarifa de IVA en puntos básicos: 0 (0 %), 500 (5 %) o 1900 (19 %)."
           },
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ],
+            "example": "exempt",
+            "description": "El tipo tributario (ADR 0034): `taxed` (gravado, lleva 5 % o 19 %), `exempt` (exento) o `excluded` (excluido); los dos últimos llevan 0 %. Una combinación imposible se rechaza con `tax-kind-rate-mismatch`."
+          },
           "categoryId": {
             "type": "string",
             "format": "uuid",
@@ -3128,7 +3148,8 @@
           "sku",
           "unit",
           "unitPrice",
-          "taxRateBp"
+          "taxRateBp",
+          "taxKind"
         ]
       },
       "UpdateProductRequestDto": {
@@ -3172,6 +3193,15 @@
               500,
               1900
             ]
+          },
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ],
+            "description": "El tipo tributario (ADR 0034): `taxed` (gravado, lleva 5 % o 19 %), `exempt` (exento) o `excluded` (excluido); los dos últimos llevan 0 %. Una combinación imposible se rechaza con `tax-kind-rate-mismatch`. Se compara con la tarifa que el producto ya tiene si solo mandas uno de los dos."
           },
           "categoryId": {
             "type": "string",
@@ -4142,6 +4172,16 @@
             ],
             "example": 1900,
             "description": "Tarifa de IVA con que se vendió, en puntos básicos."
+          },
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ],
+            "example": "taxed",
+            "description": "El tipo tributario con que se vendió (ADR 0034): `taxed` lleva 5 % o 19 %; `exempt` y `excluded` llevan 0 %. Es obligatorio: una venta sin él no se podría clasificar después. Si no es el del catálogo de hoy, la venta se acepta con el que trae y se marca `price-differs`."
           }
         },
         "required": [
@@ -4149,7 +4189,8 @@
           "quantityMilli",
           "unitPrice",
           "discount",
-          "taxRateBp"
+          "taxRateBp",
+          "taxKind"
         ]
       },
       "PaymentRequestDto": {
@@ -4328,6 +4369,14 @@
               500,
               1900
             ]
+          },
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ]
           }
         },
         "required": [
@@ -4335,7 +4384,8 @@
           "quantityMilli",
           "unitPrice",
           "discount",
-          "taxRateBp"
+          "taxRateBp",
+          "taxKind"
         ]
       },
       "PaymentDto": {

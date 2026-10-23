@@ -104,13 +104,21 @@ describe('sales against PostgreSQL (C3-03)', () => {
       folio: `ZZ-${String(serial).padStart(6, '0')}`,
       total: 3_000,
       lines: [
-        { productId: cola, quantityMilli: 2_000, unitPrice: 1_000, discount: 0, taxRateBp: 1900 },
+        {
+          productId: cola,
+          quantityMilli: 2_000,
+          unitPrice: 1_000,
+          discount: 0,
+          taxRateBp: 1900,
+          taxKind: 'taxed',
+        },
         {
           productId: bread,
           quantityMilli: 1_500,
           unitPrice: 1_000,
           discount: 500,
           taxRateBp: 1900,
+          taxKind: 'taxed',
         },
       ],
       payments: [
@@ -187,6 +195,7 @@ describe('sales against PostgreSQL (C3-03)', () => {
         unitPrice: 100,
         discount: 0,
         taxRateBp: 0,
+        taxKind: 'exempt',
       }));
       const payments: PaymentRecord[] = [
         { method: 'transfer', amount: 100, reference: 'primero' },
@@ -210,18 +219,32 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const { sale } = await sell({
         total: 1_500,
         lines: [
-          { productId: cola, quantityMilli: 1_000, unitPrice: 1_500, discount: 0, taxRateBp: 0 },
+          {
+            productId: cola,
+            quantityMilli: 1_000,
+            unitPrice: 1_500,
+            discount: 0,
+            taxRateBp: 0,
+            taxKind: 'exempt',
+          },
         ],
         payments: [{ method: 'cash', amount: 1_500 }],
       });
 
       expect(sale.lines).toEqual([
-        { productId: cola, quantityMilli: 1_000, unitPrice: 1_500, discount: 0, taxRateBp: 0 },
+        {
+          productId: cola,
+          quantityMilli: 1_000,
+          unitPrice: 1_500,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
       ]);
       expect(sale.flags).toEqual(['price-differs']);
       expect(
-        await select(admin, 'SELECT unit_price::int AS p, tax_rate_bp FROM sale_line'),
-      ).toEqual([{ p: 1_500, tax_rate_bp: 0 }]);
+        await select(admin, 'SELECT unit_price::int AS p, tax_rate_bp, tax_kind FROM sale_line'),
+      ).toEqual([{ p: 1_500, tax_rate_bp: 0, tax_kind: 'exempt' }]);
     });
 
     it('stores the flags and reads them back in order', async () => {
@@ -243,6 +266,7 @@ describe('sales against PostgreSQL (C3-03)', () => {
             unitPrice: 1_000,
             discount: 1_000,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         ],
         payments: [],
@@ -262,7 +286,14 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const { sale } = await sell({
         total: 2_000,
         lines: [
-          { productId: lone, quantityMilli: 2_000, unitPrice: 1_000, discount: 0, taxRateBp: 1900 },
+          {
+            productId: lone,
+            quantityMilli: 2_000,
+            unitPrice: 1_000,
+            discount: 0,
+            taxRateBp: 1900,
+            taxKind: 'taxed',
+          },
         ],
         payments: [{ method: 'cash', amount: 2_000 }],
       });
@@ -278,7 +309,14 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const { sale } = await sell({
         total: 2_000,
         lines: [
-          { productId: lone, quantityMilli: 2_000, unitPrice: 1_000, discount: 0, taxRateBp: 1900 },
+          {
+            productId: lone,
+            quantityMilli: 2_000,
+            unitPrice: 1_000,
+            discount: 0,
+            taxRateBp: 1900,
+            taxKind: 'taxed',
+          },
         ],
         payments: [{ method: 'cash', amount: 2_000 }],
       });
@@ -293,7 +331,14 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const oneUnit = {
         total: 1_000,
         lines: [
-          { productId: last, quantityMilli: 1_000, unitPrice: 1_000, discount: 0, taxRateBp: 1900 },
+          {
+            productId: last,
+            quantityMilli: 1_000,
+            unitPrice: 1_000,
+            discount: 0,
+            taxRateBp: 1900,
+            taxKind: 'taxed',
+          },
         ],
         payments: [{ method: 'cash', amount: 1_000 }],
       };
@@ -371,6 +416,7 @@ describe('sales against PostgreSQL (C3-03)', () => {
                 unitPrice: 1_000,
                 discount: 0,
                 taxRateBp: 0,
+                taxKind: 'exempt',
               },
             ],
             payments: [{ method: 'cash', amount: 1_000, reference: null }],
@@ -395,6 +441,7 @@ describe('sales against PostgreSQL (C3-03)', () => {
             unitPrice: 1,
             discount: 0,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         ],
         total: 1,
@@ -405,7 +452,14 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const fixed = {
         ...same,
         lines: [
-          { productId: cola, quantityMilli: 1_000, unitPrice: 1_000, discount: 0, taxRateBp: 1900 },
+          {
+            productId: cola,
+            quantityMilli: 1_000,
+            unitPrice: 1_000,
+            discount: 0,
+            taxRateBp: 1900,
+            taxKind: 'taxed',
+          },
         ],
         total: 1_000,
         payments: [{ method: 'cash', amount: 1_000 }],
@@ -471,6 +525,7 @@ describe('sales against PostgreSQL (C3-03)', () => {
             unitPrice: 1_000,
             discount: 0,
             taxRateBp: 1900,
+            taxKind: 'taxed',
           },
         ],
         payments: [{ method: 'cash', amount: 1_000 }],
@@ -567,8 +622,8 @@ describe('sales against PostgreSQL (C3-03)', () => {
       // Escritas al reves: la fila fisica de la posicion 2 va primero.
       for (const position of [2, 0, 1]) {
         await admin.query(
-          `INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, position)
-           VALUES ($1, $2, $3, $4, 1, 0, $5)`,
+          `INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, tax_kind, position)
+           VALUES ($1, $2, $3, $4, 1, 0, 'exempt', $5)`,
           [BUSINESS_A, saleId, cola, 1000 * (position + 1), position],
         );
       }
@@ -663,8 +718,8 @@ describe('sales against PostgreSQL (C3-03)', () => {
       const line = async (position: number) => {
         const { saleId } = await insertLine(position)();
         await admin.query(
-          `INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, position)
-           VALUES ($1, $2, $3, 1000, 1, 0, $4)`,
+          `INSERT INTO sale_line (id_negocio, sale_id, product_id, quantity_milli, unit_price, tax_rate_bp, tax_kind, position)
+           VALUES ($1, $2, $3, 1000, 1, 0, 'exempt', $4)`,
           [BUSINESS_A, saleId, cola, position],
         );
         await admin.query(

@@ -1,11 +1,60 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PESOS, Money } from './money.js';
-import { TAX_RATES_BP, splitTaxIncluded } from './tax.js';
+import { TAX_KINDS, TAX_RATES_BP, isTaxKind, splitTaxIncluded, taxKindFitsRate } from './tax.js';
 
 const split = (total: number, rateBp: number) => {
   const { base, tax } = splitTaxIncluded(Money.of(total), rateBp);
   return { base: base.amount, tax: tax.amount };
 };
+
+describe('the tax kind (ADR 0034)', () => {
+  it('knows taxed, exempt and excluded, in that order', () => {
+    expect(TAX_KINDS).toEqual(['taxed', 'exempt', 'excluded']);
+  });
+
+  it.each(TAX_KINDS)('recognises the kind %s', (kind) => {
+    expect(isTaxKind(kind)).toBe(true);
+  });
+
+  it.each(['unclassified', 'Taxed', '', 'toString', 5, null, undefined])(
+    'does not take %j for a kind',
+    (value) => {
+      expect(isTaxKind(value)).toBe(false);
+    },
+  );
+
+  it.each([
+    ['taxed', 500, true],
+    ['taxed', 1900, true],
+    ['taxed', 0, false],
+    ['exempt', 0, true],
+    ['exempt', 500, false],
+    ['exempt', 1900, false],
+    ['excluded', 0, true],
+    ['excluded', 500, false],
+    ['excluded', 1900, false],
+  ] as const)('%s at %i basis points fits: %s', (kind, rateBp, fits) => {
+    expect(taxKindFitsRate(kind, rateBp)).toBe(fits);
+  });
+
+  it('does not let «taxed» take a rate the catalogue does not have', () => {
+    expect(taxKindFitsRate('taxed', 800)).toBe(false);
+    expect(taxKindFitsRate('taxed', 10_000)).toBe(false);
+  });
+
+  it('gives every rate of the catalogue at least one kind, and 0 % exactly two', () => {
+    for (const rateBp of TAX_RATES_BP) {
+      const kinds = TAX_KINDS.filter((kind) => taxKindFitsRate(kind, rateBp));
+
+      expect(kinds.length, `${rateBp}`).toBe(rateBp === 0 ? 2 : 1);
+    }
+  });
+
+  it('does not enter the calculation: the split depends on the rate and nothing else', () => {
+    expect(splitTaxIncluded.length).toBe(2);
+    expect(split(10_000, 0)).toEqual({ base: 10_000, tax: 0 });
+  });
+});
 
 describe('splitTaxIncluded', () => {
   it('knows the three rates of the delivery', () => {

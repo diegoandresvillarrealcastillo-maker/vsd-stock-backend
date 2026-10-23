@@ -5,6 +5,7 @@ import {
   SkuTakenError,
 } from '../../../domain/model/catalog-errors.js';
 import type { NewProduct, ProductChange } from '../../../domain/model/product-input.js';
+import { isTaxKind } from '../../../domain/model/tax.js';
 import { isUnitOfMeasure } from '../../../domain/model/unit-of-measure.js';
 import type {
   CatalogRepository,
@@ -28,6 +29,7 @@ const PRODUCT_SELECT = {
   unit: true,
   unitPrice: true,
   taxRateBp: true,
+  taxKind: true,
   active: true,
   categoryId: true,
   minStockMilli: true,
@@ -43,6 +45,7 @@ interface ProductRow {
   readonly unit: string;
   readonly unitPrice: bigint;
   readonly taxRateBp: number;
+  readonly taxKind: string;
   readonly active: boolean;
   readonly categoryId: string | null;
   readonly minStockMilli: bigint | null;
@@ -55,6 +58,10 @@ function productOf(row: ProductRow): ProductRecord {
     // La base lo impide con una restriccion; si llegara aqui, mejor caer que dar una unidad que no existe.
     throw new Error(`The product ${row.id} has a unit that does not exist`);
   }
+  if (!isTaxKind(row.taxKind)) {
+    // Igual que la unidad: la base lo impide con una restriccion; mejor caer que dar un tipo que no existe.
+    throw new Error(`The product ${row.id} has a tax kind that does not exist`);
+  }
   return {
     id: row.id,
     name: row.name,
@@ -64,6 +71,7 @@ function productOf(row: ProductRow): ProductRecord {
     // La base los limita a un billon (ADR 0014): un `number` los guarda sin perder un peso.
     unitPrice: Number(row.unitPrice),
     taxRateBp: row.taxRateBp,
+    taxKind: row.taxKind,
     active: row.active,
     categoryId: row.categoryId,
     minStockMilli: row.minStockMilli === null ? null : Number(row.minStockMilli),
@@ -247,6 +255,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
           unit: product.unit,
           unitPrice: BigInt(product.unitPrice),
           taxRateBp: product.taxRateBp,
+          taxKind: product.taxKind,
           categoryId: product.categoryId,
           minStockMilli: product.minStockMilli === null ? null : BigInt(product.minStockMilli),
         },
@@ -269,6 +278,7 @@ export class PrismaCatalogRepository implements CatalogRepository {
           ...(change.unit === undefined ? {} : { unit: change.unit }),
           ...(change.unitPrice === undefined ? {} : { unitPrice: BigInt(change.unitPrice) }),
           ...(change.taxRateBp === undefined ? {} : { taxRateBp: change.taxRateBp }),
+          ...(change.taxKind === undefined ? {} : { taxKind: change.taxKind }),
           ...(change.categoryId === undefined ? {} : { categoryId: change.categoryId }),
           ...(change.minStockMilli === undefined
             ? {}

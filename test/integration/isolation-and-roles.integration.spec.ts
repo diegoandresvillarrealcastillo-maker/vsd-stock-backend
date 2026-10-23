@@ -313,6 +313,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
       })
     ).id;
 
@@ -367,7 +368,16 @@ describe('isolation between businesses and the matrix of roles, through the whol
       shiftId: await makeShiftOf(team, role),
       folio: `ZZ-${String(++counter).padStart(6, '0')}`,
       total: 3200,
-      lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+      lines: [
+        {
+          productId,
+          quantityMilli: 1000,
+          unitPrice: 3200,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
+      ],
       payments: [{ method: 'cash', amount: 3200 }],
       deviceTime: new Date().toISOString(),
       clockOffsetMs: 0,
@@ -505,6 +515,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
             unit: 'unit',
             unitPrice: 3200,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         }),
       outsider: { kind: 'own-business' },
@@ -776,7 +787,16 @@ describe('isolation between businesses and the matrix of roles, through the whol
             shiftId: await makeShiftOf(team, role),
             folio: `ZZ-${String(++counter).padStart(6, '0')}`,
             total: 3200,
-            lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+            lines: [
+              {
+                productId,
+                quantityMilli: 1000,
+                unitPrice: 3200,
+                discount: 0,
+                taxRateBp: 0,
+                taxKind: 'exempt',
+              },
+            ],
             payments: [{ method: 'cash', amount: 3200 }],
             deviceTime: new Date().toISOString(),
             clockOffsetMs: 0,
@@ -1158,6 +1178,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
         categoryId: foreign,
       });
       const changed = await call('PATCH', `/v1/products/${mine}`, a.tokens.owner, {

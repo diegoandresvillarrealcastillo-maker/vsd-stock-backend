@@ -1,8 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { TAX_KINDS, type TaxKind } from '../../../domain/model/tax.js';
 import type { UnitOfMeasure } from '../../../domain/model/unit-of-measure.js';
 import type { CategoryView, ProductView } from '../../../domain/ports/in/catalog.js';
 
 const UNITS = ['unit', 'kilogram', 'gram', 'pound', 'liter', 'milliliter'] as const;
+
+const TAX_KIND_DESCRIPTION =
+  'El tipo tributario (ADR 0034): `taxed` (gravado, lleva 5 % o 19 %), `exempt` (exento) o `excluded` (excluido); los dos últimos llevan 0 %. Una combinación imposible se rechaza con `tax-kind-rate-mismatch`.';
 
 /** Lo que se manda para crear o renombrar una categoria. */
 export class CategoryRequestDto {
@@ -88,6 +92,14 @@ export class CreateProductRequestDto {
   })
   readonly taxRateBp!: number;
 
+  @ApiProperty({
+    type: String,
+    enum: [...TAX_KINDS],
+    example: 'exempt',
+    description: TAX_KIND_DESCRIPTION,
+  })
+  readonly taxKind!: TaxKind;
+
   @ApiProperty({ type: String, format: 'uuid', required: false, nullable: true })
   readonly categoryId?: string | null;
 
@@ -141,6 +153,14 @@ export class UpdateProductRequestDto {
 
   @ApiProperty({
     type: String,
+    enum: [...TAX_KINDS],
+    required: false,
+    description: `${TAX_KIND_DESCRIPTION} Se compara con la tarifa que el producto ya tiene si solo mandas uno de los dos.`,
+  })
+  readonly taxKind?: TaxKind;
+
+  @ApiProperty({
+    type: String,
     format: 'uuid',
     required: false,
     nullable: true,
@@ -190,6 +210,9 @@ export class ProductDto implements ProductView {
 
   @ApiProperty({ type: 'integer', enum: [0, 500, 1900] })
   readonly taxRateBp!: number;
+
+  @ApiProperty({ type: String, enum: [...TAX_KINDS], description: TAX_KIND_DESCRIPTION })
+  readonly taxKind!: TaxKind;
 
   @ApiProperty({ type: Boolean, description: '`false` si está archivado.' })
   readonly active!: boolean;

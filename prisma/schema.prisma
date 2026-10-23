@@ -152,6 +152,8 @@ model Product {
   unit          String
   unitPrice     BigInt   @map("unit_price")
   taxRateBp     Int      @map("tax_rate_bp")
+  /// Gravado, exento o excluido (ADR 0034). Sin valor por defecto: quien escribe tiene que decirlo.
+  taxKind       String   @map("tax_kind")
   active        Boolean  @default(true)
   categoryId    String?  @map("category_id") @db.Uuid
   minStockMilli BigInt?  @map("min_stock_milli")
@@ -392,6 +394,8 @@ model SaleLine {
   quantityMilli BigInt @map("quantity_milli")
   unitPrice     BigInt @map("unit_price")
   taxRateBp     Int    @map("tax_rate_bp")
+  /// El tipo tributario con que se vendio (ADR 0034): se copia del producto y ya no cambia.
+  taxKind       String @map("tax_kind")
   discount      BigInt @default(0)
   /// El orden en que el dispositivo la vendio (desde cero).
   position      Int    @default(0)

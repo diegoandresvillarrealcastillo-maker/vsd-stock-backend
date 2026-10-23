@@ -157,13 +157,24 @@ después (ADR 0014).
 El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
 sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
 siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Un contador revisó la
-mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones pendientes: distinguir lo exento de lo excluido, dar
+mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones: la primera, distinguir lo exento de lo excluido, ya está resuelta (ver _Tipo tributario_, ADR 0034); quedan dar
 folio propio a las anulaciones, un reporte mensual por tarifa y los impuestos que no son IVA. También advirtió que el negocio, si es
 responsable de IVA, debe expedir factura electrónica o documento equivalente por su cuenta.
 
 **Código:** `Tax`
 
 **Estado:** Decidido (ADR 0014)
+
+### Tipo tributario
+
+Si un producto es gravado, exento o excluido de IVA, y con cuál se vendió cada línea. Gravado lleva 5 % o 19 %; exento y excluido llevan 0 %. Para el
+cálculo da igual, pero para declarar van en renglones distintos. Se guarda en el producto y se copia a la línea de venta, como el precio y la
+tarifa, para que corregir el producto mañana no cambie las ventas de ayer. Es obligatorio y la base rechaza una combinación que no cabe. El
+sistema no sabe qué producto es exento y cuál excluido: guarda lo que el negocio le dice (ADR 0034).
+
+**Código:** `TaxKind`
+
+**Estado:** Decidido (ADR 0034)
 
 ### Código de barras
 

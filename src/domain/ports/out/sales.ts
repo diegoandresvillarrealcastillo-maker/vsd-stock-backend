@@ -1,6 +1,7 @@
 import type { TimeFlag } from '../../model/operation-time.js';
 import type { SaleFlag } from '../../model/sale-flags.js';
 import type { PaymentMethod } from '../../model/sale-input.js';
+import type { TaxKind } from '../../model/tax.js';
 
 /** Una linea tal como se vendio: el precio y la tarifa quedan los que el cliente vio (ADR 0027). */
 export interface SaleLineRecord {
@@ -13,6 +14,8 @@ export interface SaleLineRecord {
   readonly discount: number;
   /** Puntos basicos: 0, 500 o 1900. */
   readonly taxRateBp: number;
+  /** Con que tipo tributario se vendio: no cambia si el producto se reclasifica despues (ADR 0034). */
+  readonly taxKind: TaxKind;
 }
 
 export interface PaymentRecord {

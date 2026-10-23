@@ -2,6 +2,7 @@ import type { TimeFlag } from '../../../domain/model/operation-time.js';
 import { SaleVoidedError } from '../../../domain/model/sale-errors.js';
 import type { SaleFlag } from '../../../domain/model/sale-flags.js';
 import type { PaymentMethod } from '../../../domain/model/sale-input.js';
+import type { TaxKind } from '../../../domain/model/tax.js';
 import type {
   NewSale,
   NewSaleVoid,
@@ -73,6 +74,7 @@ export class PrismaSaleRepository implements SaleRepository {
         quantityMilli: BigInt(line.quantityMilli),
         unitPrice: BigInt(line.unitPrice),
         taxRateBp: line.taxRateBp,
+        taxKind: line.taxKind,
         discount: BigInt(line.discount),
         position,
       })),
@@ -261,6 +263,8 @@ export class PrismaSaleRepository implements SaleRepository {
         unitPrice: Number(line.unitPrice),
         discount: Number(line.discount),
         taxRateBp: line.taxRateBp,
+        // La base solo deja guardar los tres tipos (`sale_line_tax_kind_fits_rate`, ADR 0034).
+        taxKind: line.taxKind as TaxKind,
       })),
       payments: payments.map((payment) => ({
         method: payment.method as PaymentMethod,

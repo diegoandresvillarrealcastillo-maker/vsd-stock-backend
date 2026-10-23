@@ -42,8 +42,22 @@ const valid = {
   folio: 'AA-000142',
   total: 13_000,
   lines: [
-    { productId: COLA, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-    { productId: BREAD, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+    {
+      productId: COLA,
+      quantityMilli: 2_000,
+      unitPrice: 3_500,
+      discount: 0,
+      taxRateBp: 1900,
+      taxKind: 'taxed',
+    },
+    {
+      productId: BREAD,
+      quantityMilli: 1_500,
+      unitPrice: 4_000,
+      discount: 0,
+      taxRateBp: 0,
+      taxKind: 'exempt',
+    },
   ],
   payments: [
     { method: 'cash', amount: 10_000 },
@@ -64,8 +78,22 @@ describe('reading a sale', () => {
       folioDevice: 'AA',
       claimedTotal: 13_000,
       lines: [
-        { productId: COLA, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-        { productId: BREAD, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+        {
+          productId: COLA,
+          quantityMilli: 2_000,
+          unitPrice: 3_500,
+          discount: 0,
+          taxRateBp: 1900,
+          taxKind: 'taxed',
+        },
+        {
+          productId: BREAD,
+          quantityMilli: 1_500,
+          unitPrice: 4_000,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
       ],
       payments: [
         { method: 'cash', amount: 10_000, reference: null },
@@ -117,13 +145,21 @@ describe('reading a sale', () => {
       ...valid,
       total: 6_000,
       lines: [
-        { productId: COLA, quantityMilli: 1_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
+        {
+          productId: COLA,
+          quantityMilli: 1_000,
+          unitPrice: 3_500,
+          discount: 0,
+          taxRateBp: 1900,
+          taxKind: 'taxed',
+        },
         {
           productId: COLA,
           quantityMilli: 1_000,
           unitPrice: 3_500,
           discount: 1_000,
           taxRateBp: 1900,
+          taxKind: 'taxed',
         },
       ],
       payments: [{ method: 'cash', amount: 6_000 }],
@@ -174,6 +210,7 @@ describe('reading a sale', () => {
       'unitPrice',
       'discount',
       'taxRateBp',
+      'taxKind',
     ]);
     expect(PAYMENT_FIELDS).toEqual(['method', 'amount', 'reference']);
   });
@@ -206,6 +243,7 @@ describe('the lines of a sale', () => {
       unitPrice: 100,
       discount: 0,
       taxRateBp: 0,
+      taxKind: 'exempt',
     }));
     expect(sale({ ...valid, total: 20_000, lines: many }).lines).toHaveLength(MAX_SALE_LINES);
     expect(codes(errorsOf({ ...valid, lines: [...many, many[0]] }))).toEqual(['/lines:too-many']);
@@ -281,16 +319,91 @@ describe('the lines of a sale', () => {
   });
 
   it('knows only the tax rates of the catalog', () => {
-    const line = (taxRateBp: unknown) => ({ ...valid.lines[0], taxRateBp });
+    const line = (taxRateBp: unknown, taxKind: unknown) => ({
+      ...valid.lines[0],
+      taxRateBp,
+      taxKind,
+    });
 
-    expect(codes(errorsOf({ ...valid, lines: [line(1_000), valid.lines[1]] }))).toEqual([
+    expect(codes(errorsOf({ ...valid, lines: [line(1_000, 'taxed'), valid.lines[1]] }))).toEqual([
       '/lines/0/taxRateBp:invalid-value',
     ]);
-    for (const rate of [0, 500, 1900]) {
-      expect(sale({ ...valid, lines: [line(rate), valid.lines[1]] }).lines[0]?.taxRateBp).toBe(
-        rate,
-      );
+    for (const [rate, kind] of [
+      [0, 'exempt'],
+      [500, 'taxed'],
+      [1900, 'taxed'],
+    ] as const) {
+      expect(
+        sale({ ...valid, lines: [line(rate, kind), valid.lines[1]] }).lines[0]?.taxRateBp,
+      ).toBe(rate);
     }
+  });
+
+  it.each(['taxed', 'exempt', 'excluded'] as const)(
+    'keeps the tax kind %s of each line exactly as the device sold it',
+    (taxKind) => {
+      const rateBp = taxKind === 'taxed' ? 1900 : 0;
+      const read = sale({
+        ...valid,
+        lines: [{ ...valid.lines[0], taxRateBp: rateBp, taxKind }, valid.lines[1]],
+      });
+
+      expect(read.lines.map((line) => line.taxKind)).toEqual([taxKind, 'exempt']);
+    },
+  );
+
+  it('wants the tax kind of every line: a sale recorded without it cannot be classified later (ADR 0034)', () => {
+    const without = { ...valid.lines[0], taxKind: undefined };
+
+    expect(codes(errorsOf({ ...valid, lines: [without, valid.lines[1]] }))).toEqual([
+      '/lines/0/taxKind:required',
+    ]);
+  });
+
+  it('refuses a tax kind the catalog does not have, with the list', () => {
+    const wrong = { ...valid.lines[0], taxKind: 'gravado' };
+
+    expect(errorsOf({ ...valid, lines: [wrong, valid.lines[1]] })).toEqual([
+      {
+        pointer: '/lines/0/taxKind',
+        code: 'invalid-value',
+        detail: 'El tipo tributario debe ser uno de: taxed, exempt, excluded.',
+      },
+    ]);
+  });
+
+  it.each([
+    ['taxed', 0],
+    ['exempt', 1900],
+    ['exempt', 500],
+    ['excluded', 1900],
+    ['excluded', 500],
+  ] as const)(
+    'refuses the line sold as %s at %i basis points, in the field of the kind',
+    (taxKind, taxRateBp) => {
+      const line = { ...valid.lines[0], taxKind, taxRateBp };
+
+      expect(errorsOf({ ...valid, lines: [valid.lines[1], line] })).toEqual([
+        {
+          pointer: '/lines/1/taxKind',
+          code: 'tax-kind-rate-mismatch',
+          detail:
+            'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.',
+        },
+      ]);
+    },
+  );
+
+  it('does not add the mismatch to a rate or a kind that were already refused', () => {
+    const badRate = { ...valid.lines[0], taxRateBp: 1_000, taxKind: 'exempt' };
+    const badKind = { ...valid.lines[0], taxRateBp: 1_900, taxKind: 'gravado' };
+
+    expect(codes(errorsOf({ ...valid, lines: [badRate, valid.lines[1]] }))).toEqual([
+      '/lines/0/taxRateBp:invalid-value',
+    ]);
+    expect(codes(errorsOf({ ...valid, lines: [badKind, valid.lines[1]] }))).toEqual([
+      '/lines/0/taxKind:invalid-value',
+    ]);
   });
 
   it('says only what is wrong with a line, not what follows from it', () => {
@@ -306,6 +419,15 @@ describe('the lines of a sale', () => {
     expect(
       codes(errorsOf({ ...valid, lines: [broken({ taxRateBp: undefined }), valid.lines[1]] })),
     ).toEqual(['/lines/0/taxRateBp:required']);
+    // Una rebaja que pasa del valor de la linea se dice sola: mientras la linea no cuadre no se juzga si el tipo cabe con la tarifa.
+    expect(
+      codes(
+        errorsOf({
+          ...valid,
+          lines: [broken({ discount: 7_001, taxKind: 'taxed', taxRateBp: 0 }), valid.lines[1]],
+        }),
+      ),
+    ).toEqual(['/lines/0/discount:discount-too-large']);
     // Una linea mala no hace que el total de las demas parezca demasiado grande.
     const huge = { ...valid.lines[0], unitPrice: MAX_PESOS, quantityMilli: 1_000 };
     expect(
@@ -420,6 +542,10 @@ describe('the fingerprint of a sale', () => {
     ['the price of a line', { lines: [{ ...valid.lines[0], unitPrice: 3_400 }, valid.lines[1]] }],
     ['the discount of a line', { lines: [{ ...valid.lines[0], discount: 100 }, valid.lines[1]] }],
     ['the tax rate of a line', { lines: [{ ...valid.lines[0], taxRateBp: 500 }, valid.lines[1]] }],
+    [
+      'the tax kind of a line',
+      { lines: [valid.lines[0], { ...valid.lines[1], taxKind: 'excluded' }] },
+    ],
     ['the product of a line', { lines: [{ ...valid.lines[0], productId: BREAD }, valid.lines[1]] }],
     ['a payment method', { payments: [{ method: 'transfer', amount: 10_000 }, valid.payments[1]] }],
     ['a payment amount', { payments: [{ method: 'cash', amount: 9_000 }, valid.payments[1]] }],
