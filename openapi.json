@@ -2374,6 +2374,56 @@
         ]
       }
     },
+    "/v1/reports/monthly": {
+      "get": {
+        "description": "Lo que el contador pidió (ADR 0032): las ventas del mes por tarifa y tipo tributario (gravado al 19 %, gravado al 5 %, exento y excluido, siempre los cuatro renglones), las ventas anuladas en el mes en renglón aparte —no se restan— y lo cobrado por medio de pago. El IVA se saca venta por venta, como en cada recibo (ADR 0014), y no del total del mes. Una venta es del mes en que ocurrió (su hora efectiva, ADR 0016); una anulación es del mes en que se hizo. Los meses empiezan y terminan a medianoche de Bogotá. Es de la gerencia (`report:sales`) y necesita conexión: un cajero recibe 403. No es la declaración de impuestos ni reemplaza la factura electrónica.",
+        "operationId": "ReportsController_monthly",
+        "parameters": [
+          {
+            "name": "month",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^2[0-9]{3}-(0[1-9]|1[0-2])$",
+              "example": "2026-10"
+            },
+            "description": "El mes, año-mes (`AAAA-MM`)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlyReportDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Cualquier error. El cuerpo es un `application/problem+json` (RFC 9457): el cliente se guía por `code` y por el estado HTTP, no por el texto.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El reporte mensual",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/v1/sync": {
       "post": {
         "description": "De 1 a 50 operaciones (`shift-open`, `shift-close` o `sale`) con el cuerpo EXACTO de su ruta individual. Se aplican una tras otra y cada una en su propia transacción, con las reglas de su ruta, así que una que falla no deshace ni detiene a las demás (ADR 0028). Responde 200 siempre que se procesó el lote, con un resultado por operación y en el mismo orden: `status` es el estado HTTP que habría contestado la ruta suelta, `replayed` dice si ya estaba aplicada, y viene `body` (lo que la ruta devuelve) o `problem` (el error de siempre). Lo que echa abajo la petición entera (sin sesión, sin negocio, un lote que no es una lista de 1 a 50) es el error de siempre.",
@@ -4843,6 +4893,151 @@
         "required": [
           "operationId",
           "reason"
+        ]
+      },
+      "ReportRowDto": {
+        "type": "object",
+        "properties": {
+          "taxKind": {
+            "type": "string",
+            "enum": [
+              "taxed",
+              "exempt",
+              "excluded"
+            ],
+            "description": "El tipo tributario del renglón (ADR 0034). Los renglones son siempre cuatro y van en este orden: `taxed` al 19 %, `taxed` al 5 %, `exempt` y `excluded`."
+          },
+          "rateBp": {
+            "type": "integer",
+            "enum": [
+              0,
+              500,
+              1900
+            ],
+            "description": "La tarifa, en puntos básicos."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Lo vendido en este renglón, con el IVA incluido."
+          },
+          "base": {
+            "type": "integer",
+            "description": "La base gravable."
+          },
+          "tax": {
+            "type": "integer",
+            "description": "El IVA: el total menos la base."
+          }
+        },
+        "required": [
+          "taxKind",
+          "rateBp",
+          "total",
+          "base",
+          "tax"
+        ]
+      },
+      "ReportPaymentDto": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "transfer"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Pesos cobrados con este medio, sin el vuelto."
+          }
+        },
+        "required": [
+          "method",
+          "amount"
+        ]
+      },
+      "ReportSectionDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Cuántas ventas entran."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Con el IVA incluido: la suma de los renglones."
+          },
+          "base": {
+            "type": "integer"
+          },
+          "tax": {
+            "type": "integer"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportRowDto"
+            }
+          },
+          "payments": {
+            "description": "Siempre los tres medios (`cash`, `card` y `transfer`), en ese orden.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportPaymentDto"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "total",
+          "base",
+          "tax",
+          "rows",
+          "payments"
+        ]
+      },
+      "MonthlyReportDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-10"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La medianoche de Bogotá con que empieza el mes (incluida)."
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "La medianoche de Bogotá con que empieza el mes siguiente (excluida)."
+          },
+          "sales": {
+            "description": "Las ventas hechas en el mes (por su hora efectiva), aunque después se anularan.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReportSectionDto"
+              }
+            ]
+          },
+          "voids": {
+            "description": "Las ventas anuladas en el mes, con los montos de la venta que se anuló, sea cual sea el mes de la venta. Van aparte: no se restan de `sales` (ADR 0032 y 0035).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReportSectionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "month",
+          "from",
+          "to",
+          "sales",
+          "voids"
         ]
       },
       "SyncOperationDto": {

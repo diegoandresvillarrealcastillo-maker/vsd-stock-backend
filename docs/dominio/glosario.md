@@ -157,8 +157,8 @@ después (ADR 0014).
 El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
 sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
 siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Un contador revisó la
-mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones: la primera, distinguir lo exento de lo excluido, ya está resuelta (ver _Tipo tributario_, ADR 0034); quedan dar
-folio propio a las anulaciones, un reporte mensual por tarifa y los impuestos que no son IVA. También advirtió que el negocio, si es
+mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones: la primera, distinguir lo exento de lo excluido, ya está resuelta (ver _Tipo tributario_, ADR 0034), y la del reporte mensual por tarifa y tipo
+también (ver _Reporte mensual_, ADR 0035); quedan dar folio propio a las anulaciones y los impuestos que no son IVA. También advirtió que el negocio, si es
 responsable de IVA, debe expedir factura electrónica o documento equivalente por su cuenta.
 
 **Código:** `Tax`
@@ -175,6 +175,17 @@ sistema no sabe qué producto es exento y cuál excluido: guarda lo que el negoc
 **Código:** `TaxKind`
 
 **Estado:** Decidido (ADR 0034)
+
+### Reporte mensual
+
+Lo que el contador pidió para declarar (ADR 0032): las ventas de un mes por tarifa y tipo tributario (gravado al 19 %, gravado al 5 %,
+exento y excluido, siempre los cuatro renglones), las ventas anuladas en ese mes en un bloque aparte y lo cobrado por medio de pago. El IVA se
+saca venta por venta, como en cada recibo, y no del total del mes; una venta es del mes en que ocurrió y una anulación del mes en que se hizo,
+con los meses cortados a medianoche de Bogotá. No es la declaración de impuestos ni reemplaza la factura electrónica (ADR 0035).
+
+**Código:** `MonthlyReport`
+
+**Estado:** Decidido (ADR 0035)
 
 ### Código de barras
 
