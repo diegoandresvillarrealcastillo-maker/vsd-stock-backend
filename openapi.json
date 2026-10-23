@@ -4368,6 +4368,11 @@
       "SaleVoidDto": {
         "type": "object",
         "properties": {
+          "folio": {
+            "type": "string",
+            "example": "ANU-000001",
+            "description": "El folio propio de la anulación (ADR 0036): `ANU-` y el número de anulación del negocio, con seis cifras como mínimo. Es la secuencia del negocio, sin saltos y en el orden en que se anotaron, y no se parece al folio de ninguna venta."
+          },
           "voidedAt": {
             "type": "string",
             "format": "date-time",
@@ -4390,6 +4395,7 @@
           }
         },
         "required": [
+          "folio",
           "voidedAt",
           "voidedByUserId",
           "operationId",
