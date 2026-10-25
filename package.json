@@ -59,6 +59,7 @@
     "rxjs": "^7.8.2"
   },
   "overrides": {
+    "multer": "^2.5.0",
     "typed-rest-client": {
       "qs": "^6.16.1"
     }
