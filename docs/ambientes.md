@@ -195,11 +195,11 @@ migración **no** se revierte sola; por eso se aplica con cuidado y a mano.
 
 - **Proyecto de Supabase:** creado por Samuel. La aplicación se conecta por el pooler de sesión (puerto 5432) con el rol
   `stock_app`; el rol `postgres` solo se usa para migrar.
-- **Migraciones:** aplicadas el 2026-10-18 por Diego con `npm run db:migrate` (20 tablas, 2 migraciones).
-  **Pendiente (Ciclo 3):** `20261018120000_turnos` (C3-02, ADR 0026), `20261019120000_ventas` (C3-03, ADR 0027), `20261020120000_revision_de_ventas` (C3-04, ADR 0027) y las que sigan. Se aplican con el mismo script de
-  siempre; hay que hacerlo **antes** de desplegar el código que las usa.
-- **`npm run verify:pre`: 2026-10-18, Diego, 9 pasan, 0 fallan, 0 omitidas** (ADR 0025). Es la primera corrida contra el
-  Supabase real.
+- **Migraciones:** las 7 están aplicadas. Las dos primeras, el 2026-10-18 por Diego con `npm run db:migrate` (20 tablas); la
+  última, `20261023130000_folio_de_anulaciones` (C4-A1), el 2026-10-25, también por Diego (ver «Si algo sale mal» abajo: el primer
+  intento había fallado). Las nuevas se aplican con el mismo script de siempre y **antes** de desplegar el código que las usa.
+- **`npm run verify:pre`: 2026-10-25, Diego, 9 pasan, 0 fallan, 0 omitidas**, con las 7 migraciones. La primera corrida contra
+  el Supabase real fue el 2026-10-18 (también 9 de 9, ADR 0025).
 - **Lo que dejó comprobado:** el adaptador de Prisma funciona a través del pooler (25 transacciones sin que el negocio de
   una se filtre a otra); la seguridad por fila está forzada y sin decir de qué negocio se pregunta no se ve nada; `anon`,
   `authenticated` y `service_role` no tienen privilegios sobre las tablas; la aplicación no puede cambiar ni borrar el
@@ -209,9 +209,13 @@ migración **no** se revierte sola; por eso se aplica con cuidado y a mano.
   como cajero, y los límites del cajero). Es la primera vez que la API verifica tokens reales de Supabase. El detalle está en
   el [historial de corridas](https://github.com/diegoandresvillarrealcastillo-maker/vsd-stock-frontend/blob/desarrollo/docs/recorrido-del-ciclo-2.md#historial-de-corridas)
   del frontend.
+- **Los hosts (2026-10-25):** la API en Render (`https://vsd-stock-api-pre.onrender.com`) sigue la rama `preproduccion` y se
+  redespliega sola; la web en Cloudflare Pages (`https://vsd-stock-pre.pages.dev`) se subió a mano desde `preproduccion` (commit
+  `8e25260`, la promoción del frontend #92) con `wrangler pages deploy`, porque no hay despliegue automático.
+  `npm run verify:deploy`: **14 pasan, 0 fallan, 0 omitidas**.
 - **Lo que sigue sin comprobarse:** que el token se renueve solo (vence a la hora y el recorrido dura menos), el correo de
-  confirmación y los límites de uso (en PRE «Confirm email» está apagado a propósito), un teléfono, y los hosts de la API y
-  de la web (Ciclo 3).
+  confirmación y los límites de uso (en PRE «Confirm email» está apagado a propósito), y un teléfono real (C3-16: instalar la
+  aplicación en el Android, abrirla en modo avión y vender; queda para antes de producción).
 
 `verify:pre` se vuelve a correr cuando cambie el esquema, el proyecto o la documentación de Supabase en la que se apoya.
 Dos cosas que se aprendieron en esta primera corrida:
@@ -334,7 +338,20 @@ explica y dice por qué se acepta en PRE):
 - **Render:** _Events → Rollback_ al despliegue anterior, o _Manual Deploy_ de otra rama. Una migración **no** se revierte sola.
 - **Cloudflare Pages:** _Deployments_ → el despliegue anterior → _Rollback to this deployment_.
 - **`/v1/ready` responde 503:** la API no llega a su base. Revisa `DATABASE_URL` (el rol `stock_app`, el pooler de sesión y el puerto 5432) y que el proyecto de Supabase diga _Healthy_.
+  Justo después de fusionar a `preproduccion` también pasa mientras Render reinicia la API (2026-10-25): se espera unos minutos y se repite `verify:deploy`.
 - **El navegador dice «blocked by CORS policy»:** `CORS_ORIGINS` no es la dirección exacta de la web.
+- **`P3009` («migrate found failed migrations»):** un intento anterior de una migración falló y Prisma no aplica ninguna más hasta
+  que se marque. La causa está en la columna `logs` de la fila de `_prisma_migrations` que tiene `finished_at` vacío. Como cada
+  migración corre en una sola transacción, un fallo no deja nada a medias (se comprueba mirando la tabla). Entonces se marca con
+  `npx prisma migrate resolve --rolled-back NOMBRE_DE_LA_MIGRACION` y se repite `npm run db:migrate`. Pasó el 2026-10-25 con
+  `20261023130000_folio_de_anulaciones` (`relation "void_counter" already exists`): un borrador descartado, sin rastrear en el clon,
+  se había aplicado antes. **Antes de migrar, `git status` debe estar limpio: sin migraciones sin rastrear.**
+- **`db:migrate` lee `.env`, no `.env.pre`** (ese lo lee `verify:pre`): lo que importa es a qué base apunta `DATABASE_MIGRATION_URL` en
+  el `.env` de quien migra. El script imprime «Las migraciones se aplicarán a:» y, si la base no es de esa máquina, pide escribir el
+  host: se lee antes de confirmar.
+- **La prueba «Transacciones a través del pooler» falla con `Unable to start a transaction in the given time`:** Prisma espera 2
+  segundos por una conexión (ADR 0013) y el pooler tardó más. Fue pasajero (2026-10-25: falló dos veces y pasó después sin tocar
+  nada). Se repite; si persiste, se mira que Supabase diga _Healthy_ y cuántas conexiones tiene abiertas.
 
 ## Promover entre ambientes
 
