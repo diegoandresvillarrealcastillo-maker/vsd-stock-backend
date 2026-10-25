@@ -41,6 +41,7 @@ const productOf = (id: string, sku: string, unit: ProductRecord['unit']): Produc
   unit,
   unitPrice: 3500,
   taxRateBp: 1900,
+  taxKind: 'taxed',
   active: true,
   categoryId: null,
   minStockMilli: null,
@@ -110,9 +111,30 @@ const sell = async (
     folio: `AA-${String(counter).padStart(6, '0')}`,
     total: 13_000,
     lines: [
-      { productId: COLA, quantityMilli: 1_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-      { productId: BREAD, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
-      { productId: COLA, quantityMilli: 1_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
+      {
+        productId: COLA,
+        quantityMilli: 1_000,
+        unitPrice: 3_500,
+        discount: 0,
+        taxRateBp: 1900,
+        taxKind: 'taxed',
+      },
+      {
+        productId: BREAD,
+        quantityMilli: 1_500,
+        unitPrice: 4_000,
+        discount: 0,
+        taxRateBp: 0,
+        taxKind: 'exempt',
+      },
+      {
+        productId: COLA,
+        quantityMilli: 1_000,
+        unitPrice: 3_500,
+        discount: 0,
+        taxRateBp: 1900,
+        taxKind: 'taxed',
+      },
     ],
     payments: [
       { method: 'cash', amount: 10_000 },
@@ -471,6 +493,69 @@ describe('SalesUseCase: voiding a sale', () => {
         (failure as ValidationFailedError).errors.map((e) => `${e.pointer}:${e.code}`),
       ).toEqual(['/extra:unknown-field', '/operationId:invalid-id', '/reason:blank']);
       expect(env.work.openedFor).toHaveLength(opened);
+    });
+  });
+
+  describe('the folio of the void (C4-A1, ADR 0036)', () => {
+    it('gives the void its own folio, apart from the folio of the sale it voids', async () => {
+      const env = await setup();
+      const made = await sell(env);
+
+      const { sale } = await env.useCase.voidSale(luisAdmin, made.id, voidBody());
+
+      expect(sale.voided?.folio).toBe('ANU-000001');
+      expect(sale.folio).toBe(made.folio);
+      expect(sale.voided?.folio).not.toBe(sale.folio);
+    });
+
+    it('numbers the voids one after the other in the order they are made, not in the order of the sales', async () => {
+      const env = await setup();
+      const first = await sell(env);
+      const second = await sell(env);
+      const third = await sell(env);
+
+      const ofThird = await env.useCase.voidSale(luisAdmin, third.id, voidBody());
+      const ofFirst = await env.useCase.voidSale(luisAdmin, first.id, voidBody());
+      const ofSecond = await env.useCase.voidSale(luisAdmin, second.id, voidBody());
+
+      expect([ofThird, ofFirst, ofSecond].map(({ sale }) => sale.voided?.folio)).toEqual([
+        'ANU-000001',
+        'ANU-000002',
+        'ANU-000003',
+      ]);
+    });
+
+    it('answers a repeated request with the same folio and does not take another number', async () => {
+      const env = await setup();
+      const first = await sell(env);
+      const second = await sell(env);
+      const body = voidBody();
+      await env.useCase.voidSale(luisAdmin, first.id, body);
+
+      const again = await env.useCase.voidSale(luisAdmin, first.id, body);
+      const next = await env.useCase.voidSale(luisAdmin, second.id, voidBody());
+
+      expect(again.replayed).toBe(true);
+      expect(again.sale.voided?.folio).toBe('ANU-000001');
+      expect(next.sale.voided?.folio).toBe('ANU-000002');
+    });
+
+    it('takes no number when the void is refused, so the series has no hole', async () => {
+      const env = await setup();
+      const first = await sell(env);
+      const second = await sell(env);
+      await env.useCase.voidSale(luisAdmin, first.id, voidBody());
+
+      // Ya anulada, y sin turno donde devolver el efectivo: las dos se rechazan antes de escribir la anulacion.
+      const twice = await failureOf(env.useCase.voidSale(luisAdmin, first.id, voidBody()));
+      const noShift = await failureOf(
+        env.useCase.voidSale(luisAdmin, second.id, voidBody({ shiftId: UNKNOWN })),
+      );
+      const next = await env.useCase.voidSale(luisAdmin, second.id, voidBody());
+
+      expect(twice).toBeInstanceOf(SaleVoidedError);
+      expect(noShift).toBeInstanceOf(ShiftRequiredError);
+      expect(next.sale.voided?.folio).toBe('ANU-000002');
     });
   });
 });

@@ -148,6 +148,22 @@ Dos cosas que conviene saber:
 - Un trabajo **saltado** cuenta como aprobado. `Convencion de commits` se salta en las promociones
   (`desarrollo → preproduccion → produccion`) a propósito: sus commits ya se revisaron.
 
+## Cuando «Vulnerabilidades en las dependencias» se pone en rojo
+
+Un aviso nuevo se publica cualquier día y pone en rojo todos los PR hasta que se resuelve (el trabajo corre también cada lunes y en cada
+empujón a las ramas de ambiente). Se resuelve en este orden:
+
+1. `npm audit fix` sube lo que se pueda dentro de su rango, sin cambios de versión mayor.
+2. Si una dependencia de otra queda **fijada** a una versión con el aviso, se fuerza la versión arreglada con `overrides` en `package.json` y
+   se anota abajo **cuándo se quita**. Un `overrides` que nadie recuerda esconde una dependencia vieja el día que el paquete de origen ya
+   trae el arreglo.
+3. Un aviso sin arreglo solo se acepta con una lista escrita, con su motivo y su fecha. Hoy no hay ninguna.
+
+| `overrides` en `package.json`                | Por qué                                                                                                                                 | Se quita cuando                                                  |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `multer` `^2.5.0`                            | `@nestjs/platform-express` fija `multer@2.4.0`, con el aviso GHSA-q7qp-rjg7-q26m (denegación de servicio con un `fileFilter` pendiente) | `@nestjs/platform-express` fije `multer` 2.5.0 o posterior       |
+| `qs` `^6.16.1` dentro de `typed-rest-client` | Stryker trae `typed-rest-client`, que arrastra un `qs` con avisos de seguridad                                                          | Stryker o `typed-rest-client` suban su `qs` a 6.16.1 o posterior |
+
 ## Con la línea de comandos
 
 `gh` evita abrir el navegador. Tres trampas de Windows y PowerShell 5.1:

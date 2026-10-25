@@ -207,6 +207,7 @@ describe('CategoriesUseCase', () => {
         unit: 'unit',
         unitPrice: 1,
         taxRateBp: 0,
+        taxKind: 'exempt',
         active: true,
         categoryId: created.id,
         minStockMilli: null,

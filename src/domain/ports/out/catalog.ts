@@ -1,4 +1,5 @@
 import type { NewProduct, ProductChange } from '../../model/product-input.js';
+import type { TaxKind } from '../../model/tax.js';
 import type { UnitOfMeasure } from '../../model/unit-of-measure.js';
 
 export interface CategoryRecord {
@@ -18,6 +19,8 @@ export interface ProductRecord {
   readonly unitPrice: number;
   /** Puntos basicos: 0, 500 o 1900. */
   readonly taxRateBp: number;
+  /** Gravado, exento o excluido (ADR 0034). */
+  readonly taxKind: TaxKind;
   /** `false` si esta archivado: no se vende pero conserva su historia. */
   readonly active: boolean;
   readonly categoryId: string | null;

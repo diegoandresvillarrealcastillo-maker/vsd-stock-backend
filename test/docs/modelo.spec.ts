@@ -183,8 +183,8 @@ describe('docs/dominio/modelo-de-datos.md (ADR 0020)', () => {
       .map((match) => match[1] ?? '')
       .sort();
 
-    // Veinte tablas del modelo congelado y `sale_review`, que suma el ADR 0027.
-    expect(created).toHaveLength(21);
+    // Veinte tablas del modelo congelado, `sale_review`, que suma el ADR 0027, y `void_counter`, que suma el ADR 0036.
+    expect(created).toHaveLength(22);
     expect(created).toEqual(tables.map((table) => table.name).sort());
   });
 

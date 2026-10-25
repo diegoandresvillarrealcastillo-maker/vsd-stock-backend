@@ -52,9 +52,9 @@ describe('stock and its history against PostgreSQL (C2-07)', () => {
   const newProduct = async (businessId: string, product: NewProduct): Promise<string> => {
     const id = product.id ?? randomUUID();
     await admin.query(
-      `INSERT INTO product (id, id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, category_id,
-                            min_stock_milli, active)
-       VALUES ($1, $2, $3, $4, $5, $6, 1000, 0, $7, $8, $9)`,
+      `INSERT INTO product (id, id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, tax_kind,
+                            category_id, min_stock_milli, active)
+       VALUES ($1, $2, $3, $4, $5, $6, 1000, 0, 'exempt', $7, $8, $9)`,
       [
         id,
         businessId,

@@ -1,5 +1,8 @@
 dist/
 coverage/
+# Informe y copia de trabajo de las roturas a proposito (Stryker): los genera la herramienta.
+reports/
+.stryker-tmp/
 # Codigo generado por Prisma.
 src/generated/
 node_modules/

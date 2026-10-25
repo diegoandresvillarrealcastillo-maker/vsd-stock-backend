@@ -26,6 +26,7 @@ const product = (id: string, overrides: Partial<ProductRecord>): ProductRecord =
   unit: 'unit',
   unitPrice: 1000,
   taxRateBp: 0,
+  taxKind: 'exempt',
   active: true,
   categoryId: null,
   minStockMilli: null,

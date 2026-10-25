@@ -132,6 +132,7 @@ describe('suppliers, warehouse and purchases, end to end (C2-06)', () => {
         unit,
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
       })
     ).body.id;
 

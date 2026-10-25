@@ -59,9 +59,9 @@ describe('stock ledger: read and write cost (ADR 0013)', () => {
       await resetData(admin);
       const business = await seedBusiness(admin, BUSINESS_A);
       await admin.query(
-        `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp)
+        `INSERT INTO product (id, id_negocio, name, sku, unit, unit_price, tax_rate_bp, tax_kind)
          SELECT ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, $1, 'P' || n, 'SKU-' || n,
-                'unit', 1000, 0
+                'unit', 1000, 0, 'exempt'
            FROM generate_series(0, $2::int - 1) AS n`,
         [BUSINESS_A, products],
       );

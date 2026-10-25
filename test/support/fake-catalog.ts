@@ -147,6 +147,7 @@ export class FakeCatalog implements CatalogRepository {
       unit: product.unit,
       unitPrice: product.unitPrice,
       taxRateBp: product.taxRateBp,
+      taxKind: product.taxKind,
       active: true,
       categoryId: product.categoryId,
       minStockMilli: product.minStockMilli,
@@ -175,6 +176,7 @@ export class FakeCatalog implements CatalogRepository {
       unit: change.unit ?? current.unit,
       unitPrice: change.unitPrice ?? current.unitPrice,
       taxRateBp: change.taxRateBp ?? current.taxRateBp,
+      taxKind: change.taxKind ?? current.taxKind,
       active: change.active ?? current.active,
       categoryId: change.categoryId === undefined ? current.categoryId : change.categoryId,
       minStockMilli:

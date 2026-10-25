@@ -116,6 +116,7 @@ const USE_CASES: Record<string, readonly string[]> = {
   purchases: ['POST /v1/purchases', 'GET /v1/purchases', 'GET /v1/purchases/:purchaseId'],
   'redeem-invitation': ['POST /v1/invitations/redeem'],
   'regenerate-invitation': ['POST /v1/users/:userId/invitation'],
+  reports: ['GET /v1/reports/monthly'],
   sales: [
     'POST /v1/sales',
     'GET /v1/sales',
@@ -313,6 +314,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
       })
     ).id;
 
@@ -367,7 +369,16 @@ describe('isolation between businesses and the matrix of roles, through the whol
       shiftId: await makeShiftOf(team, role),
       folio: `ZZ-${String(++counter).padStart(6, '0')}`,
       total: 3200,
-      lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+      lines: [
+        {
+          productId,
+          quantityMilli: 1000,
+          unitPrice: 3200,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
+      ],
       payments: [{ method: 'cash', amount: 3200 }],
       deviceTime: new Date().toISOString(),
       clockOffsetMs: 0,
@@ -505,6 +516,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
             unit: 'unit',
             unitPrice: 3200,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         }),
       outsider: { kind: 'own-business' },
@@ -776,7 +788,16 @@ describe('isolation between businesses and the matrix of roles, through the whol
             shiftId: await makeShiftOf(team, role),
             folio: `ZZ-${String(++counter).padStart(6, '0')}`,
             total: 3200,
-            lines: [{ productId, quantityMilli: 1000, unitPrice: 3200, discount: 0, taxRateBp: 0 }],
+            lines: [
+              {
+                productId,
+                quantityMilli: 1000,
+                unitPrice: 3200,
+                discount: 0,
+                taxRateBp: 0,
+                taxKind: 'exempt',
+              },
+            ],
             payments: [{ method: 'cash', amount: 3200 }],
             deviceTime: new Date().toISOString(),
             clockOffsetMs: 0,
@@ -836,6 +857,20 @@ describe('isolation between businesses and the matrix of roles, through the whol
         };
       },
       outsider: { kind: 'not-found', code: 'sale-not-found' },
+    },
+    // ---------------- reportes
+    {
+      route: 'GET /v1/reports/monthly',
+      allowed: MANAGEMENT,
+      success: 200,
+      aim: async (team) => {
+        await makeSaleOf(team, 'owner');
+        return {
+          method: 'GET',
+          path: `/v1/reports/monthly?month=${new Date().toISOString().slice(0, 7)}`,
+        };
+      },
+      outsider: { kind: 'own-business' },
     },
     // ---------------- lote de sincronizacion y copia de lectura
     {
@@ -1158,6 +1193,7 @@ describe('isolation between businesses and the matrix of roles, through the whol
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
         categoryId: foreign,
       });
       const changed = await call('PATCH', `/v1/products/${mine}`, a.tokens.owner, {

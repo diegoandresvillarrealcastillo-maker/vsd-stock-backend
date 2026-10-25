@@ -47,6 +47,7 @@ model Business {
   saleLines      SaleLine[]
   payments       Payment[]
   saleVoids      SaleVoid[]
+  voidCounter    VoidCounter?
   saleReviews    SaleReview[]
 
   @@map("business")
@@ -152,6 +153,8 @@ model Product {
   unit          String
   unitPrice     BigInt   @map("unit_price")
   taxRateBp     Int      @map("tax_rate_bp")
+  /// Gravado, exento o excluido (ADR 0034). Sin valor por defecto: quien escribe tiene que decirlo.
+  taxKind       String   @map("tax_kind")
   active        Boolean  @default(true)
   categoryId    String?  @map("category_id") @db.Uuid
   minStockMilli BigInt?  @map("min_stock_milli")
@@ -392,6 +395,8 @@ model SaleLine {
   quantityMilli BigInt @map("quantity_milli")
   unitPrice     BigInt @map("unit_price")
   taxRateBp     Int    @map("tax_rate_bp")
+  /// El tipo tributario con que se vendio (ADR 0034): se copia del producto y ya no cambia.
+  taxKind       String @map("tax_kind")
   discount      BigInt @default(0)
   /// El orden en que el dispositivo la vendio (desde cero).
   position      Int    @default(0)
@@ -441,6 +446,8 @@ model SaleVoid {
   idNegocio   String   @map("id_negocio") @db.Uuid
   saleId      String   @map("sale_id") @db.Uuid
   operationId String   @map("operation_id") @db.Uuid
+  /// El numero de la anulacion dentro del negocio, sin saltos: lo da `void_counter` al anotarla (ADR 0036).
+  number      Int
   reason      String
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -450,5 +457,16 @@ model SaleVoid {
 
   @@unique([idNegocio, saleId], map: "sale_void_sale_unique")
   @@unique([idNegocio, operationId], map: "sale_void_operation_unique")
+  @@unique([idNegocio, number], map: "sale_void_number_unique")
   @@map("sale_void")
+}
+
+/// El contador de anulaciones de cada negocio (ADR 0036): `nextNumber` es el siguiente numero por dar; la fila nace con la primera anulacion.
+model VoidCounter {
+  idNegocio  String @id @map("id_negocio") @db.Uuid
+  nextNumber Int    @map("next_number")
+
+  business Business @relation(fields: [idNegocio], references: [id])
+
+  @@map("void_counter")
 }

@@ -195,6 +195,41 @@ describe('documentation: GitHub guide', () => {
     expect(stacked()).toContain('Contrato con el backend');
     expect(stacked()).toMatch(/rama base del PR/);
   });
+
+  // Un `overrides` fuerza una version que el paquete de origen no pide: si nadie anota por que esta ni cuando se quita, se queda para
+  // siempre y esconde una dependencia vieja el dia que el origen ya trae el arreglo.
+  const audit = (): string =>
+    (
+      guide()
+        .split(/^## /m)
+        .find((block) => /^Cuando «Vulnerabilidades en las dependencias»/.test(block)) ?? ''
+    ).replace(/\s+/g, ' ');
+  const overrides = (): Record<string, unknown> =>
+    (JSON.parse(read('package.json')) as { overrides?: Record<string, unknown> }).overrides ?? {};
+
+  it('has a section on what to do when the dependencies check turns red', () => {
+    expect(audit()).not.toBe('');
+    expect(audit()).toContain('`npm audit fix`');
+    expect(audit()).toMatch(/Un aviso sin arreglo solo se acepta con una lista escrita/);
+  });
+
+  it('writes down every override of package.json, and when it goes away', () => {
+    expect(Object.keys(overrides()).length).toBeGreaterThan(0);
+    for (const name of Object.keys(overrides())) expect(audit(), name).toContain(`\`${name}\``);
+    expect(audit()).toContain('Se quita cuando');
+  });
+
+  it('keeps multer on a version with the fix (2.5.0 or later), which the lockfile really resolves', () => {
+    const lock = JSON.parse(read('package-lock.json')) as {
+      packages: Record<string, { version?: string }>;
+    };
+    const [major = 0, minor = 0] = (lock.packages['node_modules/multer']?.version ?? '0.0.0')
+      .split('.')
+      .map(Number);
+
+    expect(overrides()['multer']).toBe('^2.5.0');
+    expect(major === 2 && minor >= 5).toBe(true);
+  });
 });
 
 describe('documentation: glossary', () => {

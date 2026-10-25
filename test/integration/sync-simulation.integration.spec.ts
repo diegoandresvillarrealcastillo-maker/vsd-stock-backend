@@ -124,6 +124,7 @@ describe('a simulation of devices that sell without a connection and send their 
         unit: 'unit',
         unitPrice,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       });
       await call('POST', '/v1/stock-adjustments', owner, {
         operationId: randomUUID(),
@@ -198,6 +199,7 @@ describe('a simulation of devices that sell without a connection and send their 
           unitPrice,
           discount: 0,
           taxRateBp: 1900,
+          taxKind: 'taxed',
         };
       });
       const total = lines.reduce(

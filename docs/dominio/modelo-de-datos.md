@@ -60,6 +60,7 @@ erDiagram
   PRODUCT ||--o{ SALE_LINE : se_vende
   SALE ||--|{ PAYMENT : se_paga_con
   SALE ||--o| SALE_VOID : se_anula
+  BUSINESS ||--o| VOID_COUNTER : numera_anulaciones
   SALE ||--o| SALE_REVIEW : se_revisa
   APP_USER ||--o{ SALE_REVIEW : revisa
   CASH_SHIFT ||--o{ CASH_MOVEMENT : registra
@@ -82,8 +83,9 @@ regla ya está demostrada por una prueba contra PostgreSQL real o por el dominio
 | `app_user`       | Identidad y acceso | Una persona con acceso: su rol (`owner`, `admin`, `cashier`) y si está activa (ADR 0017). Cómo se identifica es del Ciclo 2.                                                                                     |
 | `device`         | Identidad y acceso | Un dispositivo registrado y su código corto (`AA`, `AB`...), único por negocio y nunca reutilizado (ADR 0016).                                                                                                   |
 | `device_counter` | Identidad y acceso | El contador por negocio que reparte los códigos de dispositivo sin repetirlos aunque se registren a la vez (ADR 0016).                                                                                           |
+| `void_counter`   | Ventas             | El contador por negocio que reparte los números de las anulaciones sin saltos y en orden; nace con la primera anulación (ADR 0036).                                                                              |
 | `category`       | Catálogo           | Una agrupación opcional de productos, de un solo nivel; el nombre es único por negocio.                                                                                                                          |
-| `product`        | Catálogo           | Nombre, SKU, código de barras opcional, unidad, precio con IVA incluido y tarifa. SKU y código únicos por negocio, archivados incluidos (ADR 0015).                                                              |
+| `product`        | Catálogo           | Nombre, SKU, código de barras opcional, unidad, precio con IVA incluido, tarifa y tipo tributario (gravado, exento o excluido, ADR 0034). SKU y código únicos por negocio, archivados incluidos (ADR 0015).      |
 | `warehouse`      | Inventario         | Dónde está la mercancía. Se modela, pero la entrega opera con una bodega por local.                                                                                                                              |
 | `supplier`       | Inventario         | A quien se le compra. Solo nombre y datos de contacto opcionales.                                                                                                                                                |
 | `purchase`       | Inventario         | Una entrada de mercancía: bodega, proveedor opcional y la operación que la originó.                                                                                                                              |
@@ -91,10 +93,10 @@ regla ya está demostrada por una prueba contra PostgreSQL real o por el dominio
 | `stock_movement` | Inventario         | El libro: un cambio firmado de la existencia de un producto, con su motivo. Solo se agrega (ADR 0013).                                                                                                           |
 | `stock_balance`  | Inventario         | La existencia de un producto en una bodega, derivada del libro por un disparador en la misma transacción; la aplicación solo la lee (ADR 0013).                                                                  |
 | `sale`           | Ventas             | Una venta: su folio (`AA-000142`), su turno, su total y la marca «requiere ajuste». Inmutable (ADR 0009, 0013 y 0016).                                                                                           |
-| `sale_line`      | Ventas             | Un producto, una cantidad, el precio y la tarifa que tenían al vender y el descuento de la línea (ADR 0014).                                                                                                     |
+| `sale_line`      | Ventas             | Un producto, una cantidad, el precio, la tarifa y el tipo tributario que tenían al vender y el descuento de la línea (ADR 0014 y 0034).                                                                          |
 | `payment`        | Ventas             | Con qué se pagó: efectivo, o el registro manual de tarjeta o transferencia. Sin pasarela de pagos.                                                                                                               |
 | `sale_review`    | Ventas             | La revisión de una venta que pedía atención: quién la miró, cuándo y qué anotó. Una por venta y solo se agrega: revisar no cambia la venta (ADR 0027).                                                           |
-| `sale_void`      | Ventas             | La anulación de una venta: no borra nada, agrega los movimientos que compensan (ADR 0009).                                                                                                                       |
+| `sale_void`      | Ventas             | La anulación de una venta: no borra nada, agrega los movimientos que compensan (ADR 0009). Lleva su número de anulación por negocio, el de su folio `ANU-000001` (ADR 0036).                                     |
 | `cash_shift`     | Caja               | Del momento en que una persona abre la caja hasta que la cierra y hace el arqueo. Cerrarlo espera a las ventas en curso (ADR 0013); un turno abierto por dispositivo y por persona, y quién lo cerró (ADR 0026). |
 | `cash_movement`  | Caja               | Un ingreso o un egreso de efectivo: el cobro de una venta o un movimiento fuera de venta. Positivo.                                                                                                              |
 | `operation`      | Sincronización     | Una fila por operación que llega de un dispositivo: su `operation_id` es la clave primaria con el negocio (idempotencia), y guarda la hora cruda, la efectiva y las marcas (ADR 0013 y 0016).                    |
@@ -132,9 +134,10 @@ Los esquemas de juguete de los ADR 0013 a 0016 eran más pequeños que el modelo
   `operation` con la persona que la hizo y, si vino de uno, el dispositivo; `device` con la persona que lo
   registró; `purchase` con la persona que la creó y con su `operation`; `sale_void` con su `operation`; y `sale_review`
   con su venta y con la persona que la revisó.
-- **`sale_review` es la única tabla que se suma al modelo congelado**, y la decide el
+- **`sale_review` y `void_counter` son las tablas que se suman al modelo congelado.** La primera la decide el
   [ADR 0027](../adr/0027-registro-de-ventas-y-atencion.md): revisar una venta de la bandeja «Requiere atención» no puede
-  editar la venta (es historia inmutable, ADR 0009 y 0013), así que es otra fila.
+  editar la venta (es historia inmutable, ADR 0009 y 0013), así que es otra fila. La segunda la decide el
+  [ADR 0036](../adr/0036-las-anulaciones-tienen-su-propio-folio-consecutivo.md): el contador que da a cada anulación su número sin saltos.
 - **Las columnas que aún no existen** (por ejemplo los desgloses de IVA de la venta) se agregan con la migración del
   ciclo que construye esa funcionalidad: una migración nueva, nunca la edición de una ya aplicada.
 - `app_user` también sirve de invitación pendiente: mientras no se canjea, `auth_user_id` está vacío y guarda el hash

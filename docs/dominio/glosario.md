@@ -156,12 +156,36 @@ después (ADR 0014).
 
 El gravamen incluido en el precio (en Colombia, el IVA), con una tarifa **por producto**: 0 %, 5 % o 19 %. El
 sistema lo desglosa del total, no lo suma, y se redondea de una sola manera para que la base más el IVA sea
-siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Las tarifas y
-la mecánica frente a la norma son una hipótesis que debe verificar quien lleve la contabilidad.
+siempre el total (ADR 0014). La entrega calcula impuestos pero no emite factura electrónica (DIAN). Un contador revisó la
+mecánica y las tarifas y la dio por buena (ADR 0032), con cuatro precisiones: la primera, distinguir lo exento de lo excluido, ya está resuelta (ver _Tipo tributario_, ADR 0034), y la del reporte mensual por tarifa y tipo
+también (ver _Reporte mensual_, ADR 0035), y la de dar folio propio a las anulaciones también (ver _Folio de anulación_, ADR 0036); quedan los impuestos que no son IVA. También advirtió que el negocio, si es
+responsable de IVA, debe expedir factura electrónica o documento equivalente por su cuenta.
 
 **Código:** `Tax`
 
 **Estado:** Decidido (ADR 0014)
+
+### Tipo tributario
+
+Si un producto es gravado, exento o excluido de IVA, y con cuál se vendió cada línea. Gravado lleva 5 % o 19 %; exento y excluido llevan 0 %. Para el
+cálculo da igual, pero para declarar van en renglones distintos. Se guarda en el producto y se copia a la línea de venta, como el precio y la
+tarifa, para que corregir el producto mañana no cambie las ventas de ayer. Es obligatorio y la base rechaza una combinación que no cabe. El
+sistema no sabe qué producto es exento y cuál excluido: guarda lo que el negocio le dice (ADR 0034).
+
+**Código:** `TaxKind`
+
+**Estado:** Decidido (ADR 0034)
+
+### Reporte mensual
+
+Lo que el contador pidió para declarar (ADR 0032): las ventas de un mes por tarifa y tipo tributario (gravado al 19 %, gravado al 5 %,
+exento y excluido, siempre los cuatro renglones), las ventas anuladas en ese mes en un bloque aparte y lo cobrado por medio de pago. El IVA se
+saca venta por venta, como en cada recibo, y no del total del mes; una venta es del mes en que ocurrió y una anulación del mes en que se hizo,
+con los meses cortados a medianoche de Bogotá. No es la declaración de impuestos ni reemplaza la factura electrónica (ADR 0035).
+
+**Código:** `MonthlyReport`
+
+**Estado:** Decidido (ADR 0035)
 
 ### Código de barras
 
@@ -360,11 +384,12 @@ Dejar sin efecto una venta ya registrada. No borra ni edita nada: agrega los mov
 stock y de caja. Es de la gerencia, necesita conexión y se hace una sola vez por venta. La existencia vuelve con un
 movimiento por producto, y el **efectivo que se cobró sale del turno abierto de quien anula**, no del turno de la venta (que
 puede estar cerrado y contado): la venta anulada sigue sumada en el arqueo de su turno y la devolución se ve en el de quien
-anula. Si hubo efectivo y quien anula no tiene un turno abierto, no se anula (ADR 0027).
+anula. Si hubo efectivo y quien anula no tiene un turno abierto, no se anula (ADR 0027). Tiene su **folio propio**, distinto del de la
+venta (ADR 0036).
 
 **Código:** `SaleVoid`, tabla `sale_void`, `POST /v1/sales/{id}/void`
 
-**Estado:** Decidido (ADR 0009 y ADR 0027)
+**Estado:** Decidido (ADR 0009, ADR 0027 y ADR 0036)
 
 ### Devolución
 
@@ -443,6 +468,17 @@ cambia al sincronizar, no ordena las ventas entre dispositivos (para eso está l
 **Código:** `Folio`
 
 **Estado:** Decidido (ADR 0016)
+
+### Folio de anulación
+
+El número con que se identifica una anulación: `ANU-000001`, el prefijo `ANU` y el número de anulación del negocio con seis
+cifras como mínimo. A diferencia del folio de una venta, es una **secuencia del negocio, sin saltos y en el orden en que se
+anotaron**: la da el servidor al aceptar la anulación, dentro de su misma transacción, y una anulación rechazada no gasta ninguno. Ningún
+código de dispositivo lleva la `U`, así que no se parece al folio de ninguna venta. La venta anulada conserva el suyo (ADR 0036).
+
+**Código:** `voidFolio`, columna `sale_void.number`, tabla `void_counter`
+
+**Estado:** Decidido (ADR 0036)
 
 ## Finanzas y reportes
 

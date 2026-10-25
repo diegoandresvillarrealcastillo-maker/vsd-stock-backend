@@ -141,6 +141,7 @@ describe('stock, adjustments and history, end to end (C2-07)', () => {
         unit: 'unit',
         unitPrice: 3200,
         taxRateBp: 0,
+        taxKind: 'exempt',
         ...extra,
       })
     ).body.id;

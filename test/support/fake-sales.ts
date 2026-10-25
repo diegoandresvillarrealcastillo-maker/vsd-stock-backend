@@ -1,5 +1,6 @@
 import { requiresAttention } from '../../src/domain/model/sale-attention.js';
 import { SaleVoidedError } from '../../src/domain/model/sale-errors.js';
+import { voidFolio } from '../../src/domain/model/void-folio.js';
 import type {
   NewSale,
   SaleHeader,
@@ -8,6 +9,7 @@ import type {
   SaleRepository,
   SaleReviewRecord,
   SaleVoidRecord,
+  SalesOfPeriod,
   NewSaleVoid,
 } from '../../src/domain/ports/out/sales.js';
 import type { FakeShifts } from './fake-cash.js';
@@ -120,6 +122,17 @@ export class FakeSales implements SaleRepository {
     return Promise.resolve(rows.slice(0, request.limit).map((sale) => this.headerOf(sale)));
   }
 
+  inPeriod(from: Date, to: Date): Promise<SalesOfPeriod> {
+    const within = (at: Date): boolean => at >= from && at < to;
+    return Promise.resolve({
+      sold: this.records.filter((sale) => within(sale.occurredAt)),
+      voided: this.records.filter((sale) => {
+        const voided = this.voids.get(sale.id);
+        return voided !== undefined && within(voided.voidedAt);
+      }),
+    });
+  }
+
   review(
     saleId: string,
     userId: string,
@@ -142,7 +155,9 @@ export class FakeSales implements SaleRepository {
     if (claimed === undefined) {
       return Promise.reject(new Error(`The operation ${request.operationId} was not claimed`));
     }
+    // El numero sale hasta que la anulacion se acepta: una rechazada no gasta ninguno (ADR 0036).
     this.voids.set(request.saleId, {
+      folio: voidFolio(this.voids.size + 1),
       voidedAt: this.voidedAt,
       voidedByUserId: claimed.userId,
       operationId: request.operationId,

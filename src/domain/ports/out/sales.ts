@@ -1,6 +1,7 @@
 import type { TimeFlag } from '../../model/operation-time.js';
 import type { SaleFlag } from '../../model/sale-flags.js';
 import type { PaymentMethod } from '../../model/sale-input.js';
+import type { TaxKind } from '../../model/tax.js';
 
 /** Una linea tal como se vendio: el precio y la tarifa quedan los que el cliente vio (ADR 0027). */
 export interface SaleLineRecord {
@@ -13,6 +14,8 @@ export interface SaleLineRecord {
   readonly discount: number;
   /** Puntos basicos: 0, 500 o 1900. */
   readonly taxRateBp: number;
+  /** Con que tipo tributario se vendio: no cambia si el producto se reclasifica despues (ADR 0034). */
+  readonly taxKind: TaxKind;
 }
 
 export interface PaymentRecord {
@@ -45,6 +48,8 @@ export interface SaleReviewRecord {
 
 /** La anulacion de una venta: quien la hizo, cuando y por que (ADR 0027). Una fila de solo agregar. */
 export interface SaleVoidRecord {
+  /** El folio propio de la anulacion, como `ANU-000001`: la secuencia del negocio, sin saltos (ADR 0036). */
+  readonly folio: string;
   readonly voidedAt: Date;
   readonly voidedByUserId: string;
   /** La operacion de anular: bajo ella quedaron los movimientos que compensan. */
@@ -97,6 +102,14 @@ export interface SaleRecord extends SaleHeader {
   readonly payments: readonly PaymentRecord[];
 }
 
+/** Las ventas de un periodo, con lo unico que el reporte mensual necesita de cada una: sus lineas y sus cobros (ADR 0035). */
+export interface SalesOfPeriod {
+  /** Las ventas cuya hora efectiva cae en el periodo, anuladas despues o no. */
+  readonly sold: readonly Pick<SaleRecord, 'lines' | 'payments'>[];
+  /** Las ventas anuladas dentro del periodo, sea cual sea el mes de la venta. */
+  readonly voided: readonly Pick<SaleRecord, 'lines' | 'payments'>[];
+}
+
 /** El listado va de la venta mas reciente a la mas vieja; la posicion es (hora efectiva en milisegundos, id). */
 export interface SaleListRequest {
   readonly limit: number;
@@ -123,6 +136,11 @@ export interface SaleRepository {
   /** La venta que una operacion de anular anulo, o `null` si esa operacion no anulo ninguna. */
   findByVoid(operationId: string): Promise<SaleRecord | null>;
   list(request: SaleListRequest): Promise<SaleHeader[]>;
+  /**
+   * Las ventas de `[from, to)`: las HECHAS en el periodo (por su hora efectiva, ADR 0016) y las ANULADAS en el (por el momento en que
+   * el servidor anoto la anulacion), cada una con sus lineas y sus cobros tal como se vendieron (ADR 0035).
+   */
+  inPeriod(from: Date, to: Date): Promise<SalesOfPeriod>;
   /**
    * Agrega la revision de una venta que ya existe. Una venta se revisa una vez: si ya tenia revision, no agrega otra y
    * devuelve la que habia (`created: false`).

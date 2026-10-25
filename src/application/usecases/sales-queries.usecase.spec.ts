@@ -39,6 +39,7 @@ const product: ProductRecord = {
   unit: 'unit',
   unitPrice: 3500,
   taxRateBp: 1900,
+  taxKind: 'taxed',
   active: true,
   categoryId: null,
   minStockMilli: null,
@@ -107,7 +108,14 @@ const sell = async (
     folio: `AA-${String(counter).padStart(6, '0')}`,
     total: 3_500,
     lines: [
-      { productId: COLA, quantityMilli: 1_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
+      {
+        productId: COLA,
+        quantityMilli: 1_000,
+        unitPrice: 3_500,
+        discount: 0,
+        taxRateBp: 1900,
+        taxKind: 'taxed',
+      },
     ],
     payments: [{ method: 'cash', amount: 3_500 }],
     deviceTime: at,

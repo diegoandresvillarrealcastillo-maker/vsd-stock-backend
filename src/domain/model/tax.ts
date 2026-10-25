@@ -3,10 +3,30 @@ import { divideRounded } from './rounding.js';
 
 /**
  * Las tarifas de IVA del catalogo, en puntos basicos (1 % = 100): exento o excluido,
- * reducida y general. HIPOTESIS pendiente de verificar con quien lleve la contabilidad
- * del negocio de referencia (ADR 0014); la aritmetica sirve para cualquier tarifa.
+ * reducida y general. Un contador reviso la mecanica y estas tarifas (ADR 0032); la
+ * aritmetica sirve para cualquier tarifa. Que un 0 % sea exento o excluido no lo dice la
+ * tarifa: lo dice el tipo tributario (ADR 0034), que no entra en el calculo.
  */
 export const TAX_RATES_BP: readonly number[] = [0, 500, 1900];
+
+/**
+ * Los tipos tributarios (ADR 0034): gravado, exento y excluido. Para el calculo da igual
+ * (la tarifa manda), pero para declarar van en renglones distintos.
+ */
+export const TAX_KINDS = ['taxed', 'exempt', 'excluded'] as const;
+export type TaxKind = (typeof TAX_KINDS)[number];
+
+export const isTaxKind = (value: unknown): value is TaxKind => TAX_KINDS.includes(value as TaxKind);
+
+/** Gravado lleva 5 % o 19 %; exento y excluido llevan 0 % (ADR 0034). */
+export function taxKindFitsRate(kind: TaxKind, rateBp: number): boolean {
+  return kind === 'taxed' ? rateBp !== 0 && TAX_RATES_BP.includes(rateBp) : rateBp === 0;
+}
+
+/** El problema de una tarifa y un tipo que no caben juntos: el mismo en el producto, en el cambio y en la linea de venta. */
+export const TAX_KIND_RATE_CODE = 'tax-kind-rate-mismatch';
+export const TAX_KIND_RATE_DETAIL =
+  'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.';
 
 const BASIS_POINTS = 10_000;
 

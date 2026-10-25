@@ -1,7 +1,8 @@
 import { Barcode } from './barcode.js';
 import { MAX_PESOS } from './money.js';
 import { Sku } from './sku.js';
-import { TAX_RATES_BP } from './tax.js';
+import { TAX_RATES_BP, type TaxKind } from './tax.js';
+import { readTaxKind, refuseTaxKindMismatch } from './tax-kind-input.js';
 import { UNITS_OF_MEASURE, type UnitOfMeasure } from './unit-of-measure.js';
 import type { InputReader } from './validation.js';
 
@@ -13,6 +14,7 @@ export const NEW_PRODUCT_FIELDS = [
   'unit',
   'unitPrice',
   'taxRateBp',
+  'taxKind',
   'categoryId',
   'minStockMilli',
 ] as const;
@@ -40,6 +42,8 @@ export interface NewProduct {
   readonly unit: UnitOfMeasure;
   readonly unitPrice: number;
   readonly taxRateBp: number;
+  /** Gravado, exento o excluido; lleva una tarifa que le quepa (ADR 0034). */
+  readonly taxKind: TaxKind;
   readonly categoryId: string | null;
   readonly minStockMilli: number | null;
 }
@@ -52,6 +56,8 @@ export interface ProductChange {
   readonly unit?: UnitOfMeasure;
   readonly unitPrice?: number;
   readonly taxRateBp?: number;
+  /** Solo, se compara con la tarifa que el producto ya tiene (lo hace el caso de uso); junto con la tarifa, se compara aqui. */
+  readonly taxKind?: TaxKind;
   readonly categoryId?: string | null;
   readonly minStockMilli?: number | null;
   readonly active?: boolean;
@@ -134,6 +140,11 @@ function taxRate(reader: InputReader, required: boolean): number | undefined {
   return rate;
 }
 
+function taxKind(reader: InputReader, required: boolean): TaxKind | undefined {
+  if (!required && !present(reader, 'taxKind')) return undefined;
+  return readTaxKind(reader);
+}
+
 function category(reader: InputReader): string | null | undefined {
   if (reader.isNull('categoryId')) return null;
   if (!present(reader, 'categoryId')) return undefined;
@@ -156,17 +167,25 @@ function minStock(reader: InputReader): number | null | undefined {
 
 /** Lee un producto nuevo. Los problemas quedan en el lector; el llamador llama a `finish()` antes de usar el resultado. */
 export function readNewProduct(reader: InputReader): NewProduct {
-  const result = {
+  const head = {
     name: name(reader, true) as string,
     sku: sku(reader, true) as Sku,
     barcode: barcode(reader) ?? null,
     unit: unit(reader, true) as UnitOfMeasure,
     unitPrice: unitPrice(reader, true) as number,
-    taxRateBp: taxRate(reader, true) as number,
+  };
+  // La tarifa y el tipo se leen juntos para decir si caben (ADR 0034).
+  const taxStart = reader.errorCount();
+  const taxRateBp = taxRate(reader, true) as number;
+  const kind = taxKind(reader, true) as TaxKind;
+  refuseTaxKindMismatch(reader, taxStart, kind, taxRateBp);
+  return {
+    ...head,
+    taxRateBp,
+    taxKind: kind,
     categoryId: category(reader) ?? null,
     minStockMilli: minStock(reader) ?? null,
   };
-  return result;
 }
 
 /** Lee lo que cambia de un producto. Pide al menos un campo. */
@@ -182,8 +201,15 @@ export function readProductChange(reader: InputReader): ProductChange {
   if (unitValue !== undefined) draft.unit = unitValue;
   const priceValue = unitPrice(reader, false);
   if (priceValue !== undefined) draft.unitPrice = priceValue;
+  const taxStart = reader.errorCount();
   const rateValue = taxRate(reader, false);
   if (rateValue !== undefined) draft.taxRateBp = rateValue;
+  const kindValue = taxKind(reader, false);
+  if (kindValue !== undefined) draft.taxKind = kindValue;
+  // Los dos juntos se comparan aqui; uno solo, contra el producto que ya existe, en el caso de uso (ADR 0034).
+  if (rateValue !== undefined && kindValue !== undefined) {
+    refuseTaxKindMismatch(reader, taxStart, kindValue, rateValue);
+  }
   const categoryValue = category(reader);
   if (categoryValue !== undefined) draft.categoryId = categoryValue;
   const minStockValue = minStock(reader);

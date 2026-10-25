@@ -44,8 +44,8 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
     asApplication(admin, businessId, (client) =>
       client.query<{ sku_key: string; barcode_key: string | null }>(
         `INSERT INTO product
-           (id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (id_negocio, name, sku, barcode, unit, unit_price, tax_rate_bp, tax_kind, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING sku_key, barcode_key`,
         [
           businessId,
@@ -55,6 +55,7 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
           product.unit,
           product.unitPrice.amount,
           product.rateBp,
+          product.rateBp > 0 ? 'taxed' : 'exempt',
           active,
         ],
       ),
@@ -68,6 +69,7 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
       unit: 'unit',
       unit_price: 1000,
       tax_rate_bp: 0,
+      tax_kind: 'exempt',
       ...columns,
     };
     const names = Object.keys(row);
@@ -175,6 +177,12 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
     it.each([
       ['a unit that does not exist (a box)', { unit: 'box' }],
       ['a tax rate outside the catalogue', { tax_rate_bp: 800 }],
+      ['a taxed product at 0 %', { tax_kind: 'taxed', tax_rate_bp: 0 }],
+      ['an exempt product at 5 %', { tax_kind: 'exempt', tax_rate_bp: 500 }],
+      ['an exempt product at 19 %', { tax_kind: 'exempt', tax_rate_bp: 1900 }],
+      ['an excluded product at 5 %', { tax_kind: 'excluded', tax_rate_bp: 500 }],
+      ['an excluded product at 19 %', { tax_kind: 'excluded', tax_rate_bp: 1900 }],
+      ['a tax kind that does not exist', { tax_kind: 'gravado' }],
       ['a negative price', { unit_price: -1 }],
       ['a price above the maximum', { unit_price: 1_000_000_000_001 }],
       ['an empty name', { name: '' }],
@@ -190,6 +198,19 @@ describe('catalog: codes and shape in the database (ADR 0015)', () => {
       ['a barcode of all zeros', { barcode: '0000000000000' }],
     ])('rejects %s', async (_label, columns) => {
       await expect(saveRaw(columns)).rejects.toMatchObject({ code: '23514' });
+    });
+
+    it.each([
+      ['taxed', 500],
+      ['taxed', 1900],
+      ['exempt', 0],
+      ['excluded', 0],
+    ])('accepts a product that is %s at %i basis points', async (kind, rate) => {
+      await expect(saveRaw({ tax_kind: kind, tax_rate_bp: rate })).resolves.toBeDefined();
+    });
+
+    it('does not fill the tax kind by itself: a product written without it is refused, not classified (ADR 0034)', async () => {
+      await expect(saveRaw({ tax_kind: null })).rejects.toMatchObject({ code: '23502' });
     });
 
     it('accepts the largest price and the smallest', async () => {

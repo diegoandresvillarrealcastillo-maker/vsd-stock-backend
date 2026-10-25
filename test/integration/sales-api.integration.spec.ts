@@ -21,6 +21,7 @@ interface VoidBody {
   voidedByUserId: string;
   operationId: string;
   reason: string;
+  folio: string;
 }
 
 interface SaleBody {
@@ -44,6 +45,7 @@ interface SaleBody {
     unitPrice: number;
     discount: number;
     taxRateBp: number;
+    taxKind: string;
   }[];
   payments: { method: string; amount: number; reference: string | null }[];
   summary: {
@@ -172,6 +174,7 @@ describe('sales, end to end (C3-03)', () => {
           unit,
           unitPrice,
           taxRateBp,
+          taxKind: taxRateBp > 0 ? 'taxed' : 'exempt',
         })
       ).body.id;
     return {
@@ -211,8 +214,22 @@ describe('sales, end to end (C3-03)', () => {
       folio: `AA-${String(serial).padStart(6, '0')}`,
       total: 13_000,
       lines: [
-        { productId: t.cola, quantityMilli: 2_000, unitPrice: 3_500, discount: 0, taxRateBp: 1900 },
-        { productId: t.bread, quantityMilli: 1_500, unitPrice: 4_000, discount: 0, taxRateBp: 0 },
+        {
+          productId: t.cola,
+          quantityMilli: 2_000,
+          unitPrice: 3_500,
+          discount: 0,
+          taxRateBp: 1900,
+          taxKind: 'taxed',
+        },
+        {
+          productId: t.bread,
+          quantityMilli: 1_500,
+          unitPrice: 4_000,
+          discount: 0,
+          taxRateBp: 0,
+          taxKind: 'exempt',
+        },
       ],
       payments: [
         { method: 'cash', amount: 10_000 },
@@ -268,6 +285,93 @@ describe('sales, end to end (C3-03)', () => {
         });
         expect(reply.headers.get('idempotent-replayed')).toBeNull();
       }
+    });
+
+    describe('the tax kind of each line (ADR 0034)', () => {
+      it('keeps the kind each line was sold with, and gives it back when the sale is read again', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+
+        const created = await call('POST', '/v1/sales', t.cashier.token, sale(t, shiftId));
+        const read = await call('GET', `/v1/sales/${created.body.id}`, t.owner);
+
+        expect(created.status).toBe(201);
+        expect(created.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'exempt']);
+        expect(read.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'exempt']);
+      });
+
+      it('wants the kind in every line: a sale without it is refused, and says which line', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const { taxKind: _kind, ...withoutKind } = base.lines[1] as Record<string, unknown>;
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], withoutKind] }),
+        );
+
+        expect(reply.status).toBe(400);
+        expect(fields(reply)).toEqual(['/lines/1/taxKind:required']);
+      });
+
+      it('refuses a line whose kind does not fit its rate, and registers nothing', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const wrong = { ...(base.lines[1] as Record<string, unknown>), taxKind: 'taxed' };
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], wrong] }),
+        );
+
+        expect(reply.status).toBe(400);
+        expect(fields(reply)).toEqual(['/lines/1/taxKind:tax-kind-rate-mismatch']);
+        expect((await call('GET', '/v1/sales', t.owner)).body.items).toEqual([]);
+      });
+
+      it('accepts a line sold with another kind than the catalog has today, keeps it and marks the sale', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        // El catalogo de hoy dice que el pan es exento; el dispositivo, con un catalogo anterior, lo vendio como excluido.
+        const other = { ...(base.lines[1] as Record<string, unknown>), taxKind: 'excluded' };
+
+        const reply = await call(
+          'POST',
+          '/v1/sales',
+          t.cashier.token,
+          sale(t, shiftId, { lines: [base.lines[0], other] }),
+        );
+
+        expect(reply.status).toBe(201);
+        expect(reply.body.flags).toEqual(['price-differs']);
+        expect(reply.body.lines.map((line) => line.taxKind)).toEqual(['taxed', 'excluded']);
+      });
+
+      it('does not let the same operation be reused with a different kind: it is another sale', async () => {
+        const t = await team();
+        const shiftId = await openShift(t, t.cashier.token);
+        const base = sale(t, shiftId);
+        const first = await call('POST', '/v1/sales', t.cashier.token, base);
+        const changed = {
+          ...base,
+          lines: [
+            base.lines[0],
+            { ...(base.lines[1] as Record<string, unknown>), taxKind: 'excluded' },
+          ],
+        };
+
+        const again = await call('POST', '/v1/sales', t.cashier.token, changed);
+
+        expect(first.status).toBe(201);
+        expect(again.status).toBe(409);
+      });
     });
 
     it('answers every amount as a whole number of pesos', async () => {
@@ -382,6 +486,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 3_000,
         discount: 0,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       };
 
       const reply = await call(
@@ -579,6 +684,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 1,
         discount: 0,
         taxRateBp: 0,
+        taxKind: 'exempt',
       };
       const half = {
         productId: t.cola,
@@ -586,6 +692,7 @@ describe('sales, end to end (C3-03)', () => {
         unitPrice: 3_500,
         discount: 0,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       };
 
       const reply = await call(
@@ -1103,6 +1210,80 @@ describe('sales, end to end (C3-03)', () => {
         expect(await stockOf(t.cola)).toBe(100_000);
         expect(await select(admin, 'SELECT count(*)::int AS n FROM cash_movement')).toEqual([
           { n: 1 },
+        ]);
+      });
+
+      it('gives the void its own consecutive folio, apart from the folio of the sale, and shows it in the list and one by one (C4-A1)', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const cashierShift = await openShift(t, t.cashier.token);
+        const first = await plain(t, t.cashier.token, cashierShift);
+        const second = await plain(t, t.cashier.token, cashierShift);
+        const untouched = await plain(t, t.cashier.token, cashierShift);
+
+        const ofSecond = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+        const ofFirst = await call(
+          'POST',
+          `/v1/sales/${first.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+
+        expect(ofSecond.body.voided?.folio).toBe('ANU-000001');
+        expect(ofFirst.body.voided?.folio).toBe('ANU-000002');
+        expect(ofFirst.body.folio).toBe(first.folio);
+        const one = await call('GET', `/v1/sales/${second.id}`, t.owner);
+        const listed = await call('GET', '/v1/sales', t.owner);
+        const folioInList = (id: string) =>
+          listed.body.items.find((item) => item.id === id)?.voided?.folio;
+        expect(one.body.voided?.folio).toBe('ANU-000001');
+        expect(folioInList(first.id)).toBe('ANU-000002');
+        expect(folioInList(second.id)).toBe('ANU-000001');
+        expect(listed.body.items.find((item) => item.id === untouched.id)?.voided).toBeNull();
+      });
+
+      it('answers a repeated void with the same folio and takes no number for a void that is refused (C4-A1)', async () => {
+        const t = await stockedTeam();
+        const shiftId = await openShift(t, t.admin.token);
+        const cashierShift = await openShift(t, t.cashier.token);
+        const first = await plain(t, t.cashier.token, cashierShift);
+        const second = await plain(t, t.cashier.token, cashierShift);
+        const body = voidBody(shiftId);
+        const done = await call('POST', `/v1/sales/${first.id}/void`, t.admin.token, body);
+
+        const again = await call('POST', `/v1/sales/${first.id}/void`, t.admin.token, body);
+        const twice = await call(
+          'POST',
+          `/v1/sales/${first.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+        const noShift = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(randomUUID()),
+        );
+        const next = await call(
+          'POST',
+          `/v1/sales/${second.id}/void`,
+          t.admin.token,
+          voidBody(shiftId),
+        );
+
+        expect(done.body.voided?.folio).toBe('ANU-000001');
+        expect(again.body.voided?.folio).toBe('ANU-000001');
+        expect(twice.status).toBe(409);
+        expect(noShift.status).toBe(409);
+        expect(next.body.voided?.folio).toBe('ANU-000002');
+        expect(await select(admin, 'SELECT number FROM sale_void ORDER BY number')).toEqual([
+          { number: 1 },
+          { number: 2 },
         ]);
       });
 

@@ -139,6 +139,7 @@ describe('sync, end to end (C3-06)', () => {
         unit: 'unit',
         unitPrice,
         taxRateBp: 1900,
+        taxKind: 'taxed',
       });
       await call('POST', '/v1/stock-adjustments', owner, {
         operationId: randomUUID(),
@@ -188,6 +189,7 @@ describe('sync, end to end (C3-06)', () => {
             unitPrice: 3_500,
             discount: 0,
             taxRateBp: 1900,
+            taxKind: 'taxed',
           },
         ],
         payments: [{ method: 'cash', amount: 7_000 }],
@@ -284,6 +286,7 @@ describe('sync, end to end (C3-06)', () => {
             unitPrice: 1_000,
             discount: 0,
             taxRateBp: 0,
+            taxKind: 'exempt',
           },
         ],
       });
@@ -461,6 +464,7 @@ describe('sync, end to end (C3-06)', () => {
           unit: 'unit',
           unitPrice: 1000,
           taxRateBp: 0,
+          taxKind: 'exempt',
         })
       ).body.id;
 
@@ -595,6 +599,7 @@ describe('sync, end to end (C3-06)', () => {
                 unitPrice: 4_000,
                 discount: 0,
                 taxRateBp: 1900,
+                taxKind: 'taxed',
               },
             ],
             total: 480_000,

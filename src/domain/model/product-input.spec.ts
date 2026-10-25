@@ -19,6 +19,7 @@ const valid = {
   unit: 'unit',
   unitPrice: 3200,
   taxRateBp: 0,
+  taxKind: 'exempt',
 };
 
 const read = <T>(work: (reader: InputReader) => T, body: unknown, fields: readonly string[]): T => {
@@ -41,9 +42,10 @@ const errorsOf = (work: (body: unknown) => unknown, body: unknown): readonly Fie
     throw error;
   }
 };
+const codes = (errors: readonly FieldError[]) => errors.map((e) => `${e.pointer}:${e.code}`);
 
 describe('a new product', () => {
-  it('needs a name, a SKU, a unit, a price and an IVA rate; the rest is none', () => {
+  it('needs a name, a SKU, a unit, a price, an IVA rate and a tax kind; the rest is none', () => {
     const product = newProduct(valid);
 
     expect(product.name).toBe('Arroz 500 g');
@@ -51,6 +53,7 @@ describe('a new product', () => {
     expect(product.unit).toBe('unit');
     expect(product.unitPrice).toBe(3200);
     expect(product.taxRateBp).toBe(0);
+    expect(product.taxKind).toBe('exempt');
     expect(product.barcode).toBeNull();
     expect(product.categoryId).toBeNull();
     expect(product.minStockMilli).toBeNull();
@@ -99,8 +102,12 @@ describe('a new product', () => {
     });
   });
 
-  it.each([0, 500, 1900])('accepts the IVA rate of %i basis points', (rate) => {
-    expect(newProduct({ ...valid, taxRateBp: rate }).taxRateBp).toBe(rate);
+  it.each([
+    [0, 'exempt'],
+    [500, 'taxed'],
+    [1900, 'taxed'],
+  ])('accepts the IVA rate of %i basis points', (rate, taxKind) => {
+    expect(newProduct({ ...valid, taxRateBp: rate, taxKind }).taxRateBp).toBe(rate);
   });
 
   it.each([1, 1000, 1901, 10_000])(
@@ -115,6 +122,67 @@ describe('a new product', () => {
       ]);
     },
   );
+
+  it.each([
+    ['taxed', 500],
+    ['taxed', 1900],
+    ['exempt', 0],
+    ['excluded', 0],
+  ] as const)('accepts the tax kind %s with %i basis points', (taxKind, taxRateBp) => {
+    const product = newProduct({ ...valid, taxKind, taxRateBp });
+
+    expect(product.taxKind).toBe(taxKind);
+    expect(product.taxRateBp).toBe(taxRateBp);
+  });
+
+  it.each([
+    ['taxed', 0],
+    ['exempt', 500],
+    ['exempt', 1900],
+    ['excluded', 500],
+    ['excluded', 1900],
+  ] as const)(
+    'refuses the tax kind %s with %i basis points, in the field of the kind',
+    (taxKind, taxRateBp) => {
+      expect(errorsOf(newProduct, { ...valid, taxKind, taxRateBp })).toEqual([
+        {
+          pointer: '/taxKind',
+          code: 'tax-kind-rate-mismatch',
+          detail:
+            'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.',
+        },
+      ]);
+    },
+  );
+
+  it.each(['gravado', 'zero', 'Taxed', 5, true])(
+    'refuses the tax kind %j, and lists the three',
+    (taxKind) => {
+      const errors = errorsOf(newProduct, { ...valid, taxKind });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({ pointer: '/taxKind' });
+    },
+  );
+
+  it('refuses a tax kind that is not one of the three with the list', () => {
+    expect(errorsOf(newProduct, { ...valid, taxKind: 'gravado' })).toEqual([
+      {
+        pointer: '/taxKind',
+        code: 'invalid-value',
+        detail: 'El tipo tributario debe ser uno de: taxed, exempt, excluded.',
+      },
+    ]);
+  });
+
+  it('does not add the mismatch to a rate or a kind that were already refused', () => {
+    expect(codes(errorsOf(newProduct, { ...valid, taxKind: 'taxed', taxRateBp: 1000 }))).toEqual([
+      '/taxRateBp:invalid-value',
+    ]);
+    expect(codes(errorsOf(newProduct, { ...valid, taxKind: 'gravado', taxRateBp: 1900 }))).toEqual([
+      '/taxKind:invalid-value',
+    ]);
+  });
 
   it.each(['unit', 'kilogram', 'gram', 'pound', 'liter', 'milliliter'])(
     'accepts the unit %s',
@@ -208,6 +276,7 @@ describe('a new product', () => {
       '/unit:required',
       '/unitPrice:required',
       '/taxRateBp:required',
+      '/taxKind:required',
     ]);
   });
 
@@ -232,7 +301,33 @@ describe('a change to a product', () => {
     expect(change({ unitPrice: 3500 })).toEqual({ unitPrice: 3500 });
     expect(change({ active: false })).toEqual({ active: false });
     expect(change({ taxRateBp: 1900 })).toEqual({ taxRateBp: 1900 });
+    expect(change({ taxKind: 'excluded' })).toEqual({ taxKind: 'excluded' });
     expect(change({ unit: 'kilogram' })).toEqual({ unit: 'kilogram' });
+  });
+
+  it('changes the tax kind and the rate together when they fit', () => {
+    expect(change({ taxKind: 'taxed', taxRateBp: 1900 })).toEqual({
+      taxKind: 'taxed',
+      taxRateBp: 1900,
+    });
+    expect(change({ taxKind: 'exempt', taxRateBp: 0 })).toEqual({
+      taxKind: 'exempt',
+      taxRateBp: 0,
+    });
+  });
+
+  it('refuses a tax kind and a rate sent together that do not fit, and leaves the single ones to the use case', () => {
+    expect(errorsOf(change, { taxKind: 'exempt', taxRateBp: 1900 })).toEqual([
+      {
+        pointer: '/taxKind',
+        code: 'tax-kind-rate-mismatch',
+        detail:
+          'El tipo gravado lleva una tarifa de 5 % o 19 %; el exento y el excluido llevan 0 %.',
+      },
+    ]);
+    // Sola, la tarifa o el tipo solo se pueden comparar con el producto que ya existe: eso lo hace el caso de uso.
+    expect(errorsOf(change, { taxRateBp: 1900 })).toEqual([]);
+    expect(errorsOf(change, { taxKind: 'exempt' })).toEqual([]);
   });
 
   it('changes the SKU and the barcode through the same checks as a new product', () => {
@@ -264,7 +359,7 @@ describe('a change to a product', () => {
   });
 
   it('does not take null for what cannot be none', () => {
-    for (const field of ['name', 'sku', 'unit', 'unitPrice', 'taxRateBp', 'active']) {
+    for (const field of ['name', 'sku', 'unit', 'unitPrice', 'taxRateBp', 'taxKind', 'active']) {
       const errors = errorsOf(change, { [field]: null });
       expect(errors, field).toHaveLength(1);
       expect(errors[0]?.pointer).toBe(`/${field}`);
@@ -273,13 +368,18 @@ describe('a change to a product', () => {
 
   it('reports every problem together', () => {
     expect(
-      errorsOf(change, { name: '', unitPrice: -5, taxRateBp: 7, active: 'si' }).map(
-        (e) => `${e.pointer}:${e.code}`,
-      ),
+      errorsOf(change, {
+        name: '',
+        unitPrice: -5,
+        taxRateBp: 7,
+        taxKind: 'gravado',
+        active: 'si',
+      }).map((e) => `${e.pointer}:${e.code}`),
     ).toEqual([
       '/name:blank',
       '/unitPrice:out-of-range',
       '/taxRateBp:invalid-value',
+      '/taxKind:invalid-value',
       '/active:invalid-type',
     ]);
   });
