@@ -155,4 +155,14 @@ describe('the steps for PRE (docs/ambientes.md)', () => {
   it('give the command that checks the hosts, ready to copy', () => {
     expect(guide).toMatch(/```bash\nnpm run verify:deploy -- https:\/\/\S+ https:\/\/\S+\n```/);
   });
+
+  it('say what to do when Prisma refuses to migrate because an earlier attempt failed (P3009)', () => {
+    expect(guide).toContain('P3009');
+    expect(guide).toContain('npx prisma migrate resolve --rolled-back');
+    expect(guide).toContain('migraciones sin rastrear');
+  });
+
+  it('say which env file the migration script reads, since it is not the one verify:pre reads', () => {
+    expect(guide).toMatch(/`db:migrate`[^.]*`\.env`[^.]*`\.env\.pre`/);
+  });
 });
