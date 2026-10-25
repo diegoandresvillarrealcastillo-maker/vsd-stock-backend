@@ -46,6 +46,7 @@ afecte al frontend. El repositorio `vsd-stock-frontend` enlaza a esta carpeta en
 | [0034](0034-el-tipo-tributario-vive-en-el-producto-y-se-copia-a-la-linea.md)             | El tipo tributario (gravado, exento o excluido) vive en el producto y se copia a la línea de venta              | Aceptada |
 | [0035](0035-el-reporte-mensual-suma-lo-que-dijo-cada-recibo-y-corta-a-hora-de-bogota.md) | El reporte mensual suma lo que dijo cada recibo, deja las anulaciones aparte y corta los meses a hora de Bogotá | Aceptada |
 | [0036](0036-las-anulaciones-tienen-su-propio-folio-consecutivo.md)                       | Las anulaciones tienen su propio folio consecutivo, sin saltos, que da el servidor                              | Aceptada |
+| [0037](0037-la-marca-future-tolera-el-error-de-la-medicion.md)                           | La marca `future` tolera el error de la propia medición del reloj                                               | Aceptada |
 
 ## Reglas
 

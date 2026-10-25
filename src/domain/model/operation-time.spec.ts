@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FUTURE_TOLERANCE_MS,
   MAX_ROUND_TRIP_MS,
   SKEW_WARNING_MS,
   STALE_AFTER_MS,
@@ -187,6 +188,73 @@ describe('resolveOperationTime', () => {
     expect(resolved.effectiveAt).toBe(SERVER);
     expect(resolved.source).toBe('corrected');
     expect(resolved.flags).toEqual([]);
+  });
+
+  describe('an operation dated a little after the moment the server heard of it', () => {
+    const after = (ms: number): string => new Date(at(SERVER) + ms).toISOString();
+
+    it('tolerates the error of the measurement itself: half of the longest round trip that is still trusted', () => {
+      expect(FUTURE_TOLERANCE_MS).toBe(MAX_ROUND_TRIP_MS / 2);
+      expect(FUTURE_TOLERANCE_MS).toBe(2500);
+    });
+
+    it('does not call it "future" when it is ahead by less than that, because it is the measurement and not the clock', () => {
+      // Una venta cobrada con red se manda al instante: la diferencia medida a mitad de viaje se equivoca por unos segundos
+      // y la hora corregida queda un poco delante de la recepcion.
+      const resolved = resolveOperationTime({
+        deviceTime: after(1500),
+        clockOffsetMs: 0,
+        receivedAt: SERVER,
+      });
+
+      expect(resolved.effectiveAt).toBe(SERVER);
+      expect(resolved.source).toBe('received');
+      expect(resolved.flags).toEqual([]);
+    });
+
+    it('does not call it "future" at exactly the tolerance', () => {
+      const resolved = resolveOperationTime({
+        deviceTime: after(FUTURE_TOLERANCE_MS),
+        clockOffsetMs: 0,
+        receivedAt: SERVER,
+      });
+
+      expect(resolved.effectiveAt).toBe(SERVER);
+      expect(resolved.flags).toEqual([]);
+    });
+
+    it('calls it "future" one millisecond past the tolerance, and still dates it at the reception', () => {
+      const resolved = resolveOperationTime({
+        deviceTime: after(FUTURE_TOLERANCE_MS + 1),
+        clockOffsetMs: 0,
+        receivedAt: SERVER,
+      });
+
+      expect(resolved.effectiveAt).toBe(SERVER);
+      expect(resolved.source).toBe('received');
+      expect(resolved.flags).toEqual(['future']);
+    });
+
+    it('measures the tolerance on the corrected time, not on the time the device said', () => {
+      const resolved = resolveOperationTime({
+        deviceTime: after(60_000),
+        clockOffsetMs: -58_500,
+        receivedAt: SERVER,
+      });
+
+      expect(resolved.flags).toEqual([]);
+    });
+
+    it('keeps saying that the clock was never measured, without adding "future", for a clock a second ahead', () => {
+      const resolved = resolveOperationTime({
+        deviceTime: after(1000),
+        clockOffsetMs: null,
+        receivedAt: SERVER,
+      });
+
+      expect(resolved.effectiveAt).toBe(SERVER);
+      expect(resolved.flags).toEqual(['clock-unverified']);
+    });
   });
 
   it('flags an operation that waited more than three days, and keeps it', () => {
