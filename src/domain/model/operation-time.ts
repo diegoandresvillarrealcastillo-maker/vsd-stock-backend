@@ -7,6 +7,13 @@ export const SKEW_WARNING_MS = 5 * 60 * 1000;
 /** Una operacion que espero mas de esto en el dispositivo se acepta, pero se marca. */
 export const STALE_AFTER_MS = 72 * 60 * 60 * 1000;
 
+/**
+ * Cuanto puede quedar la hora corregida por delante de la recepcion sin que se llame «futuro»: el error de la propia medicion.
+ * La diferencia se mide a mitad del viaje y el viaje que aun se acepta dura hasta `MAX_ROUND_TRIP_MS`, asi que el error llega a
+ * la mitad. Una venta cobrada con red se manda al instante y cae dentro de ese margen sin que el reloj este mal.
+ */
+export const FUTURE_TOLERANCE_MS = MAX_ROUND_TRIP_MS / 2;
+
 /** Lo que el dispositivo ve al preguntar `GET /health`: cuando pregunto, cuando oyo la respuesta y la hora del servidor. */
 export interface ClockMeasurement {
   readonly sentAtMs: number;
@@ -96,9 +103,10 @@ export function resolveOperationTime(input: OperationTimeInput): ResolvedOperati
   }
 
   if (effective > received) {
+    // Nunca posterior a la recepcion; pero solo es «futuro» si se pasa del error de la medicion.
+    if (effective - received > FUTURE_TOLERANCE_MS) flags.add('future');
     effective = received;
     source = 'received';
-    flags.add('future');
   }
   if (received - effective > STALE_AFTER_MS) flags.add('stale');
 

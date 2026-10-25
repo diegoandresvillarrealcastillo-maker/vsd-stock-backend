@@ -322,8 +322,9 @@ muestra hasta que la gerencia la revisa (ADR 0027).
 
 La lista de ventas que el servidor aceptó marcadas y que nadie de la gerencia ha revisado: existencia en negativo, folio
 repetido, cualquier _Marca de venta_ o una hora en la que no se puede confiar (reloj desviado, hora del futuro o ilegible;
-un dispositivo que todavía no midió su reloj o una operación que esperó horas **no** cuentan, es lo normal sin conexión). Es
-solo de la gerencia (ADR 0027).
+un dispositivo que todavía no midió su reloj o una operación que esperó horas **no** cuentan, es lo normal sin conexión). La
+hora del futuro cuenta solo si pasa de la recepción por más de 2,5 s, el error de la propia medición (ADR 0037). Es solo de la
+gerencia (ADR 0027).
 
 **Código:** `requiresAttention`, `GET /v1/sales?attention=true`
 
