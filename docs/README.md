@@ -14,6 +14,7 @@ con una sola numeración de decisiones.
 | [Convenciones de la API](convenciones-de-la-api.md)                  | Versión, errores, dinero, fechas, idempotencia, paginación y cabeceras, con ejemplos.                 |
 | [Experimento de cifrado local](experimentos/cifrado-local/README.md) | Cómo se comprobó en un navegador real el cifrado y el olvido del ADR 0018, con qué resultado.         |
 | [Plan de ambientes](ambientes.md)                                    | Local, DEV, PRE y PROD (en pausa); variables de entorno; los pasos manuales para quien opera paneles. |
+| [Crear producción](produccion.md)                                    | El paso a paso (comandos y variables) para crear PROD cuando se levante la pausa; hoy PROD no existe. |
 | [Guía de GitHub](guia-github.md)                                     | Tickets, hitos, etiquetas, plantillas, checks exigidos y cómo se revisa.                              |
 
 **Del backend:** [`README.md`](../README.md) (cómo correrlo y su arquitectura), [`CONTRIBUTING.md`](../CONTRIBUTING.md)

@@ -23,7 +23,8 @@ repositorios es `produccion`, así que cada PR indica su base de forma explícit
 Mientras no se diga lo contrario **no se configura, no se promueve y no se prueba contra ella**: ni el proyecto
 de Supabase, ni el host de la API, ni el de la web, ni las variables, ni el dominio. Quien levante la pausa es
 el dueño del proyecto, por escrito. Se propone que lo primero sea un ADR con lo que hay que preparar (copias de
-seguridad, quién atiende un incidente, qué pasa con los datos de los negocios).
+seguridad, quién atiende un incidente, qué pasa con los datos de los negocios). El paso a paso para crearla, con los comandos y las variables, está
+escrito en [Crear producción](produccion.md): no la levanta, solo deja lista la lista.
 
 ## Local
 
